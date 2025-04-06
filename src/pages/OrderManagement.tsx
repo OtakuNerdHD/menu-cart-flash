@@ -1,11 +1,14 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Clock, User, Utensils } from 'lucide-react';
 import { useUserSwitcher } from '@/context/UserSwitcherContext';
+import { Dialog } from '@/components/ui/dialog';
+import OrderDetailsDialog from '@/components/OrderDetailsDialog';
+import { toast } from '@/hooks/use-toast';
 
 // Dados de exemplo - futuramente virão da API
 const mockOrders = [
@@ -14,11 +17,12 @@ const mockOrders = [
     table: 'Mesa 10',
     status: 'pending',
     items: [
-      { name: 'X-Burguer', quantity: 2, price: 15.90 },
+      { name: 'X-Burguer', quantity: 2, price: 15.90, notes: 'Sem ketchup' },
       { name: 'Batata Frita', quantity: 1, price: 10.50 }
     ],
     total: 42.30,
     createdAt: new Date().toISOString(),
+    assignedTo: null
   },
   {
     id: 2,
@@ -30,6 +34,7 @@ const mockOrders = [
     ],
     total: 47.90,
     createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(), // 15 min atrás
+    assignedTo: 'João'
   }
 ];
 
@@ -65,6 +70,9 @@ const getStatusText = (status: string) => {
 
 const OrderManagement = () => {
   const { currentUser } = useUserSwitcher();
+  const [orders, setOrders] = useState(mockOrders);
+  const [selectedOrder, setSelectedOrder] = useState<typeof mockOrders[0] | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
   
   const isStaff = ['admin', 'restaurant_owner', 'waiter', 'chef'].includes(currentUser?.role || '');
 
@@ -93,6 +101,28 @@ const OrderManagement = () => {
       </div>
     );
   }
+  
+  const handleAssignTable = (orderId: number) => {
+    if (!currentUser) return;
+    
+    setOrders(prevOrders => 
+      prevOrders.map(order => 
+        order.id === orderId 
+          ? { ...order, assignedTo: currentUser.name } 
+          : order
+      )
+    );
+    
+    toast({
+      title: "Mesa assumida com sucesso",
+      description: `Você é o responsável pela ${orders.find(o => o.id === orderId)?.table}`,
+    });
+  };
+  
+  const handleOpenDetails = (order: typeof orders[0]) => {
+    setSelectedOrder(order);
+    setShowDetails(true);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
@@ -100,7 +130,7 @@ const OrderManagement = () => {
         <h1 className="text-2xl font-bold mb-6">Gerenciamento de Pedidos / Mesas</h1>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {mockOrders.map(order => (
+          {orders.map(order => (
             <Card key={order.id} className="overflow-hidden">
               <div className={`h-2 ${order.status === 'pending' ? 'bg-yellow-500' : order.status === 'preparing' ? 'bg-blue-500' : 'bg-green-500'}`}></div>
               <CardHeader className="pb-2">
@@ -117,6 +147,17 @@ const OrderManagement = () => {
                     minute: '2-digit' 
                   })}
                 </CardDescription>
+                {order.assignedTo ? (
+                  <div className="mt-1 text-sm flex items-center gap-1 text-gray-600">
+                    <User className="w-4 h-4" />
+                    <span>Atendido por: {order.assignedTo}</span>
+                  </div>
+                ) : (
+                  <div className="mt-1 text-sm flex items-center gap-1 text-yellow-600">
+                    <User className="w-4 h-4" />
+                    <span>Atendimento pendente</span>
+                  </div>
+                )}
               </CardHeader>
               
               <CardContent>
@@ -142,24 +183,56 @@ const OrderManagement = () => {
                   
                   <div className="pt-3 space-y-2">
                     {currentUser?.role === 'waiter' && (
-                      <Button className="w-full" variant={order.status === 'ready' ? 'default' : 'outline'}>
-                        {order.status === 'ready' ? 'Entregar pedido' : 'Verificar status'}
-                      </Button>
+                      <>
+                        <Button 
+                          className="w-full" 
+                          variant={order.status === 'ready' ? 'default' : 'outline'}
+                          onClick={() => order.assignedTo ? handleOpenDetails(order) : handleAssignTable(order.id)}
+                        >
+                          {!order.assignedTo ? 'Assumir mesa' : order.status === 'ready' ? 'Entregar pedido' : 'Verificar status'}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="w-full"
+                          onClick={() => handleOpenDetails(order)}
+                        >
+                          Ver detalhes
+                        </Button>
+                      </>
                     )}
                     
                     {currentUser?.role === 'chef' && (
-                      <Button className="w-full" variant={order.status === 'pending' ? 'default' : 'outline'}>
-                        {order.status === 'pending' ? 'Iniciar preparo' : 
-                         order.status === 'preparing' ? 'Marcar como pronto' : 'Ver detalhes'}
-                      </Button>
+                      <div className="space-y-2">
+                        <Button 
+                          className="w-full" 
+                          variant={order.status === 'pending' ? 'default' : 'outline'}
+                        >
+                          {order.status === 'pending' ? 'Iniciar preparo' : 
+                           order.status === 'preparing' ? 'Marcar como pronto' : 'Ver detalhes'}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="w-full"
+                          onClick={() => handleOpenDetails(order)}
+                        >
+                          Ver detalhes
+                        </Button>
+                      </div>
                     )}
                     
                     {(currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner') && (
                       <div className="space-y-2">
-                        <Button className="w-full">
-                          Alterar status
+                        <Button 
+                          className="w-full"
+                          onClick={() => !order.assignedTo ? handleAssignTable(order.id) : null}
+                        >
+                          {!order.assignedTo ? 'Assumir mesa' : 'Alterar status'}
                         </Button>
-                        <Button variant="outline" className="w-full">
+                        <Button 
+                          variant="outline" 
+                          className="w-full"
+                          onClick={() => handleOpenDetails(order)}
+                        >
                           Ver detalhes
                         </Button>
                       </div>
@@ -171,6 +244,15 @@ const OrderManagement = () => {
           ))}
         </div>
       </div>
+
+      {selectedOrder && (
+        <OrderDetailsDialog 
+          order={selectedOrder}
+          open={showDetails}
+          onOpenChange={setShowDetails}
+          currentUserRole={currentUser?.role || ''}
+        />
+      )}
     </div>
   );
 };

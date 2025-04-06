@@ -1,12 +1,39 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ShoppingBag, Clock, CheckCircle, Truck, Loader2 } from 'lucide-react';
+import { ShoppingBag, Clock, CheckCircle, Truck, Loader2, MapPin, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
+import { toast } from '@/hooks/use-toast';
+
+// Componente do mapa OpenStreetMap
+const OrderMap = () => {
+  return (
+    <div className="w-full h-[300px] bg-gray-100 rounded-lg overflow-hidden">
+      <div className="w-full h-full">
+        <iframe 
+          width="100%" 
+          height="100%" 
+          frameBorder="0" 
+          scrolling="no" 
+          marginHeight={0} 
+          marginWidth={0} 
+          src="https://www.openstreetmap.org/export/embed.html?bbox=-46.69601440429688%2C-23.588296175900284%2C-46.61335945129395%2C-23.54324143931328&layer=mapnik"
+          title="Mapa de localização do entregador"
+        />
+      </div>
+      <div className="p-3 bg-yellow-50 text-center">
+        <p className="text-sm">Essa é uma versão demonstrativa do mapa. Na versão final, a localização em tempo real do entregador será mostrada.</p>
+      </div>
+    </div>
+  );
+};
 
 const OrderTracking = () => {
   const navigate = useNavigate();
+  const [mapOpen, setMapOpen] = useState(false);
+  const [orderConfirmed, setOrderConfirmed] = useState(false);
   
   // Mockup de pedido - no futuro virá da API
   const order = {
@@ -33,6 +60,18 @@ const OrderTracking = () => {
   };
 
   const statusStep = getStatusStep(order.status);
+  
+  const handleTrackOrder = () => {
+    setMapOpen(true);
+  };
+  
+  const handleConfirmOrder = () => {
+    setOrderConfirmed(true);
+    toast({
+      title: "Pedido confirmado",
+      description: "Obrigado por confirmar o recebimento do seu pedido!",
+    });
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
@@ -117,7 +156,7 @@ const OrderTracking = () => {
               
               {/* Resumo do Pedido */}
               <div>
-                <h3 className="font-medium mb-3">Resumo do Pedido</h3>
+                <h3 className="font-bold mb-3">Resumo do Pedido</h3>
                 <ul className="space-y-2">
                   {order.items.map((item, index) => (
                     <li key={index} className="flex justify-between text-sm">
@@ -134,6 +173,29 @@ const OrderTracking = () => {
                   </div>
                 </div>
               </div>
+              
+              {/* Seção de botões adicionais */}
+              {(statusStep === 3 || statusStep === 4) && (
+                <div className="space-y-3 pt-2">
+                  <Button 
+                    variant="outline" 
+                    className="w-full flex items-center justify-center gap-2"
+                    onClick={handleTrackOrder}
+                  >
+                    <MapPin className="h-4 w-4" />
+                    Rastrear pedido
+                  </Button>
+                  
+                  <Button 
+                    className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700"
+                    onClick={handleConfirmOrder}
+                    disabled={orderConfirmed}
+                  >
+                    <Check className="h-4 w-4" />
+                    {orderConfirmed ? "Pedido confirmado" : "Confirmar recebimento"}
+                  </Button>
+                </div>
+              )}
             </CardContent>
             
             <CardFooter>
@@ -148,6 +210,20 @@ const OrderTracking = () => {
           </Card>
         </div>
       </div>
+
+      {/* Diálogo do mapa */}
+      <Dialog open={mapOpen} onOpenChange={setMapOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rastreamento do pedido</DialogTitle>
+            <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Fechar</span>
+            </DialogClose>
+          </DialogHeader>
+          <OrderMap />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
