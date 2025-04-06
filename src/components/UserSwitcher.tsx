@@ -66,7 +66,7 @@ const UserSwitcher = () => {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-50" ref={menuRef}>
+    <div className="fixed bottom-4 right-4 z-[9999]" ref={menuRef}>
       {/* Menu Dropdown */}
       {isUserSwitcherOpen && (
         <div className="absolute bottom-16 right-0 w-52 bg-white rounded-lg shadow-lg overflow-hidden mb-2 border border-gray-200">
