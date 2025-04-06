@@ -1,13 +1,101 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import React, { useState } from 'react';
+import { menuItems } from '@/data/menuItems';
+import { CartProvider } from '@/context/CartContext';
+import Header from '@/components/Header';
+import MenuGrid from '@/components/MenuGrid';
+import CategoryFilter from '@/components/CategoryFilter';
+import Cart from '@/components/Cart';
 
 const Index = () => {
+  const [selectedCategory, setSelectedCategory] = useState('todos');
+
+  const filteredItems = selectedCategory === 'todos'
+    ? menuItems
+    : menuItems.filter(item => item.category === selectedCategory);
+  
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">Start building your amazing project here!</p>
+    <CartProvider>
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        
+        <main className="flex-grow container mx-auto px-4 py-8">
+          <section className="mb-8">
+            <h1 className="text-3xl font-bold mb-2 text-menu-secondary">Cardápio Digital</h1>
+            <p className="text-gray-600 max-w-2xl">
+              Explore nosso delicioso menu com opções para todos os gostos. Adicione itens ao seu carrinho e faça seu pedido facilmente.
+            </p>
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-bold mb-4 text-menu-secondary">Categorias</h2>
+            <CategoryFilter 
+              selectedCategory={selectedCategory} 
+              onCategoryChange={setSelectedCategory} 
+            />
+          </section>
+          
+          <section className="mb-12">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-menu-secondary">
+                {selectedCategory === 'todos' ? 'Todos os itens' : 
+                  selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}
+              </h2>
+              <span className="text-sm text-gray-500">{filteredItems.length} itens</span>
+            </div>
+            
+            <MenuGrid items={filteredItems} />
+          </section>
+        </main>
+        
+        <footer className="bg-menu-secondary text-white py-8">
+          <div className="container mx-auto px-4">
+            <div className="flex flex-col md:flex-row justify-between">
+              <div className="mb-6 md:mb-0">
+                <h2 className="text-xl font-bold mb-4">Cardápio<span className="text-menu-accent">Digital</span></h2>
+                <p className="text-gray-300 max-w-xs">
+                  O melhor cardápio digital para o seu estabelecimento.
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
+                <div>
+                  <h3 className="font-semibold mb-3 text-menu-accent">Navegação</h3>
+                  <ul className="space-y-2">
+                    <li><a href="#" className="text-gray-300 hover:text-white">Home</a></li>
+                    <li><a href="#" className="text-gray-300 hover:text-white">Cardápio</a></li>
+                    <li><a href="#" className="text-gray-300 hover:text-white">Promoções</a></li>
+                    <li><a href="#" className="text-gray-300 hover:text-white">Contato</a></li>
+                  </ul>
+                </div>
+                
+                <div>
+                  <h3 className="font-semibold mb-3 text-menu-accent">Horários</h3>
+                  <ul className="space-y-2">
+                    <li className="text-gray-300">Seg-Sex: 11h - 22h</li>
+                    <li className="text-gray-300">Sáb-Dom: 11h - 23h</li>
+                  </ul>
+                </div>
+                
+                <div>
+                  <h3 className="font-semibold mb-3 text-menu-accent">Contato</h3>
+                  <ul className="space-y-2">
+                    <li className="text-gray-300">(11) 9999-9999</li>
+                    <li className="text-gray-300">contato@cardapiodigital.com</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
+            <div className="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400 text-sm">
+              <p>© {new Date().getFullYear()} CardápioDigital. Todos os direitos reservados.</p>
+            </div>
+          </div>
+        </footer>
+        
+        <Cart />
       </div>
-    </div>
+    </CartProvider>
   );
 };
 
