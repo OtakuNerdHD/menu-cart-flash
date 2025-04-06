@@ -1,15 +1,14 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from '@/hooks/use-toast';
 import { useCart } from '@/context/CartContext';
 import { Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const DeliveryAddressForm = () => {
-  const { subtotal, items, clearCart } = useCart();
+  const { subtotal, cartItems, clearCart } = useCart();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isCepLoading, setIsCepLoading] = useState(false);
