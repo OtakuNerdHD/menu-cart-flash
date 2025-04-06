@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ShoppingCart, Menu } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { Sheet, SheetTrigger, SheetContent } from '@/components/ui/sheet';
+import { Link } from 'react-router-dom';
 
 const Header = () => {
   const { totalItems, toggleCart } = useCart();
@@ -12,34 +13,33 @@ const Header = () => {
     <header className="sticky top-0 z-40 w-full bg-white shadow-sm">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         <div className="flex items-center">
-          <div className="md:hidden mr-2">
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Menu className="h-6 w-6" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-[300px] sm:w-[400px]">
-                <nav className="flex flex-col gap-4 mt-8">
-                  <a href="#" className="text-lg font-medium hover:text-menu-primary">Home</a>
-                  <a href="#" className="text-lg font-medium hover:text-menu-primary">Cardápio</a>
-                  <a href="#" className="text-lg font-medium hover:text-menu-primary">Promoções</a>
-                  <a href="#" className="text-lg font-medium hover:text-menu-primary">Contato</a>
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="mr-2">
+                <Menu className="h-6 w-6" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[300px] sm:w-[400px]">
+              <div className="flex flex-col h-full">
+                <h3 className="text-lg font-bold mb-4">Menu</h3>
+                <nav className="flex flex-col gap-4">
+                  <Link to="/" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                    Home
+                  </Link>
+                  <Link to="/order-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                    Gerenciamento de Pedidos
+                  </Link>
+                  <Link to="/order-tracking" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                    Acompanhar Pedido
+                  </Link>
                 </nav>
-              </SheetContent>
-            </Sheet>
-          </div>
-          <a href="#" className="flex items-center space-x-2">
+              </div>
+            </SheetContent>
+          </Sheet>
+          <a href="/" className="flex items-center space-x-2">
             <h1 className="text-2xl font-bold text-menu-primary">Cardápio<span className="text-menu-accent">Digital</span></h1>
           </a>
         </div>
-        
-        <nav className="hidden md:flex items-center space-x-6">
-          <a href="#" className="text-gray-800 hover:text-menu-primary font-medium">Home</a>
-          <a href="#" className="text-gray-800 hover:text-menu-primary font-medium">Cardápio</a>
-          <a href="#" className="text-gray-800 hover:text-menu-primary font-medium">Promoções</a>
-          <a href="#" className="text-gray-800 hover:text-menu-primary font-medium">Contato</a>
-        </nav>
         
         <Button 
           onClick={toggleCart}

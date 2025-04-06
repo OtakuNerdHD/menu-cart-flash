@@ -3,43 +3,50 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Card } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { useUserSwitcher } from '@/context/UserSwitcherContext';
 import { useCart } from '@/context/CartContext';
-
-interface Address {
-  cep: string;
-  logradouro: string;
-  numero: string;
-  bairro: string;
-  complemento: string;
-  localidade: string;
-  uf: string;
-}
+import { Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const DeliveryAddressForm = () => {
-  const { currentUser } = useUserSwitcher();
-  const { subtotal } = useCart();
-  const [loading, setLoading] = useState(false);
-  const [useNewAddress, setUseNewAddress] = useState(false);
-  const [address, setAddress] = useState<Address>({
-    cep: '',
-    logradouro: '',
-    numero: '',
-    bairro: '',
-    complemento: '',
-    localidade: '',
-    uf: '',
-  });
-
-  // Função para consultar CEP
-  const fetchAddressByCep = async (cep: string) => {
-    if (cep.length !== 8) return;
+  const { subtotal, items, clearCart } = useCart();
+  const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCepLoading, setIsCepLoading] = useState(false);
+  
+  // Dados de endereço
+  const [cep, setCep] = useState('');
+  const [endereco, setEndereco] = useState('');
+  const [numero, setNumero] = useState('');
+  const [bairro, setBairro] = useState('');
+  const [complemento, setComplemento] = useState('');
+  const [cidade, setCidade] = useState('');
+  const [estado, setEstado] = useState('');
+  
+  // Script do Mercado Pago
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://sdk.mercadopago.com/js/v2';
+    script.async = true;
+    document.body.appendChild(script);
     
-    setLoading(true);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  // Função para buscar endereço pelo CEP
+  const buscarEnderecoPorCep = async () => {
+    if (!cep || cep.length !== 8) {
+      toast({
+        title: "CEP inválido",
+        description: "Por favor, insira um CEP válido com 8 dígitos.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsCepLoading(true);
     try {
       const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
       const data = await response.json();
@@ -47,170 +54,193 @@ const DeliveryAddressForm = () => {
       if (data.erro) {
         toast({
           title: "CEP não encontrado",
-          description: "O CEP informado não foi encontrado",
-          variant: "destructive",
+          description: "Não foi possível encontrar o endereço para este CEP.",
+          variant: "destructive"
         });
-        return;
+      } else {
+        setEndereco(data.logradouro);
+        setBairro(data.bairro);
+        setCidade(data.localidade);
+        setEstado(data.uf);
       }
-      
-      setAddress({
-        ...address,
-        logradouro: data.logradouro,
-        bairro: data.bairro,
-        localidade: data.localidade,
-        uf: data.uf,
-      });
     } catch (error) {
+      console.error('Erro ao buscar CEP:', error);
       toast({
-        title: "Erro ao buscar CEP",
-        description: "Ocorreu um erro ao buscar o endereço",
-        variant: "destructive",
+        title: "Erro",
+        description: "Ocorreu um erro ao buscar o endereço. Tente novamente.",
+        variant: "destructive"
       });
     } finally {
-      setLoading(false);
+      setIsCepLoading(false);
     }
   };
 
-  // Efeito para buscar o CEP quando digitado
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (address.cep.replace(/\D/g, '').length === 8) {
-        fetchAddressByCep(address.cep.replace(/\D/g, ''));
-      }
-    }, 700);
-    
-    return () => clearTimeout(timeoutId);
-  }, [address.cep]);
-
-  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Remove qualquer caractere que não seja número
-    const newCep = e.target.value.replace(/\D/g, '');
-    setAddress({ ...address, cep: newCep });
-  };
-
-  const handleProceedToPayment = () => {
-    // Validar se todos os campos obrigatórios estão preenchidos
-    if (!address.cep || !address.logradouro || !address.numero || !address.bairro) {
+  const handleDeliveryOrder = async () => {
+    // Validar dados do endereço
+    if (!cep || !endereco || !numero || !bairro || !cidade || !estado) {
       toast({
-        title: "Campos obrigatórios",
-        description: "Por favor, preencha todos os campos obrigatórios",
-        variant: "destructive",
+        title: "Dados incompletos",
+        description: "Por favor, preencha todos os campos obrigatórios.",
+        variant: "destructive"
       });
       return;
     }
-
-    // Aqui você redirecionaria para a página de pagamento do Mercado Pago
-    toast({
-      title: "Prosseguindo para pagamento",
-      description: "Você será redirecionado para a página de pagamento",
-    });
     
-    // Exemplo de redirecionamento (implementar depois)
-    // window.location.href = '/checkout/payment';
+    setIsLoading(true);
+    
+    try {
+      // Aqui integramos com o Mercado Pago
+      // Normalmente, enviaríamos os dados para um endpoint de backend
+      // No caso de implementação front-end, podemos simular o processo
+      
+      // Esta implementação é apenas um exemplo
+      // Em uma implementação real, você enviaria os dados para seu backend
+      // que então criaria a preferência no Mercado Pago
+      
+      const mp = new window.MercadoPago('TEST-45feae2e-291e-4f2b-8db5-a03d6893a185', {
+        locale: 'pt-BR'
+      });
+      
+      // Simulando sucesso de pagamento após 2 segundos
+      setTimeout(() => {
+        // Em implementação real, isso seria manipulado por callbacks do Mercado Pago
+        const orderId = `ORDER-${Math.floor(Math.random() * 1000000)}`;
+        
+        // Redirecionar para a página de acompanhamento
+        clearCart();
+        navigate(`/order-tracking/${orderId}`);
+        
+        toast({
+          title: "Pedido realizado!",
+          description: `Seu pedido #${orderId} foi processado com sucesso.`,
+        });
+        
+        setIsLoading(false);
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Erro no checkout:', error);
+      toast({
+        title: "Erro no pagamento",
+        description: "Ocorreu um erro ao processar seu pagamento. Tente novamente.",
+        variant: "destructive"
+      });
+      setIsLoading(false);
+    }
+  };
+
+  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, '');
+    setCep(value);
+  };
+
+  const handleCepBlur = () => {
+    if (cep.length === 8) {
+      buscarEnderecoPorCep();
+    }
   };
 
   return (
     <div className="space-y-6">
-      {currentUser?.role === 'customer' && !useNewAddress && (
-        <div className="mb-6">
-          <h4 className="text-base font-medium mb-3">Endereço salvo</h4>
-          <Card className="p-4">
-            <RadioGroup defaultValue="savedAddress" className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="savedAddress" id="savedAddress" checked={!useNewAddress} 
-                  onClick={() => setUseNewAddress(false)} />
-                <Label htmlFor="savedAddress">Usar endereço salvo</Label>
-              </div>
-              <p className="text-sm text-gray-500 pl-6">
-                Rua Exemplo, 123 - Centro<br />
-                São Paulo, SP - 01001-000
-              </p>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="newAddress" id="newAddress" checked={useNewAddress} 
-                  onClick={() => setUseNewAddress(true)} />
-                <Label htmlFor="newAddress">Adicionar novo endereço</Label>
-              </div>
-            </RadioGroup>
-          </Card>
-        </div>
-      )}
-
-      {(useNewAddress || currentUser?.role !== 'customer') && (
-        <div className="space-y-4">
-          <h4 className="text-base font-medium">Novo endereço</h4>
-          
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="cep">CEP*</Label>
-            <div className="relative">
+            <Label htmlFor="cep">CEP</Label>
+            <div className="flex">
               <Input
                 id="cep"
                 placeholder="00000000"
-                maxLength={8}
-                value={address.cep}
+                value={cep}
                 onChange={handleCepChange}
-                className="pr-10"
-                required
+                onBlur={handleCepBlur}
+                maxLength={8}
+                className="flex-1"
+                disabled={isCepLoading}
               />
-              {loading && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+              {isCepLoading && (
+                <div className="ml-2 flex items-center">
+                  <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
                 </div>
               )}
             </div>
           </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="logradouro">Endereço*</Label>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="col-span-2 space-y-2">
+            <Label htmlFor="endereco">Endereço</Label>
             <Input
-              id="logradouro"
-              placeholder="Rua, Avenida, etc."
-              value={address.logradouro}
-              onChange={(e) => setAddress({ ...address, logradouro: e.target.value })}
-              required
+              id="endereco"
+              value={endereco}
+              onChange={(e) => setEndereco(e.target.value)}
+              placeholder="Rua, Avenida, etc"
             />
           </div>
           
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="numero">Número*</Label>
-              <Input
-                id="numero"
-                placeholder="123"
-                value={address.numero}
-                onChange={(e) => setAddress({ ...address, numero: e.target.value })}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="bairro">Bairro*</Label>
-              <Input
-                id="bairro"
-                placeholder="Centro"
-                value={address.bairro}
-                onChange={(e) => setAddress({ ...address, bairro: e.target.value })}
-                required
-              />
-            </div>
-          </div>
-          
           <div className="space-y-2">
-            <Label htmlFor="complemento">Complemento</Label>
+            <Label htmlFor="numero">Número</Label>
             <Input
-              id="complemento"
-              placeholder="Apto, Bloco, etc."
-              value={address.complemento}
-              onChange={(e) => setAddress({ ...address, complemento: e.target.value })}
+              id="numero"
+              value={numero}
+              onChange={(e) => setNumero(e.target.value)}
+              placeholder="123"
             />
           </div>
         </div>
-      )}
-
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="bairro">Bairro</Label>
+            <Input
+              id="bairro"
+              value={bairro}
+              onChange={(e) => setBairro(e.target.value)}
+              placeholder="Bairro"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="complemento">Complemento (opcional)</Label>
+            <Input
+              id="complemento"
+              value={complemento}
+              onChange={(e) => setComplemento(e.target.value)}
+              placeholder="Apto, Bloco, etc"
+            />
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="cidade">Cidade</Label>
+            <Input
+              id="cidade"
+              value={cidade}
+              onChange={(e) => setCidade(e.target.value)}
+              placeholder="Cidade"
+              readOnly
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="estado">Estado</Label>
+            <Input
+              id="estado"
+              value={estado}
+              onChange={(e) => setEstado(e.target.value)}
+              placeholder="UF"
+              readOnly
+            />
+          </div>
+        </div>
+      </div>
+      
       <div className="pt-4 border-t">
         <div className="flex justify-between mb-2">
           <span className="text-gray-600">Subtotal</span>
           <span className="font-medium">R$ {subtotal.toFixed(2)}</span>
         </div>
-        <div className="flex justify-between mb-4">
+        <div className="flex justify-between mb-2">
           <span className="text-gray-600">Taxa de entrega</span>
           <span className="font-medium">R$ 5.00</span>
         </div>
@@ -221,11 +251,22 @@ const DeliveryAddressForm = () => {
       </div>
 
       <Button
-        onClick={handleProceedToPayment}
+        onClick={handleDeliveryOrder}
         className="w-full bg-menu-primary hover:bg-menu-primary/90"
+        disabled={isLoading}
       >
-        Continuar para pagamento
+        {isLoading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Processando...
+          </>
+        ) : (
+          'Pagar'
+        )}
       </Button>
+      
+      {/* Área onde o Mercado Pago irá renderizar o formulário de pagamento */}
+      <div id="mercadopago-checkout" className="mt-4"></div>
     </div>
   );
 };
