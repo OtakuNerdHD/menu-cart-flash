@@ -7,6 +7,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { UserSwitcherProvider } from "@/context/UserSwitcherContext";
 import UserSwitcher from "@/components/UserSwitcher";
 import Index from "./pages/Index";
+import OrderManagement from "./pages/OrderManagement";
+import OrderTracking from "./pages/OrderTracking";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -20,6 +22,8 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/order-management" element={<OrderManagement />} />
+            <Route path="/order-tracking/:orderId?" element={<OrderTracking />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
