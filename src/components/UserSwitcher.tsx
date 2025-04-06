@@ -3,8 +3,8 @@ import React, { useEffect, useRef } from 'react';
 import { useUserSwitcher } from '@/context/UserSwitcherContext';
 import { Button } from '@/components/ui/button';
 import { 
-  User, ChevronUp, ChevronDown, Shield, Chef, Utensils, 
-  Truck, UserCircle2, UserRound, X 
+  User, ChevronUp, ChevronDown, Shield, Utensils, 
+  UtensilsCrossed, Truck, UserCircle2, UserRound, X 
 } from 'lucide-react';
 
 const UserSwitcher = () => {
@@ -39,7 +39,7 @@ const UserSwitcher = () => {
     admin: <Shield className="h-5 w-5" />,
     restaurant_owner: <User className="h-5 w-5" />,
     waiter: <Utensils className="h-5 w-5" />,
-    chef: <Chef className="h-5 w-5" />,
+    chef: <UtensilsCrossed className="h-5 w-5" />,
     delivery_person: <Truck className="h-5 w-5" />,
     customer: <UserCircle2 className="h-5 w-5" />,
     visitor: <UserRound className="h-5 w-5" />
