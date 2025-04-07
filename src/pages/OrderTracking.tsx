@@ -35,23 +35,27 @@ const OrderMap = ({ isTracking = false }) => {
         {isTracking && (
           <div className="absolute inset-0 pointer-events-none">
             {/* Motoboy animado */}
-            <div className="absolute w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white animate-pulse"
-                 style={{
-                   left: '40%',
-                   top: '50%',
-                   animation: 'moveMotoBoy 20s linear infinite',
-                 }}>
+            <div 
+              className="absolute w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white animate-pulse"
+              style={{
+                left: '40%',
+                top: '50%',
+                animation: 'moveMotoBoy 20s linear infinite',
+              }}
+            >
               <Truck className="h-6 w-6" />
             </div>
-            <style jsx>{`
-              @keyframes moveMotoBoy {
-                0% { left: 10%; top: 50%; }
-                25% { left: 30%; top: 30%; }
-                50% { left: 50%; top: 40%; }
-                75% { left: 70%; top: 60%; }
-                100% { left: 90%; top: 50%; }
-              }
-            `}</style>
+            <style>
+              {`
+                @keyframes moveMotoBoy {
+                  0% { left: 10%; top: 50%; }
+                  25% { left: 30%; top: 30%; }
+                  50% { left: 50%; top: 40%; }
+                  75% { left: 70%; top: 60%; }
+                  100% { left: 90%; top: 50%; }
+                }
+              `}
+            </style>
           </div>
         )}
         {isTracking && (
