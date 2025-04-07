@@ -1,10 +1,10 @@
-
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 import { MenuItem } from '../data/menuItems';
 import { useToast } from "@/components/ui/use-toast";
 
 export interface CartItem extends MenuItem {
   quantity: number;
+  notes?: string;
 }
 
 interface CartContextType {
