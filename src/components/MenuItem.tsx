@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { InfoIcon } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { toast } from '@/hooks/use-toast';
-import { Product, MenuItem as MenuItemType } from '@/types/supabase';
+import { Product } from '@/types/supabase';
 import ProductDetailsDialog from './ProductDetailsDialog';
 
 interface MenuItemProps {

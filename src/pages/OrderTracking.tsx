@@ -86,7 +86,7 @@ const OrderTracking = () => {
   // Mockup de pedido - no futuro virá da API
   const order = {
     id: params.orderId || '#ORD123456',
-    status: 'preparing', // pode ser: pending, preparing, ready, in_transit, delivered
+    status: 'in_transit', // alterado para 'in_transit' para mostrar os botões por padrão
     createdAt: new Date().toISOString(),
     estimatedTime: 25, // em minutos
     items: [
