@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCart } from '@/context/CartContext';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 
 const TableOrderForm = () => {
@@ -25,17 +25,38 @@ const TableOrderForm = () => {
     }
     
     // Aqui seria a chamada para a API para registrar o pedido no sistema
-    // Por enquanto, vamos apenas mostrar um toast de sucesso
+    // Por enquanto, vamos simular a criação dinâmica da mesa
+    
+    // Em uma implementação real, este objeto seria enviado para o backend
+    const newOrder = {
+      id: Date.now(),
+      table: tableName,
+      status: 'pending',
+      items: cartItems.map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        notes: item.notes
+      })),
+      total: subtotal * 1.1, // Com taxa de serviço
+      createdAt: new Date().toISOString(),
+      assignedTo: null
+    };
+    
+    // Salvar o pedido em localStorage como demonstração
+    // Em produção, isso seria enviado para um banco de dados
+    const existingOrders = JSON.parse(localStorage.getItem('tableOrders') || '[]');
+    localStorage.setItem('tableOrders', JSON.stringify([...existingOrders, newOrder]));
     
     toast({
       title: "Pedido realizado!",
-      description: `Seu pedido foi enviado para a mesa ${tableName}`,
+      description: `Seu pedido foi enviado para a ${tableName}`,
     });
     
     clearCart();
     
-    // Aqui você pode redirecionar para uma página de acompanhamento de pedido
-    navigate("/order-management");
+    // Redirecionar para a página de acompanhamento do pedido
+    navigate(`/order-tracking/${newOrder.id}`);
   };
 
   return (

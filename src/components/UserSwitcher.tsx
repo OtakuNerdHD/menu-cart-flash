@@ -6,6 +6,7 @@ import {
   User, ChevronUp, ChevronDown, Shield, Utensils, 
   UtensilsCrossed, Truck, UserCircle2, UserRound, X 
 } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const UserSwitcher = () => {
   const { 
@@ -16,10 +17,12 @@ const UserSwitcher = () => {
     closeUserSwitcher 
   } = useUserSwitcher();
   
+  const isMobile = useIsMobile();
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x: -1, y: -1 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [didMove, setDidMove] = useState(false);
 
   // Inicializar posição na primeira montagem
   useEffect(() => {
@@ -71,10 +74,14 @@ const UserSwitcher = () => {
       y: e.clientY - rect.top
     });
     setIsDragging(true);
+    setDidMove(false);
   };
 
   const handleMouseMove = (e: MouseEvent) => {
     if (isDragging) {
+      // Marcar que houve movimento
+      setDidMove(true);
+      
       // Calcular nova posição com base no offset do mouse
       const newX = Math.max(0, Math.min(e.clientX - dragOffset.x, window.innerWidth - 100));
       const newY = Math.max(0, Math.min(e.clientY - dragOffset.y, window.innerHeight - 100));
@@ -85,6 +92,14 @@ const UserSwitcher = () => {
 
   const handleMouseUp = () => {
     setIsDragging(false);
+  };
+
+  const handleButtonClick = (e: React.MouseEvent) => {
+    // Apenas aciona o toggle se não estiver arrastando ou não tiver movido
+    if (!didMove) {
+      toggleUserSwitcher();
+    }
+    setDidMove(false);
   };
 
   // Adicionar/remover event listeners globais para drag
@@ -182,9 +197,7 @@ const UserSwitcher = () => {
       
       {/* Botão principal */}
       <Button
-        onClick={(e) => {
-          if (!isDragging) toggleUserSwitcher();
-        }}
+        onClick={handleButtonClick}
         onMouseDown={handleMouseDown}
         className={`rounded-full shadow-lg flex items-center gap-2 ${
           roleColors[currentUser?.role || 'visitor'] || roleColors.visitor
@@ -192,12 +205,12 @@ const UserSwitcher = () => {
       >
         <span className="flex items-center gap-2">
           {roleIcons[currentUser?.role || 'visitor']}
-          <span className="hidden sm:inline">{roleLabels[currentUser?.role || 'visitor']}</span>
+          {!isMobile && <span className="hidden sm:inline">{roleLabels[currentUser?.role || 'visitor']}</span>}
         </span>
-        {isUserSwitcherOpen ? 
+        {!isMobile && (isUserSwitcherOpen ? 
           <ChevronDown className="h-4 w-4" /> : 
           <ChevronUp className="h-4 w-4" />
-        }
+        )}
       </Button>
     </div>
   );

@@ -9,6 +9,7 @@ import UserSwitcher from "@/components/UserSwitcher";
 import Index from "./pages/Index";
 import OrderManagement from "./pages/OrderManagement";
 import OrderTracking from "./pages/OrderTracking";
+import KitchenManagement from "./pages/KitchenManagement";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -23,6 +24,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/order-management" element={<OrderManagement />} />
+            <Route path="/kitchen-management" element={<KitchenManagement />} />
             <Route path="/order-tracking/:orderId?" element={<OrderTracking />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

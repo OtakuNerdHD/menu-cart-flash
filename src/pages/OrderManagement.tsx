@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -9,6 +9,7 @@ import { useUserSwitcher } from '@/context/UserSwitcherContext';
 import { Dialog } from '@/components/ui/dialog';
 import OrderDetailsDialog from '@/components/OrderDetailsDialog';
 import { toast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 // Dados de exemplo - futuramente virão da API
 const mockOrders = [
@@ -73,8 +74,32 @@ const OrderManagement = () => {
   const [orders, setOrders] = useState(mockOrders);
   const [selectedOrder, setSelectedOrder] = useState<typeof mockOrders[0] | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const navigate = useNavigate();
   
   const isStaff = ['admin', 'restaurant_owner', 'waiter', 'chef'].includes(currentUser?.role || '');
+
+  // Carregar pedidos do localStorage ao iniciar
+  useEffect(() => {
+    const storedOrders = localStorage.getItem('tableOrders');
+    if (storedOrders) {
+      try {
+        const parsedOrders = JSON.parse(storedOrders);
+        // Combina os pedidos armazenados com os predefinidos
+        setOrders(prev => {
+          const combinedOrders = [...prev];
+          parsedOrders.forEach((order: any) => {
+            // Verifica se o pedido já existe na lista atual
+            if (!combinedOrders.some(o => o.id === order.id)) {
+              combinedOrders.push(order);
+            }
+          });
+          return combinedOrders;
+        });
+      } catch (error) {
+        console.error('Erro ao carregar pedidos:', error);
+      }
+    }
+  }, []);
 
   // Se não for funcionário, mostrar mensagem de acesso negado
   if (!isStaff) {
@@ -92,7 +117,7 @@ const OrderManagement = () => {
               <p className="text-gray-500">
                 Esta página é destinada apenas para funcionários do restaurante.
               </p>
-              <Button className="mt-4" onClick={() => window.location.href = '/'}>
+              <Button className="mt-4" onClick={() => navigate('/')}>
                 Voltar para o início
               </Button>
             </CardContent>
@@ -123,11 +148,22 @@ const OrderManagement = () => {
     setSelectedOrder(order);
     setShowDetails(true);
   };
+  
+  const handleKitchenManagement = () => {
+    navigate('/kitchen-management');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">Gerenciamento de Pedidos / Mesas</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Gerenciamento de Pedidos / Mesas</h1>
+          {['admin', 'restaurant_owner', 'chef'].includes(currentUser?.role || '') && (
+            <Button onClick={handleKitchenManagement}>
+              Acessar Cozinha
+            </Button>
+          )}
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {orders.map(order => (
@@ -206,6 +242,7 @@ const OrderManagement = () => {
                         <Button 
                           className="w-full" 
                           variant={order.status === 'pending' ? 'default' : 'outline'}
+                          onClick={handleKitchenManagement}
                         >
                           {order.status === 'pending' ? 'Iniciar preparo' : 
                            order.status === 'preparing' ? 'Marcar como pronto' : 'Ver detalhes'}
@@ -224,7 +261,7 @@ const OrderManagement = () => {
                       <div className="space-y-2">
                         <Button 
                           className="w-full"
-                          onClick={() => !order.assignedTo ? handleAssignTable(order.id) : null}
+                          onClick={() => !order.assignedTo ? handleAssignTable(order.id) : handleOpenDetails(order)}
                         >
                           {!order.assignedTo ? 'Assumir mesa' : 'Alterar status'}
                         </Button>
