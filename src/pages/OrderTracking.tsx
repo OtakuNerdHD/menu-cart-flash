@@ -2,16 +2,18 @@
 import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ShoppingBag, Clock, CheckCircle, Truck, Loader2, MapPin, Check, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ShoppingBag, Clock, CheckCircle, Truck, Loader2, MapPin, Check } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 
 // Componente do mapa OpenStreetMap
-const OrderMap = () => {
+const OrderMap = ({ isTracking = false }) => {
+  const [loadingMap, setLoadingMap] = useState(true);
+  
   return (
     <div className="w-full h-[300px] bg-gray-100 rounded-lg overflow-hidden">
-      <div className="w-full h-full">
+      <div className="w-full h-full relative">
         <iframe 
           width="100%" 
           height="100%" 
@@ -19,12 +21,29 @@ const OrderMap = () => {
           scrolling="no" 
           marginHeight={0} 
           marginWidth={0} 
-          src="https://www.openstreetmap.org/export/embed.html?bbox=-46.69601440429688%2C-23.588296175900284%2C-46.61335945129395%2C-23.54324143931328&layer=mapnik"
+          src={isTracking 
+            ? "https://www.openstreetmap.org/export/embed.html?bbox=-46.69601440429688%2C-23.588296175900284%2C-46.61335945129395%2C-23.54324143931328&layer=mapnik&marker=-23.56576900000001%2C-46.65468700000001" 
+            : "https://www.openstreetmap.org/export/embed.html?bbox=-46.69601440429688%2C-23.588296175900284%2C-46.61335945129395%2C-23.54324143931328&layer=mapnik"}
           title="Mapa de localização do entregador"
+          onLoad={() => setLoadingMap(false)}
         />
+        {loadingMap && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+            <Loader2 className="h-8 w-8 animate-spin text-menu-primary" />
+          </div>
+        )}
+        {isTracking && (
+          <div className="absolute bottom-0 left-0 w-full">
+            <div className="animate-pulse flex items-center justify-center bg-blue-500 text-white py-2 px-4">
+              <Truck className="h-4 w-4 mr-2" /> Entregador a caminho
+            </div>
+          </div>
+        )}
       </div>
       <div className="p-3 bg-yellow-50 text-center">
-        <p className="text-sm">Essa é uma versão demonstrativa do mapa. Na versão final, a localização em tempo real do entregador será mostrada.</p>
+        <p className="text-sm">{isTracking 
+          ? "Acompanhando em tempo real a localização do entregador." 
+          : "Essa é uma versão demonstrativa do mapa. Na versão final, a localização em tempo real do entregador será mostrada."}</p>
       </div>
     </div>
   );
@@ -32,12 +51,14 @@ const OrderMap = () => {
 
 const OrderTracking = () => {
   const navigate = useNavigate();
+  const params = useParams();
   const [mapOpen, setMapOpen] = useState(false);
   const [orderConfirmed, setOrderConfirmed] = useState(false);
+  const [tracking, setTracking] = useState(false);
   
   // Mockup de pedido - no futuro virá da API
   const order = {
-    id: '#ORD123456',
+    id: params.orderId || '#ORD123456',
     status: 'preparing', // pode ser: pending, preparing, ready, in_transit, delivered
     createdAt: new Date().toISOString(),
     estimatedTime: 25, // em minutos
@@ -62,6 +83,7 @@ const OrderTracking = () => {
   const statusStep = getStatusStep(order.status);
   
   const handleTrackOrder = () => {
+    setTracking(true);
     setMapOpen(true);
   };
   
@@ -154,6 +176,12 @@ const OrderTracking = () => {
                 </div>
               </div>
               
+              {/* Mapa de localização */}
+              <div className="space-y-3">
+                <h3 className="font-medium">Local de entrega</h3>
+                <OrderMap />
+              </div>
+              
               {/* Resumo do Pedido */}
               <div>
                 <h3 className="font-bold mb-3">Resumo do Pedido</h3>
@@ -216,12 +244,8 @@ const OrderTracking = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Rastreamento do pedido</DialogTitle>
-            <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
-              <X className="h-4 w-4" />
-              <span className="sr-only">Fechar</span>
-            </DialogClose>
           </DialogHeader>
-          <OrderMap />
+          <OrderMap isTracking={tracking} />
         </DialogContent>
       </Dialog>
     </div>

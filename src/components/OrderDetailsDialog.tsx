@@ -10,12 +10,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Edit, X, Trash2 } from 'lucide-react';
+import { Edit, X, Trash2, Plus, Minus } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 interface OrderItem {
   name: string;
@@ -48,11 +46,13 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   onOpenChange,
   currentUserRole
 }) => {
-  const [currentStatus, setCurrentStatus] = useState<'pending' | 'preparing' | 'ready' | 'delivered'>('pending');
+  const [currentStatus, setCurrentStatus] = useState<'pending' | 'preparing' | 'ready' | 'delivered'>(order.status as any || 'pending');
   const [localOrder, setLocalOrder] = useState<OrderProps>(order);
   const [activeTab, setActiveTab] = useState('pending');
   const [editingTable, setEditingTable] = useState(false);
   const [newTableName, setNewTableName] = useState(order.table);
+  const [preparingItems, setPreparingItems] = useState<OrderItem[]>([]);
+  const [deliveredItems, setDeliveredItems] = useState<OrderItem[]>([]);
   
   const canEdit = ['admin', 'restaurant_owner', 'waiter'].includes(currentUserRole);
   
@@ -64,8 +64,13 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   ];
   
   const handleSendToKitchen = () => {
+    // Atualiza o status para preparing
     setCurrentStatus('preparing');
     setActiveTab('preparing');
+    
+    // Mover todos os itens pendentes para a lista de em preparo
+    setPreparingItems([...localOrder.items]);
+    
     toast({
       title: "Pedido enviado para a cozinha",
       description: `O pedido da ${localOrder.table} foi enviado para preparo`,
@@ -93,10 +98,26 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
     }
   };
   
-  const handleEditItem = (index: number) => {
+  const handleUpdateQuantity = (index: number, newQuantity: number) => {
+    if (newQuantity < 1) return; // Não permitir quantidade menor que 1
+    
+    const updatedItems = [...localOrder.items];
+    const oldQuantity = updatedItems[index].quantity;
+    updatedItems[index].quantity = newQuantity;
+    
+    // Recalcular o total
+    const priceDifference = updatedItems[index].price * (newQuantity - oldQuantity);
+    const newTotal = localOrder.total + priceDifference;
+    
+    setLocalOrder({
+      ...localOrder,
+      items: updatedItems,
+      total: newTotal
+    });
+    
     toast({
-      title: "Edição de item",
-      description: "Esta funcionalidade será implementada em breve",
+      title: "Quantidade atualizada",
+      description: `${updatedItems[index].name}: ${oldQuantity} → ${newQuantity}`,
     });
   };
   
@@ -128,16 +149,14 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   };
 
   const getPendingItems = () => localOrder.items.filter((_, i) => 
-    currentStatus === 'pending' || i % 3 === 0
+    currentStatus === 'pending' || preparingItems.length === 0
   );
   
-  const getPreparingItems = () => localOrder.items.filter((_, i) => 
-    currentStatus !== 'pending' && i % 3 === 1
-  );
+  const getPreparingItems = () => 
+    currentStatus !== 'pending' ? preparingItems : [];
   
-  const getDeliveredItems = () => localOrder.items.filter((_, i) => 
-    currentStatus === 'delivered' || (currentStatus === 'ready' && i % 3 === 2)
-  );
+  const getDeliveredItems = () => 
+    currentStatus === 'delivered' || currentStatus === 'ready' ? deliveredItems : [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -189,7 +208,7 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
           <TabsContent value="pending" className="mt-4">
             <h3 className="font-bold text-lg mb-2">Itens Pendentes</h3>
             <div className="space-y-4 mb-4 max-h-64 overflow-y-auto">
-              {getPendingItems().map((item, index) => (
+              {getPendingItems().length > 0 ? getPendingItems().map((item, index) => (
                 <div key={`pending-${index}`} className="flex items-start gap-3">
                   <div className="w-16 h-16 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
                     <img 
@@ -207,26 +226,40 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                     {item.notes && (
                       <p className="text-sm text-gray-600 mt-1">{item.notes}</p>
                     )}
-                    <div className="mt-1">
-                      <span className="text-sm text-gray-600">Qtd: {item.quantity}</span>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Qtd:</span>
+                      {canEdit && currentStatus === 'pending' ? (
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            className="h-6 w-6"
+                            onClick={() => handleUpdateQuantity(index, Math.max(1, item.quantity - 1))}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="font-medium w-6 text-center">{item.quantity}</span>
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            className="h-6 w-6"
+                            onClick={() => handleUpdateQuantity(index, item.quantity + 1)}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <span>{item.quantity}</span>
+                      )}
                     </div>
                   </div>
                   
                   {canEdit && currentStatus === 'pending' && (
-                    <div className="flex gap-1">
+                    <div className="flex-shrink-0">
                       <Button 
                         variant="outline" 
                         size="icon" 
-                        className="flex-shrink-0 h-8 w-8"
-                        onClick={() => handleEditItem(index)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      
-                      <Button 
-                        variant="outline" 
-                        size="icon" 
-                        className="flex-shrink-0 h-8 w-8 text-red-500 hover:text-red-700"
+                        className="h-8 w-8 text-red-500 hover:text-red-700"
                         onClick={() => handleRemoveItem(index)}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -234,7 +267,11 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                     </div>
                   )}
                 </div>
-              ))}
+              )) : (
+                <p className="text-gray-500 text-center py-4">
+                  Não há itens pendentes.
+                </p>
+              )}
             </div>
           </TabsContent>
           
@@ -245,7 +282,7 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                 <p className="text-gray-500 text-center py-4">
                   Não há itens em preparo. Envie o pedido para a cozinha primeiro.
                 </p>
-              ) : (
+              ) : getPreparingItems().length > 0 ? (
                 getPreparingItems().map((item, index) => (
                   <div key={`preparing-${index}`} className="flex items-start gap-3">
                     <div className="w-16 h-16 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
@@ -270,6 +307,10 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                     </div>
                   </div>
                 ))
+              ) : (
+                <p className="text-gray-500 text-center py-4">
+                  Todos os itens estão prontos para entrega.
+                </p>
               )}
             </div>
           </TabsContent>
@@ -277,11 +318,7 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
           <TabsContent value="delivered" className="mt-4">
             <h3 className="font-bold text-lg mb-2">Itens Entregues</h3>
             <div className="space-y-4 mb-4 max-h-64 overflow-y-auto">
-              {currentStatus !== 'ready' && currentStatus !== 'delivered' ? (
-                <p className="text-gray-500 text-center py-4">
-                  Não há itens entregues ainda.
-                </p>
-              ) : (
+              {getDeliveredItems().length > 0 ? (
                 getDeliveredItems().map((item, index) => (
                   <div key={`delivered-${index}`} className="flex items-start gap-3">
                     <div className="w-16 h-16 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
@@ -306,6 +343,10 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
                     </div>
                   </div>
                 ))
+              ) : (
+                <p className="text-gray-500 text-center py-4">
+                  Nenhum item foi entregue ainda.
+                </p>
               )}
             </div>
           </TabsContent>
@@ -322,7 +363,7 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
           <Button 
             className="w-full bg-blue-600 hover:bg-blue-700"
             onClick={handleSendToKitchen}
-            disabled={currentStatus !== 'pending'}
+            disabled={currentStatus !== 'pending' || localOrder.items.length === 0}
           >
             Mandar p/ Cozinha
           </Button>
