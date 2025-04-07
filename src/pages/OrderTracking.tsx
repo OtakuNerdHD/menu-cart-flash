@@ -33,6 +33,28 @@ const OrderMap = ({ isTracking = false }) => {
           </div>
         )}
         {isTracking && (
+          <div className="absolute inset-0 pointer-events-none">
+            {/* Motoboy animado */}
+            <div className="absolute w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white animate-pulse"
+                 style={{
+                   left: '40%',
+                   top: '50%',
+                   animation: 'moveMotoBoy 20s linear infinite',
+                 }}>
+              <Truck className="h-6 w-6" />
+            </div>
+            <style jsx>{`
+              @keyframes moveMotoBoy {
+                0% { left: 10%; top: 50%; }
+                25% { left: 30%; top: 30%; }
+                50% { left: 50%; top: 40%; }
+                75% { left: 70%; top: 60%; }
+                100% { left: 90%; top: 50%; }
+              }
+            `}</style>
+          </div>
+        )}
+        {isTracking && (
           <div className="absolute bottom-0 left-0 w-full">
             <div className="animate-pulse flex items-center justify-center bg-blue-500 text-white py-2 px-4">
               <Truck className="h-4 w-4 mr-2" /> Entregador a caminho
@@ -55,6 +77,7 @@ const OrderTracking = () => {
   const [mapOpen, setMapOpen] = useState(false);
   const [orderConfirmed, setOrderConfirmed] = useState(false);
   const [tracking, setTracking] = useState(false);
+  const [routeCompleted, setRouteCompleted] = useState(false);
   
   // Mockup de pedido - no futuro virá da API
   const order = {
@@ -85,6 +108,17 @@ const OrderTracking = () => {
   const handleTrackOrder = () => {
     setTracking(true);
     setMapOpen(true);
+    
+    // Simular que a entrega foi completada após 20s
+    setTimeout(() => {
+      if (tracking) {
+        setRouteCompleted(true);
+        toast({
+          title: "Entregador chegou ao destino",
+          description: "Seu pedido foi entregue com sucesso!",
+        });
+      }
+    }, 20000);
   };
   
   const handleConfirmOrder = () => {
@@ -179,7 +213,31 @@ const OrderTracking = () => {
               {/* Mapa de localização */}
               <div className="space-y-3">
                 <h3 className="font-medium">Local de entrega</h3>
-                <OrderMap />
+                <OrderMap isTracking={routeCompleted ? false : tracking} />
+                
+                {/* Botões de rastreamento e confirmação */}
+                {(statusStep === 3 || statusStep === 4) && (
+                  <div className="space-y-3 pt-2">
+                    <Button 
+                      variant="outline" 
+                      className="w-full flex items-center justify-center gap-2"
+                      onClick={handleTrackOrder}
+                      disabled={routeCompleted}
+                    >
+                      <MapPin className="h-4 w-4" />
+                      {routeCompleted ? 'Rota concluída' : 'Rastrear pedido'}
+                    </Button>
+                    
+                    <Button 
+                      className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700"
+                      onClick={handleConfirmOrder}
+                      disabled={orderConfirmed}
+                    >
+                      <Check className="h-4 w-4" />
+                      {orderConfirmed ? "Pedido confirmado" : "Confirmar recebimento"}
+                    </Button>
+                  </div>
+                )}
               </div>
               
               {/* Resumo do Pedido */}
@@ -201,29 +259,6 @@ const OrderTracking = () => {
                   </div>
                 </div>
               </div>
-              
-              {/* Seção de botões adicionais */}
-              {(statusStep === 3 || statusStep === 4) && (
-                <div className="space-y-3 pt-2">
-                  <Button 
-                    variant="outline" 
-                    className="w-full flex items-center justify-center gap-2"
-                    onClick={handleTrackOrder}
-                  >
-                    <MapPin className="h-4 w-4" />
-                    Rastrear pedido
-                  </Button>
-                  
-                  <Button 
-                    className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700"
-                    onClick={handleConfirmOrder}
-                    disabled={orderConfirmed}
-                  >
-                    <Check className="h-4 w-4" />
-                    {orderConfirmed ? "Pedido confirmado" : "Confirmar recebimento"}
-                  </Button>
-                </div>
-              )}
             </CardContent>
             
             <CardFooter>

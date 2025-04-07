@@ -4,11 +4,12 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Clock, UtensilsCrossed, CheckCircle } from 'lucide-react';
+import { Clock, UtensilsCrossed, CheckCircle, ClipboardList } from 'lucide-react';
 import { useUserSwitcher } from '@/context/UserSwitcherContext';
 import { toast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
 import { useNavigate } from 'react-router-dom';
+import KitchenOrderDetails from '@/components/KitchenOrderDetails';
 
 // Dados de exemplo - futuramente virão da API
 const mockOrders = [
@@ -47,6 +48,25 @@ const mockOrders = [
     total: 30.90,
     createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 min atrás
     assignedTo: 'João'
+  },
+  {
+    id: 4,
+    status: 'queued',
+    table: 'Delivery',
+    items: [
+      { name: 'Cheeseburger', quantity: 1, price: 25.00, notes: 'Sem ketchup' },
+      { name: 'Porção de batata', quantity: 2, price: 20.00 }
+    ],
+    total: 53.90,
+    createdAt: new Date().toISOString(),
+    assignedTo: null,
+    isDelivery: true,
+    customer: {
+      name: 'João Almeida',
+      phone: '(11) 98765-4321',
+      address: 'Rua Augusta, 500, São Paulo - SP'
+    },
+    deliveryFee: 8.90
   }
 ];
 
@@ -54,6 +74,8 @@ const KitchenManagement = () => {
   const { currentUser } = useUserSwitcher();
   const [orders, setOrders] = useState(mockOrders);
   const [activeTab, setActiveTab] = useState('queued');
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const navigate = useNavigate();
   
   const isKitchenStaff = ['admin', 'restaurant_owner', 'chef'].includes(currentUser?.role || '');
@@ -97,6 +119,9 @@ const KitchenManagement = () => {
       title: "Preparo iniciado",
       description: `Você começou a preparar o pedido da ${orders.find(o => o.id === orderId)?.table}`,
     });
+    
+    // Fechar o modal se estiver aberto
+    setDetailsOpen(false);
   };
   
   const handleFinishPreparation = (orderId: number) => {
@@ -112,6 +137,9 @@ const KitchenManagement = () => {
       title: "Pedido pronto",
       description: `O pedido da ${orders.find(o => o.id === orderId)?.table} está pronto para entrega`,
     });
+    
+    // Fechar o modal se estiver aberto
+    setDetailsOpen(false);
   };
   
   const handlePickedUp = (orderId: number) => {
@@ -133,6 +161,15 @@ const KitchenManagement = () => {
       setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
     }, 3000);
   };
+  
+  const handleOpenDetails = (order: typeof orders[0]) => {
+    setSelectedOrder(order);
+    setDetailsOpen(true);
+  };
+  
+  const handleCancelOrder = (orderId: number) => {
+    setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
+  };
 
   const queuedOrders = orders.filter(order => order.status === 'queued');
   const inProgressOrders = orders.filter(order => order.status === 'in_progress');
@@ -148,7 +185,12 @@ const KitchenManagement = () => {
       
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
-          <CardTitle>{order.table}</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            {order.table}
+            {order.isDelivery && (
+              <Badge className="bg-indigo-100 text-indigo-800">Delivery</Badge>
+            )}
+          </CardTitle>
           <Badge className={`${
             order.status === 'queued' ? 'bg-yellow-100 text-yellow-800' : 
             order.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 
@@ -189,7 +231,20 @@ const KitchenManagement = () => {
           
           <Separator />
           
-          <div className="pt-2">
+          <div className="pt-2 space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="font-semibold">Total: R$ {order.total.toFixed(2)}</span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex items-center gap-1"
+                onClick={() => handleOpenDetails(order)}
+              >
+                <ClipboardList className="h-4 w-4" />
+                Detalhes
+              </Button>
+            </div>
+            
             {order.status === 'queued' && (
               <Button 
                 className="w-full"
@@ -295,6 +350,18 @@ const KitchenManagement = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Modal de Detalhes do Pedido */}
+      {selectedOrder && (
+        <KitchenOrderDetails
+          order={selectedOrder}
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+          onStartPreparation={handleStartPreparation}
+          onFinishPreparation={handleFinishPreparation}
+          onCancelOrder={handleCancelOrder}
+        />
+      )}
     </div>
   );
 };
