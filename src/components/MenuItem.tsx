@@ -1,52 +1,87 @@
 
-import React from 'react';
+// Importo o componente de diálogo de detalhes do produto
+import { useState } from 'react';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { InfoIcon } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
-import { PlusCircle } from 'lucide-react';
-import { Card, CardContent, CardFooter } from '@/components/ui/card';
-import { type MenuItem as MenuItemType } from '@/data/menuItems';
-import { Badge } from '@/components/ui/badge';
+import { toast } from '@/hooks/use-toast';
+import { Product } from '@/types/supabase';
+import ProductDetailsDialog from './ProductDetailsDialog';
 
 interface MenuItemProps {
-  item: MenuItemType;
+  item: Product;
 }
 
-const MenuItem: React.FC<MenuItemProps> = ({ item }) => {
+const MenuItem = ({ item }: MenuItemProps) => {
   const { addToCart } = useCart();
-  const { name, description, price, imageUrl, featured } = item;
+  const [showDetails, setShowDetails] = useState(false);
+  
+  const handleAddToCart = () => {
+    addToCart({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      image: item.image_url,
+      quantity: 1
+    });
+    
+    toast({
+      title: "Item adicionado ao carrinho",
+      description: `${item.name} foi adicionado ao seu pedido`,
+    });
+  };
+  
+  const handleOpenDetails = () => {
+    setShowDetails(true);
+  };
 
   return (
-    <Card className={`menu-card overflow-hidden h-full flex flex-col ${featured ? 'border-menu-accent border-2' : ''}`}>
-      <div className="relative h-48 overflow-hidden">
-        <img 
-          src={imageUrl} 
-          alt={name} 
-          className="w-full h-full object-cover"
-        />
-        {featured && (
-          <Badge className="absolute top-2 right-2 bg-menu-accent text-black font-medium">
-            Oferta do dia
-          </Badge>
-        )}
-      </div>
+    <>
+      <Card className="overflow-hidden">
+        <div className="aspect-video relative">
+          <img 
+            src={item.image_url || "/placeholder.svg"} 
+            alt={item.name}
+            className="w-full h-full object-cover"
+          />
+          {item.featured && (
+            <span className="absolute top-2 right-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded-full">
+              Destaque
+            </span>
+          )}
+        </div>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">{item.name}</CardTitle>
+          <CardDescription>R$ {item.price.toFixed(2)}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-gray-600 text-sm line-clamp-2">{item.description}</p>
+        </CardContent>
+        <CardFooter className="flex justify-between">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleOpenDetails}
+            className="flex items-center gap-1"
+          >
+            <InfoIcon className="h-4 w-4" /> Detalhes
+          </Button>
+          <Button 
+            onClick={handleAddToCart}
+            size="sm"
+          >
+            Adicionar
+          </Button>
+        </CardFooter>
+      </Card>
       
-      <CardContent className="flex-grow pt-4">
-        <h3 className="text-xl font-bold mb-1 text-menu-secondary">{name}</h3>
-        <p className="text-gray-600 text-sm line-clamp-2">{description}</p>
-      </CardContent>
-      
-      <CardFooter className="flex justify-between items-center pt-2 pb-4">
-        <span className="text-lg font-bold">
-          R$ {price.toFixed(2)}
-        </span>
-        <Button 
-          onClick={() => addToCart(item)}
-          className="bg-menu-primary hover:bg-menu-primary/90"
-        >
-          <PlusCircle className="mr-2 h-4 w-4" /> Adicionar
-        </Button>
-      </CardFooter>
-    </Card>
+      <ProductDetailsDialog 
+        product={item} 
+        open={showDetails} 
+        onOpenChange={setShowDetails} 
+      />
+    </>
   );
 };
 

@@ -11,6 +11,9 @@ import Index from "./pages/Index";
 import OrderManagement from "./pages/OrderManagement";
 import OrderTracking from "./pages/OrderTracking";
 import KitchenManagement from "./pages/KitchenManagement";
+import ProductManagement from "./pages/ProductManagement";
+import UserManagement from "./pages/UserManagement";
+import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +31,9 @@ const App = () => (
               <Route path="/order-management" element={<OrderManagement />} />
               <Route path="/kitchen-management" element={<KitchenManagement />} />
               <Route path="/order-tracking/:orderId?" element={<OrderTracking />} />
+              <Route path="/product-management" element={<ProductManagement />} />
+              <Route path="/user-management" element={<UserManagement />} />
+              <Route path="/login" element={<Login />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

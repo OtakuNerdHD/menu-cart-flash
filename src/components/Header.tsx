@@ -5,9 +5,13 @@ import { ShoppingCart, Menu } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { Sheet, SheetTrigger, SheetContent } from '@/components/ui/sheet';
 import { Link } from 'react-router-dom';
+import { useUserSwitcher } from '@/context/UserSwitcherContext';
 
 const Header = () => {
   const { totalItems, toggleCart } = useCart();
+  const { currentUser } = useUserSwitcher();
+  
+  const isAdminOrOwner = currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner';
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white shadow-sm">
@@ -26,12 +30,38 @@ const Header = () => {
                   <Link to="/" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
                     Home
                   </Link>
-                  <Link to="/order-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
-                    Gerenciamento de Pedidos
+                  <Link to="/login" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                    Login / Cadastro
                   </Link>
                   <Link to="/order-tracking" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
                     Acompanhar Pedido
                   </Link>
+                  
+                  {/* Páginas visíveis apenas para Garçons, Chef, Admin e Dono */}
+                  {['waiter', 'chef', 'admin', 'restaurant_owner'].includes(currentUser?.role || '') && (
+                    <Link to="/order-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                      Gerenciamento de Pedidos
+                    </Link>
+                  )}
+                  
+                  {/* Páginas visíveis apenas para Chef, Admin e Dono */}
+                  {['chef', 'admin', 'restaurant_owner'].includes(currentUser?.role || '') && (
+                    <Link to="/kitchen-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                      Gerenciamento de Cozinha
+                    </Link>
+                  )}
+                  
+                  {/* Páginas visíveis apenas para Admin e Dono */}
+                  {isAdminOrOwner && (
+                    <>
+                      <Link to="/product-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                        Gerenciamento de Produtos
+                      </Link>
+                      <Link to="/user-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                        Gerenciamento de Usuários
+                      </Link>
+                    </>
+                  )}
                 </nav>
               </div>
             </SheetContent>
