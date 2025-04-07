@@ -20,7 +20,10 @@ const TableOrderForm = () => {
       try {
         const parsedOrders = JSON.parse(storedOrders);
         const tableNames = [...new Set(parsedOrders.map((order: any) => order.table.toLowerCase()))];
-        setExistingTables(tableNames);
+        // Garantir que todos os elementos são strings antes de atribuir ao estado
+        setExistingTables(tableNames.filter((tableName): tableName is string => 
+          typeof tableName === 'string'
+        ));
       } catch (error) {
         console.error('Erro ao carregar mesas existentes:', error);
       }
@@ -68,7 +71,7 @@ const TableOrderForm = () => {
         name: item.name,
         quantity: item.quantity,
         price: item.price,
-        notes: item.notes
+        notes: item.notes || '' // Garante que sempre teremos uma string para notes
       })),
       total: subtotal * 1.1, // Com taxa de serviço
       createdAt: new Date().toISOString(),
