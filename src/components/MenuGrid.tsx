@@ -1,10 +1,10 @@
 
 import React from 'react';
 import MenuItem from './MenuItem';
-import { type MenuItem as MenuItemType } from '@/data/menuItems';
+import { Product } from '@/types/supabase';
 
 interface MenuGridProps {
-  items: MenuItemType[];
+  items: Product[];
 }
 
 const MenuGrid: React.FC<MenuGridProps> = ({ items }) => {

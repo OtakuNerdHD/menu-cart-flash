@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -14,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { menuItems } from '@/data/menuItems';
+import { Product } from '@/types/supabase';
 import { 
   Carousel, 
   CarouselContent, 
@@ -36,11 +36,11 @@ interface ProductFormState {
 const ProductManagement = () => {
   const navigate = useNavigate();
   const { currentUser } = useUserSwitcher();
-  const [products, setProducts] = useState([...menuItems]);
+  const [products, setProducts] = useState<Product[]>([...menuItems]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddEditDialog, setShowAddEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [currentProduct, setCurrentProduct] = useState<any>(null);
+  const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
   const [formState, setFormState] = useState<ProductFormState>({
     name: '',
     price: '',
@@ -52,7 +52,6 @@ const ProductManagement = () => {
     ingredients: ''
   });
   
-  // Verifica se o usuário tem permissão
   const isAdminOrOwner = ['admin', 'restaurant_owner'].includes(currentUser?.role || '');
 
   if (!isAdminOrOwner) {
@@ -99,14 +98,14 @@ const ProductManagement = () => {
     setShowAddEditDialog(true);
   };
   
-  const handleEditProduct = (product: any) => {
+  const handleEditProduct = (product: Product) => {
     setCurrentProduct(product);
     setFormState({
       name: product.name,
       price: product.price.toString(),
-      description: product.description,
+      description: product.description || '',
       category: product.category || 'pratos_principais',
-      available: product.available !== false, // Default to true if undefined
+      available: product.available !== false,
       featured: product.featured || false,
       images: product.image_url ? [product.image_url] : [''],
       ingredients: (product.nutritional_info?.ingredients || []).join(', ')
@@ -114,7 +113,7 @@ const ProductManagement = () => {
     setShowAddEditDialog(true);
   };
   
-  const handleDeleteProduct = (product: any) => {
+  const handleDeleteProduct = (product: Product) => {
     setCurrentProduct(product);
     setShowDeleteDialog(true);
   };
@@ -132,7 +131,6 @@ const ProductManagement = () => {
   };
   
   const handleSubmitProduct = () => {
-    // Validação básica
     if (!formState.name || !formState.price || !formState.description) {
       toast({
         title: "Campos obrigatórios",
@@ -142,7 +140,6 @@ const ProductManagement = () => {
       return;
     }
     
-    // Converte preço para número
     const price = parseFloat(formState.price.replace(',', '.'));
     if (isNaN(price)) {
       toast({
@@ -153,8 +150,7 @@ const ProductManagement = () => {
       return;
     }
     
-    // Prepara o objeto produto
-    const productData = {
+    const productData: Product = {
       id: currentProduct ? currentProduct.id : Date.now(),
       name: formState.name,
       description: formState.description,
@@ -163,20 +159,19 @@ const ProductManagement = () => {
       available: formState.available,
       featured: formState.featured,
       image_url: formState.images[0] || '/placeholder.svg',
+      restaurant_id: 1,
       nutritional_info: {
         ingredients: formState.ingredients.split(',').map(i => i.trim()).filter(Boolean)
       }
     };
     
     if (currentProduct) {
-      // Atualiza produto existente
       setProducts(products.map(p => p.id === currentProduct.id ? productData : p));
       toast({
         title: "Produto atualizado",
         description: `${formState.name} foi atualizado com sucesso`,
       });
     } else {
-      // Adiciona novo produto
       setProducts([...products, productData]);
       toast({
         title: "Produto adicionado",
@@ -210,14 +205,12 @@ const ProductManagement = () => {
     }
   };
   
-  // Filtra produtos pela pesquisa
   const filteredProducts = products.filter(product => 
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
     product.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
   
-  // Agrupa produtos por categoria
   const categories = [
     { id: 'todos', name: 'Todos' },
     { id: 'pratos_principais', name: 'Pratos Principais' },
@@ -243,7 +236,6 @@ const ProductManagement = () => {
           </Button>
         </div>
         
-        {/* Filtros e pesquisa */}
         <div className="mb-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
@@ -258,7 +250,6 @@ const ProductManagement = () => {
           </div>
         </div>
         
-        {/* Lista de produtos por categoria */}
         <Tabs defaultValue="todos" className="w-full">
           <TabsList className="mb-4 flex w-full overflow-x-auto">
             {categories.map(category => (
@@ -340,7 +331,6 @@ const ProductManagement = () => {
         </Tabs>
       </div>
       
-      {/* Modal para adicionar/editar produto */}
       <Dialog open={showAddEditDialog} onOpenChange={setShowAddEditDialog}>
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -492,7 +482,6 @@ const ProductManagement = () => {
         </DialogContent>
       </Dialog>
       
-      {/* Modal de confirmação para exclusão */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
           <DialogHeader>

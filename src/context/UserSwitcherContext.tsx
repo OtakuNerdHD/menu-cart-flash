@@ -6,6 +6,7 @@ import { toast } from "@/components/ui/use-toast";
 // Definindo os tipos do contexto
 type UserSwitcherContextType = {
   currentUser: CurrentUser | null;
+  setCurrentUser: (user: CurrentUser | null) => void; // Adicionando esta propriedade
   switchUser: (role: CurrentUser['role']) => void;
   isUserSwitcherOpen: boolean;
   toggleUserSwitcher: () => void;
@@ -108,6 +109,7 @@ export const UserSwitcherProvider: React.FC<{ children: React.ReactNode }> = ({ 
   return (
     <UserSwitcherContext.Provider value={{ 
       currentUser, 
+      setCurrentUser, // Exportando a função setCurrentUser
       switchUser, 
       isUserSwitcherOpen, 
       toggleUserSwitcher, 
