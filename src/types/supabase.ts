@@ -59,9 +59,10 @@ export interface Product {
   price: number;
   image_url?: string | null;
   restaurant_id: number;
+  category?: string | null; // Adicionando a propriedade category que está faltando
   category_id?: number | null;
   available: boolean;
-  featured: boolean;
+  featured?: boolean;
   nutritional_info?: any | null;
   preparation_time?: number | null;
   created_at?: string;
@@ -175,6 +176,19 @@ export interface CurrentUser {
   id: string;
   role: 'admin' | 'restaurant_owner' | 'manager' | 'waiter' | 'chef' | 'delivery_person' | 'customer' | 'visitor';
   name?: string;
-  email?: string;
-  avatar_url?: string;
+  email?: string | null;
+  avatar_url?: string | null;
+}
+
+// Interface MenuItem para uso no carrinho e outros componentes
+export interface MenuItem {
+  id: number;
+  name: string;
+  description?: string;
+  price: number;
+  image?: string;
+  imageUrl?: string; // Para compatibilidade com código existente
+  category?: string;
+  quantity?: number;
+  notes?: string;
 }

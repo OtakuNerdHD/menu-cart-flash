@@ -1,12 +1,11 @@
 
-// Importo o componente de diálogo de detalhes do produto
 import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { InfoIcon } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { toast } from '@/hooks/use-toast';
-import { Product } from '@/types/supabase';
+import { Product, MenuItem as MenuItemType } from '@/types/supabase';
 import ProductDetailsDialog from './ProductDetailsDialog';
 
 interface MenuItemProps {
@@ -22,8 +21,10 @@ const MenuItem = ({ item }: MenuItemProps) => {
       id: item.id,
       name: item.name,
       price: item.price,
-      image: item.image_url,
-      quantity: 1
+      imageUrl: item.image_url,
+      image: item.image_url, // Para compatibilidade
+      description: item.description,
+      category: item.category
     });
     
     toast({

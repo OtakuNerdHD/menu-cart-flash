@@ -10,6 +10,7 @@ import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useUserSwitcher } from '@/context/UserSwitcherContext';
 import { supabase } from '@/integrations/supabase/client';
+import { CurrentUser } from '@/types/supabase';
 
 interface LoginFormState {
   email: string;
@@ -64,7 +65,7 @@ const Login = () => {
       
       setTimeout(() => {
         // Simulando sucesso de login
-        const mockedUser = {
+        const mockedUser: CurrentUser = {
           id: '123',
           role: 'customer',
           name: 'Usuário Logado',
@@ -112,7 +113,7 @@ const Login = () => {
       // Em produção, seria feito o registro com Supabase
       
       setTimeout(() => {
-        const mockedUser = {
+        const mockedUser: CurrentUser = {
           id: '456',
           role: 'customer',
           name: `${registerForm.firstName} ${registerForm.lastName}`,
@@ -154,7 +155,7 @@ const Login = () => {
       
       // Simulando o login
       setTimeout(() => {
-        const mockedUser = {
+        const mockedUser: CurrentUser = {
           id: '789',
           role: 'customer',
           name: 'Usuário Google',

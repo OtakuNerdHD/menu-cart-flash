@@ -1,5 +1,6 @@
+
 import React, { createContext, useState, useContext, ReactNode } from 'react';
-import { MenuItem } from '../data/menuItems';
+import { MenuItem } from '@/types/supabase';
 import { useToast } from "@/components/ui/use-toast";
 
 export interface CartItem extends MenuItem {

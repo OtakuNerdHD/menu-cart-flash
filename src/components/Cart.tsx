@@ -69,7 +69,7 @@ const Cart = () => {
                     <Card key={item.id} className="p-4">
                       <div className="flex gap-3">
                         <img 
-                          src={item.imageUrl} 
+                          src={item.imageUrl || item.image} 
                           alt={item.name} 
                           className="h-20 w-20 object-cover rounded-md"
                         />
