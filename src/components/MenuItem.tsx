@@ -47,31 +47,31 @@ const MenuItem = ({ item }: MenuItemProps) => {
             className="w-full h-full object-cover"
           />
           {item.featured && (
-            <span className="absolute top-2 right-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded-full">
+            <span className="absolute top-1 right-1 bg-yellow-500 text-white text-xs px-1.5 py-0.5 rounded-full text-[10px]">
               Destaque
             </span>
           )}
         </div>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">{item.name}</CardTitle>
-          <CardDescription>R$ {item.price.toFixed(2)}</CardDescription>
+        <CardHeader className="pb-1 pt-2 px-3">
+          <CardTitle className="text-sm">{item.name}</CardTitle>
+          <CardDescription className="text-xs">R$ {item.price.toFixed(2)}</CardDescription>
         </CardHeader>
-        <CardContent>
-          <p className="text-gray-600 text-sm line-clamp-2">{item.description}</p>
+        <CardContent className="pb-1 pt-0 px-3">
+          <p className="text-gray-600 text-xs line-clamp-1">{item.description}</p>
         </CardContent>
-        <CardFooter className="flex justify-between">
+        <CardFooter className="flex justify-between px-3 py-2">
           <Button 
             variant="outline" 
             size="sm"
             onClick={handleOpenDetails}
-            className="flex items-center gap-1"
+            className="flex items-center gap-1 h-7 px-2 text-xs"
           >
             <InfoIcon className="h-3 w-3" /> Detalhes
           </Button>
           <Button 
             onClick={handleAddToCart}
             size="sm"
-            className="text-sm px-3 py-1 h-8"
+            className="text-xs px-2 py-0 h-7"
           >
             Adicionar
           </Button>

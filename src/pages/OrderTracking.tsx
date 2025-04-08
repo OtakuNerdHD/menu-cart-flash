@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ShoppingBag, Clock, CheckCircle, Truck, Loader2, MapPin, Check } from 'lucide-react';
@@ -10,6 +10,82 @@ import { toast } from '@/hooks/use-toast';
 // Componente do mapa OpenStreetMap
 const OrderMap = ({ isTracking = false }) => {
   const [loadingMap, setLoadingMap] = useState(true);
+  const [route, setRoute] = useState([
+    { lat: -23.56576900000001, lng: -46.65468700000001 }, // Posição inicial
+    { lat: -23.56276900000001, lng: -46.65268700000001 } // Destino
+  ]);
+  
+  // Simular movimento do motoboy
+  useEffect(() => {
+    if (!isTracking) return;
+    
+    let animationFrame: number;
+    let step = 0;
+    const totalSteps = 100;
+    
+    const animate = () => {
+      if (step < totalSteps) {
+        // Simular uma rota com variações para parecer mais natural
+        const newPosition = {
+          lat: route[0].lat + (route[1].lat - route[0].lat) * (step / totalSteps) + (Math.random() - 0.5) * 0.0005,
+          lng: route[0].lng + (route[1].lng - route[0].lng) * (step / totalSteps) + (Math.random() - 0.5) * 0.0005
+        };
+        
+        setRoute(prev => [newPosition, prev[1]]);
+        step++;
+        animationFrame = requestAnimationFrame(animate);
+      }
+    };
+    
+    animationFrame = requestAnimationFrame(animate);
+    
+    // Simular mudanças de rota ocasionais
+    const routeChangeInterval = setInterval(() => {
+      // Gerar um destino ligeiramente diferente de vez em quando
+      const randomOffset = 0.003;
+      const newDestination = {
+        lat: -23.56276900000001 + (Math.random() - 0.5) * randomOffset,
+        lng: -46.65268700000001 + (Math.random() - 0.5) * randomOffset
+      };
+      setRoute(prev => [prev[0], newDestination]);
+      
+      toast({
+        title: "Rota atualizada",
+        description: "O entregador alterou a rota de entrega.",
+      });
+    }, 15000);
+    
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      clearInterval(routeChangeInterval);
+    };
+  }, [isTracking]);
+  
+  // Converter rota para SVG path para mostrar a linha
+  const getPathD = () => {
+    const svgWidth = 400;
+    const svgHeight = 300;
+    
+    // Converter coordenadas geográficas para coordenadas SVG
+    const minLat = -23.57;
+    const maxLat = -23.54;
+    const minLng = -46.67;
+    const maxLng = -46.63;
+    
+    const latToY = (lat: number) => svgHeight - ((lat - minLat) / (maxLat - minLat)) * svgHeight;
+    const lngToX = (lng: number) => ((lng - minLng) / (maxLng - minLng)) * svgWidth;
+    
+    const x1 = lngToX(route[0].lng);
+    const y1 = latToY(route[0].lat);
+    const x2 = lngToX(route[1].lng);
+    const y2 = latToY(route[1].lat);
+    
+    // Criar uma curva Bezier para simular rotas do Google Maps
+    const controlPointX = x1 + (x2 - x1) / 2 + (Math.random() - 0.5) * 20;
+    const controlPointY = y1 + (y2 - y1) / 2 + (Math.random() - 0.5) * 20;
+    
+    return `M${x1},${y1} Q${controlPointX},${controlPointY} ${x2},${y2}`;
+  };
   
   return (
     <div className="w-full h-[300px] bg-gray-100 rounded-lg overflow-hidden">
@@ -22,7 +98,7 @@ const OrderMap = ({ isTracking = false }) => {
           marginHeight={0} 
           marginWidth={0} 
           src={isTracking 
-            ? "https://www.openstreetmap.org/export/embed.html?bbox=-46.69601440429688%2C-23.588296175900284%2C-46.61335945129395%2C-23.54324143931328&layer=mapnik&marker=-23.56576900000001%2C-46.65468700000001" 
+            ? "https://www.openstreetmap.org/export/embed.html?bbox=-46.69601440429688%2C-23.588296175900284%2C-46.61335945129395%2C-23.54324143931328&layer=mapnik" 
             : "https://www.openstreetmap.org/export/embed.html?bbox=-46.69601440429688%2C-23.588296175900284%2C-46.61335945129395%2C-23.54324143931328&layer=mapnik"}
           title="Mapa de localização do entregador"
           onLoad={() => setLoadingMap(false)}
@@ -32,48 +108,77 @@ const OrderMap = ({ isTracking = false }) => {
             <Loader2 className="h-8 w-8 animate-spin text-menu-primary" />
           </div>
         )}
+        
+        {isTracking && (
+          <svg 
+            className="absolute inset-0 w-full h-full pointer-events-none" 
+            viewBox="0 0 400 300" 
+            preserveAspectRatio="none"
+          >
+            {/* Linha da rota */}
+            <path 
+              d={getPathD()} 
+              stroke="#4285F4" 
+              strokeWidth="3" 
+              fill="none" 
+              strokeDasharray="5,5" 
+            />
+            
+            {/* Pin de destino */}
+            <g transform={`translate(${lngToX(route[1].lng) - 10}, ${latToY(route[1].lat) - 20})`}>
+              <path d="M10,0 C4.5,0 0,4.5 0,10 C0,15.5 10,30 10,30 C10,30 20,15.5 20,10 C20,4.5 15.5,0 10,0 Z" 
+                fill="#E53935" />
+              <rect x="5" y="5" width="10" height="10" fill="white" />
+            </g>
+          </svg>
+        )}
+        
         {isTracking && (
           <div className="absolute inset-0 pointer-events-none">
             {/* Motoboy animado */}
             <div 
-              className="absolute w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white animate-pulse"
+              className="absolute w-6 h-6 flex items-center justify-center"
               style={{
-                left: '40%',
-                top: '50%',
-                animation: 'moveMotoBoy 20s linear infinite',
+                left: `${(lngToX(route[0].lng) / 400) * 100}%`,
+                top: `${(latToY(route[0].lat) / 300) * 100}%`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 1000
               }}
             >
-              <Truck className="h-6 w-6" />
+              <img 
+                src="/lovable-uploads/4dd85232-331e-4de5-9215-35686c444f0c.png" 
+                alt="Motoboy" 
+                className="w-6 h-6"
+              />
             </div>
-            <style>
-              {`
-                @keyframes moveMotoBoy {
-                  0% { left: 10%; top: 50%; }
-                  25% { left: 30%; top: 30%; }
-                  50% { left: 50%; top: 40%; }
-                  75% { left: 70%; top: 60%; }
-                  100% { left: 90%; top: 50%; }
-                }
-              `}
-            </style>
           </div>
         )}
+        
         {isTracking && (
           <div className="absolute bottom-0 left-0 w-full">
-            <div className="animate-pulse flex items-center justify-center bg-blue-500 text-white py-2 px-4">
-              <Truck className="h-4 w-4 mr-2" /> Entregador a caminho
+            <div className="flex items-center justify-center bg-blue-500 text-white py-2 px-4 text-xs">
+              <Truck className="h-3 w-3 mr-1" /> Entregador a caminho
             </div>
           </div>
         )}
       </div>
-      <div className="p-3 bg-yellow-50 text-center">
-        <p className="text-sm">{isTracking 
+      <div className="p-2 bg-yellow-50 text-center">
+        <p className="text-xs">{isTracking 
           ? "Acompanhando em tempo real a localização do entregador." 
           : "Essa é uma versão demonstrativa do mapa. Na versão final, a localização em tempo real do entregador será mostrada."}</p>
       </div>
     </div>
   );
 };
+
+// Funções auxiliares para converter coordenadas geográficas para SVG
+const minLat = -23.57;
+const maxLat = -23.54;
+const minLng = -46.67;
+const maxLng = -46.63;
+
+const latToY = (lat: number) => 300 - ((lat - minLat) / (maxLat - minLat)) * 300;
+const lngToX = (lng: number) => ((lng - minLng) / (maxLng - minLng)) * 400;
 
 const OrderTracking = () => {
   const navigate = useNavigate();
@@ -82,6 +187,7 @@ const OrderTracking = () => {
   const [orderConfirmed, setOrderConfirmed] = useState(false);
   const [tracking, setTracking] = useState(false);
   const [routeCompleted, setRouteCompleted] = useState(false);
+  const [mapStatic, setMapStatic] = useState(true);
   
   // Mockup de pedido - no futuro virá da API
   const order = {
@@ -112,11 +218,13 @@ const OrderTracking = () => {
   const handleTrackOrder = () => {
     setTracking(true);
     setMapOpen(true);
+    setMapStatic(false);
     
     // Simular que a entrega foi completada após 20s
     setTimeout(() => {
       if (tracking) {
         setRouteCompleted(true);
+        setMapStatic(true);
         toast({
           title: "Entregador chegou ao destino",
           description: "Seu pedido foi entregue com sucesso!",
