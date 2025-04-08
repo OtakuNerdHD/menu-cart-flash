@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ShoppingBag, Clock, CheckCircle, Truck, Loader2, MapPin, Check } from 'lucide-react';
@@ -7,15 +7,110 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 
+// SVG para o ícone do motoboy (visão aérea)
+const DeliveryBikeSvg = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="10" fill="#E53935" />
+    <circle cx="12" cy="12" r="8" fill="#FFCDD2" />
+    <rect x="9" y="9" width="6" height="6" fill="#B71C1C" />
+    <rect x="11" y="7" width="2" height="4" fill="#B71C1C" />
+    <rect x="7" y="11" width="4" height="2" fill="#B71C1C" />
+    <rect x="13" y="11" width="4" height="2" fill="#B71C1C" />
+    <rect x="11" y="13" width="2" height="4" fill="#B71C1C" />
+  </svg>
+);
+
+// Gerar pontos aleatórios para simular ruas
+const generateRandomPoints = (center: {lat: number, lng: number}, radius: number, count: number) => {
+  const points = [];
+  for (let i = 0; i < count; i++) {
+    // Gerar pontos aleatórios ao redor do centro
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.random() * radius;
+    const lat = center.lat + distance * Math.cos(angle);
+    const lng = center.lng + distance * Math.sin(angle);
+    points.push({ lat, lng });
+  }
+  return points;
+};
+
+// Converter coordenadas geográficas para SVG
+const latToY = (lat: number) => 300 - ((lat - minLat) / (maxLat - minLat)) * 300;
+const lngToX = (lng: number) => ((lng - minLng) / (maxLng - minLng)) * 400;
+
 // Componente do mapa OpenStreetMap
-const OrderMap = ({ isTracking = false }) => {
+const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = false }) => {
   const [loadingMap, setLoadingMap] = useState(true);
   const [route, setRoute] = useState([
     { lat: -23.56576900000001, lng: -46.65468700000001 }, // Posição inicial
     { lat: -23.56276900000001, lng: -46.65268700000001 } // Destino
   ]);
+  const [streets, setStreets] = useState<{lat: number, lng: number}[][]>([]);
   
-  // Simular movimento do motoboy
+  // Gerar ruas simuladas quando o componente é montado
+  useEffect(() => {
+    const center = { lat: -23.564, lng: -46.653 };
+    const points = generateRandomPoints(center, 0.01, 30);
+    
+    // Criar segmentos simulando ruas
+    const streetSegments = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      streetSegments.push([points[i], points[i+1]]);
+    }
+    
+    // Adicionar algumas ruas verticais e horizontais
+    for (let i = 0; i < 5; i++) {
+      const latStart = -23.568 + i * 0.002;
+      streetSegments.push([
+        { lat: latStart, lng: -46.658 },
+        { lat: latStart, lng: -46.648 }
+      ]);
+      
+      const lngStart = -46.658 + i * 0.002;
+      streetSegments.push([
+        { lat: -23.568, lng: lngStart },
+        { lat: -23.558, lng: lngStart }
+      ]);
+    }
+    
+    setStreets(streetSegments);
+    
+  }, []);
+  
+  // Encontrar ruas próximas à posição atual
+  const findNearbyStreet = (position: {lat: number, lng: number}) => {
+    if (streets.length === 0) return position;
+    
+    let closestPoint = position;
+    let minDistance = Infinity;
+    
+    streets.forEach(street => {
+      const [start, end] = street;
+      
+      // Calcular o ponto mais próximo na rua
+      const dx = end.lng - start.lng;
+      const dy = end.lat - start.lat;
+      const t = ((position.lng - start.lng) * dx + (position.lat - start.lat) * dy) / (dx * dx + dy * dy);
+      
+      if (t >= 0 && t <= 1) {
+        const projectionX = start.lng + t * dx;
+        const projectionY = start.lat + t * dy;
+        const distance = Math.sqrt(
+          Math.pow(position.lng - projectionX, 2) + 
+          Math.pow(position.lat - projectionY, 2)
+        );
+        
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestPoint = { lat: projectionY, lng: projectionX };
+        }
+      }
+    });
+    
+    return closestPoint;
+  };
+  
+  // Simular movimento do motoboy nas ruas
   useEffect(() => {
     if (!isTracking) return;
     
@@ -23,17 +118,34 @@ const OrderMap = ({ isTracking = false }) => {
     let step = 0;
     const totalSteps = 100;
     
+    // Verificar se temos ruas simuladas
+    if (streets.length === 0) return;
+    
     const animate = () => {
       if (step < totalSteps) {
-        // Simular uma rota com variações para parecer mais natural
+        // Calcular posição interpolada bruta
+        const rawPosition = {
+          lat: route[0].lat + (route[1].lat - route[0].lat) * (step / totalSteps),
+          lng: route[0].lng + (route[1].lng - route[0].lng) * (step / totalSteps)
+        };
+        
+        // Ajustar para a rua mais próxima para movimento mais realista
+        const streetPosition = findNearbyStreet(rawPosition);
+        
+        // Adicionar pequena variação aleatória para parecer mais natural
         const newPosition = {
-          lat: route[0].lat + (route[1].lat - route[0].lat) * (step / totalSteps) + (Math.random() - 0.5) * 0.0005,
-          lng: route[0].lng + (route[1].lng - route[0].lng) * (step / totalSteps) + (Math.random() - 0.5) * 0.0005
+          lat: streetPosition.lat + (Math.random() - 0.5) * 0.0001,
+          lng: streetPosition.lng + (Math.random() - 0.5) * 0.0001
         };
         
         setRoute(prev => [newPosition, prev[1]]);
         step++;
         animationFrame = requestAnimationFrame(animate);
+      } else {
+        // Quando completar a rota
+        if (testMode) {
+          onRouteComplete();
+        }
       }
     };
     
@@ -41,25 +153,37 @@ const OrderMap = ({ isTracking = false }) => {
     
     // Simular mudanças de rota ocasionais
     const routeChangeInterval = setInterval(() => {
-      // Gerar um destino ligeiramente diferente de vez em quando
-      const randomOffset = 0.003;
-      const newDestination = {
-        lat: -23.56276900000001 + (Math.random() - 0.5) * randomOffset,
-        lng: -46.65268700000001 + (Math.random() - 0.5) * randomOffset
-      };
-      setRoute(prev => [prev[0], newDestination]);
+      if (!isTracking) return;
       
-      toast({
-        title: "Rota atualizada",
-        description: "O entregador alterou a rota de entrega.",
-      });
+      // Gerar um destino ligeiramente diferente de vez em quando
+      const randomOffset = 0.002;
+      
+      // Escolher um ponto aleatório nas ruas simuladas
+      if (streets.length > 0) {
+        const randomStreetIndex = Math.floor(Math.random() * streets.length);
+        const randomStreet = streets[randomStreetIndex];
+        const t = Math.random();
+        
+        // Interpolar um ponto aleatório na rua
+        const newDestination = {
+          lat: randomStreet[0].lat + (randomStreet[1].lat - randomStreet[0].lat) * t,
+          lng: randomStreet[0].lng + (randomStreet[1].lng - randomStreet[0].lng) * t
+        };
+        
+        setRoute(prev => [prev[0], newDestination]);
+        
+        toast({
+          title: "Rota atualizada",
+          description: "O entregador alterou a rota de entrega.",
+        });
+      }
     }, 15000);
     
     return () => {
       cancelAnimationFrame(animationFrame);
       clearInterval(routeChangeInterval);
     };
-  }, [isTracking]);
+  }, [isTracking, streets, testMode, onRouteComplete]);
   
   // Converter rota para SVG path para mostrar a linha
   const getPathD = () => {
@@ -87,6 +211,29 @@ const OrderMap = ({ isTracking = false }) => {
     return `M${x1},${y1} Q${controlPointX},${controlPointY} ${x2},${y2}`;
   };
   
+  // Renderizar ruas no SVG
+  const renderStreets = () => {
+    return streets.map((street, index) => {
+      const x1 = lngToX(street[0].lng);
+      const y1 = latToY(street[0].lat);
+      const x2 = lngToX(street[1].lng);
+      const y2 = latToY(street[1].lat);
+      
+      return (
+        <line 
+          key={`street-${index}`}
+          x1={x1} 
+          y1={y1} 
+          x2={x2} 
+          y2={y2} 
+          stroke="#ddd" 
+          strokeWidth="4"
+          opacity="0.6"
+        />
+      );
+    });
+  };
+  
   return (
     <div className="w-full h-[300px] bg-gray-100 rounded-lg overflow-hidden">
       <div className="w-full h-full relative">
@@ -97,11 +244,10 @@ const OrderMap = ({ isTracking = false }) => {
           scrolling="no" 
           marginHeight={0} 
           marginWidth={0} 
-          src={isTracking 
-            ? "https://www.openstreetmap.org/export/embed.html?bbox=-46.69601440429688%2C-23.588296175900284%2C-46.61335945129395%2C-23.54324143931328&layer=mapnik" 
-            : "https://www.openstreetmap.org/export/embed.html?bbox=-46.69601440429688%2C-23.588296175900284%2C-46.61335945129395%2C-23.54324143931328&layer=mapnik"}
+          src="https://www.openstreetmap.org/export/embed.html?bbox=-46.69601440429688%2C-23.588296175900284%2C-46.61335945129395%2C-23.54324143931328&layer=mapnik"
           title="Mapa de localização do entregador"
           onLoad={() => setLoadingMap(false)}
+          className={isTracking ? "opacity-60" : ""}
         />
         {loadingMap && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
@@ -115,6 +261,9 @@ const OrderMap = ({ isTracking = false }) => {
             viewBox="0 0 400 300" 
             preserveAspectRatio="none"
           >
+            {/* Ruas simuladas */}
+            {renderStreets()}
+            
             {/* Linha da rota */}
             <path 
               d={getPathD()} 
@@ -137,7 +286,7 @@ const OrderMap = ({ isTracking = false }) => {
           <div className="absolute inset-0 pointer-events-none">
             {/* Motoboy animado */}
             <div 
-              className="absolute w-6 h-6 flex items-center justify-center"
+              className="absolute w-6 h-6"
               style={{
                 left: `${(lngToX(route[0].lng) / 400) * 100}%`,
                 top: `${(latToY(route[0].lat) / 300) * 100}%`,
@@ -145,11 +294,7 @@ const OrderMap = ({ isTracking = false }) => {
                 zIndex: 1000
               }}
             >
-              <img 
-                src="/lovable-uploads/4dd85232-331e-4de5-9215-35686c444f0c.png" 
-                alt="Motoboy" 
-                className="w-6 h-6"
-              />
+              <DeliveryBikeSvg />
             </div>
           </div>
         )}
@@ -171,14 +316,11 @@ const OrderMap = ({ isTracking = false }) => {
   );
 };
 
-// Funções auxiliares para converter coordenadas geográficas para SVG
+// Variáveis globais para o mapa
 const minLat = -23.57;
 const maxLat = -23.54;
 const minLng = -46.67;
 const maxLng = -46.63;
-
-const latToY = (lat: number) => 300 - ((lat - minLat) / (maxLat - minLat)) * 300;
-const lngToX = (lng: number) => ((lng - minLng) / (maxLng - minLng)) * 400;
 
 const OrderTracking = () => {
   const navigate = useNavigate();
@@ -188,6 +330,7 @@ const OrderTracking = () => {
   const [tracking, setTracking] = useState(false);
   const [routeCompleted, setRouteCompleted] = useState(false);
   const [mapStatic, setMapStatic] = useState(true);
+  const [testMode, setTestMode] = useState(false);
   
   // Mockup de pedido - no futuro virá da API
   const order = {
@@ -233,12 +376,50 @@ const OrderTracking = () => {
     }, 20000);
   };
   
+  const handleTestTracking = () => {
+    setTestMode(true);
+    setTracking(true);
+    setMapStatic(false);
+    
+    toast({
+      title: "Modo de teste ativado",
+      description: "Simulando rota de entrega por 15 segundos...",
+    });
+    
+    // Encerrar o teste após 15 segundos
+    setTimeout(() => {
+      setTestMode(false);
+      setRouteCompleted(true);
+      setMapStatic(true);
+      setTracking(false);
+      
+      toast({
+        title: "Teste concluído",
+        description: "A simulação de entrega foi finalizada.",
+      });
+    }, 15000);
+  };
+  
   const handleConfirmOrder = () => {
     setOrderConfirmed(true);
     toast({
       title: "Pedido confirmado",
       description: "Obrigado por confirmar o recebimento do seu pedido!",
     });
+  };
+  
+  const handleRouteComplete = () => {
+    if (testMode) {
+      setRouteCompleted(true);
+      setMapStatic(true);
+      setTracking(false);
+      setTestMode(false);
+      
+      toast({
+        title: "Teste concluído",
+        description: "A simulação de entrega foi finalizada com sucesso.",
+      });
+    }
   };
 
   return (
@@ -324,8 +505,25 @@ const OrderTracking = () => {
               
               {/* Mapa de localização */}
               <div className="space-y-3">
-                <h3 className="font-medium">Local de entrega</h3>
-                <OrderMap isTracking={routeCompleted ? false : tracking} />
+                <div className="flex justify-between items-center">
+                  <h3 className="font-medium">Local de entrega</h3>
+                  {(statusStep === 3 || statusStep === 4) && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleTestTracking}
+                      disabled={tracking}
+                      className="text-xs h-8"
+                    >
+                      Testar rastreio
+                    </Button>
+                  )}
+                </div>
+                <OrderMap 
+                  isTracking={routeCompleted ? false : tracking} 
+                  onRouteComplete={handleRouteComplete}
+                  testMode={testMode}
+                />
                 
                 {/* Botões de rastreamento e confirmação */}
                 {(statusStep === 3 || statusStep === 4) && (
@@ -334,10 +532,10 @@ const OrderTracking = () => {
                       variant="outline" 
                       className="w-full flex items-center justify-center gap-2"
                       onClick={handleTrackOrder}
-                      disabled={routeCompleted}
+                      disabled={routeCompleted || tracking}
                     >
                       <MapPin className="h-4 w-4" />
-                      {routeCompleted ? 'Rota concluída' : 'Rastrear pedido'}
+                      {routeCompleted ? 'Rota concluída' : (tracking ? 'Rastreando...' : 'Rastrear pedido')}
                     </Button>
                     
                     <Button 
@@ -392,7 +590,7 @@ const OrderTracking = () => {
           <DialogHeader>
             <DialogTitle>Rastreamento do pedido</DialogTitle>
           </DialogHeader>
-          <OrderMap isTracking={tracking} />
+          <OrderMap isTracking={tracking} onRouteComplete={handleRouteComplete} testMode={testMode} />
         </DialogContent>
       </Dialog>
     </div>

@@ -152,15 +152,26 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      // Simular login com Google para o protótipo
-      // Em produção, seria feito o login com Google OAuth via Supabase
+      // Abrir janela de login Google para seleção de conta
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin + '/auth/callback',
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account'
+          }
+        }
+      });
+      
+      if (error) throw error;
       
       toast({
         title: "Autenticando com Google",
         description: "Você será redirecionado...",
       });
       
-      // Simulando o login com Google
+      // Simulando o login com Google para o protótipo
       setTimeout(() => {
         const mockedUser: CurrentUser = {
           id: '789',
@@ -171,10 +182,12 @@ const Login = () => {
         };
         
         setCurrentUser(mockedUser);
+        
         toast({
           title: "Login com Google realizado",
           description: "Bem-vindo ao sistema!",
         });
+        
         navigate('/');
         setIsLoading(false);
       }, 1500);
@@ -205,182 +218,184 @@ const Login = () => {
                 <TabsTrigger value="login">Login</TabsTrigger>
                 <TabsTrigger value="register">Cadastrar</TabsTrigger>
               </TabsList>
-            
-              <CardContent className="pt-4">
-                <TabsContent value="login">
-                  <form onSubmit={handleLogin} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="login-email">Email</Label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
-                        <Input
-                          id="login-email"
-                          name="email"
-                          type="email"
-                          placeholder="seu@email.com"
-                          className="pl-10"
-                          value={loginForm.email}
-                          onChange={handleLoginChange}
-                          required
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="login-password">Senha</Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
-                        <Input
-                          id="login-password"
-                          name="password"
-                          type={showPassword ? "text" : "password"}
-                          placeholder="••••••••"
-                          className="pl-10"
-                          value={loginForm.password}
-                          onChange={handleLoginChange}
-                          required
-                        />
-                        <button
-                          type="button"
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading ? "Entrando..." : "Entrar"}
-                    </Button>
-                  </form>
-                </TabsContent>
-                
-                <TabsContent value="register">
-                  <form onSubmit={handleRegister} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="register-firstName">Nome</Label>
-                        <Input
-                          id="register-firstName"
-                          name="firstName"
-                          placeholder="Seu nome"
-                          value={registerForm.firstName}
-                          onChange={handleRegisterChange}
-                          required
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="register-lastName">Sobrenome</Label>
-                        <Input
-                          id="register-lastName"
-                          name="lastName"
-                          placeholder="Seu sobrenome"
-                          value={registerForm.lastName}
-                          onChange={handleRegisterChange}
-                          required
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="register-email">Email</Label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
-                        <Input
-                          id="register-email"
-                          name="email"
-                          type="email"
-                          placeholder="seu@email.com"
-                          className="pl-10"
-                          value={registerForm.email}
-                          onChange={handleRegisterChange}
-                          required
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="register-phone">Telefone</Label>
+            </Tabs>
+          </CardHeader>
+          
+          <CardContent className="pt-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsContent value="login">
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="login-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
                       <Input
-                        id="register-phone"
-                        name="phone"
-                        placeholder="(00) 00000-0000"
-                        value={registerForm.phone}
+                        id="login-email"
+                        name="email"
+                        type="email"
+                        placeholder="seu@email.com"
+                        className="pl-10"
+                        value={loginForm.email}
+                        onChange={handleLoginChange}
+                        required
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="login-password">Senha</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
+                      <Input
+                        id="login-password"
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        className="pl-10"
+                        value={loginForm.password}
+                        onChange={handleLoginChange}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? "Entrando..." : "Entrar"}
+                  </Button>
+                </form>
+              </TabsContent>
+              
+              <TabsContent value="register">
+                <form onSubmit={handleRegister} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="register-firstName">Nome</Label>
+                      <Input
+                        id="register-firstName"
+                        name="firstName"
+                        placeholder="Seu nome"
+                        value={registerForm.firstName}
                         onChange={handleRegisterChange}
+                        required
                       />
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="register-password">Senha</Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
-                        <Input
-                          id="register-password"
-                          name="password"
-                          type={showPassword ? "text" : "password"}
-                          placeholder="••••••••"
-                          className="pl-10"
-                          value={registerForm.password}
-                          onChange={handleRegisterChange}
-                          required
-                        />
-                        <button
-                          type="button"
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
+                      <Label htmlFor="register-lastName">Sobrenome</Label>
+                      <Input
+                        id="register-lastName"
+                        name="lastName"
+                        placeholder="Seu sobrenome"
+                        value={registerForm.lastName}
+                        onChange={handleRegisterChange}
+                        required
+                      />
                     </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="register-confirmPassword">Confirmar Senha</Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
-                        <Input
-                          id="register-confirmPassword"
-                          name="confirmPassword"
-                          type={showPassword ? "text" : "password"}
-                          placeholder="••••••••"
-                          className="pl-10"
-                          value={registerForm.confirmPassword}
-                          onChange={handleRegisterChange}
-                          required
-                        />
-                      </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="register-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
+                      <Input
+                        id="register-email"
+                        name="email"
+                        type="email"
+                        placeholder="seu@email.com"
+                        className="pl-10"
+                        value={registerForm.email}
+                        onChange={handleRegisterChange}
+                        required
+                      />
                     </div>
-                    
-                    <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading ? "Cadastrando..." : "Cadastrar"}
-                    </Button>
-                  </form>
-                </TabsContent>
-                
-                <div className="relative my-6">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t border-gray-300"></span>
                   </div>
-                  <div className="relative flex justify-center">
-                    <span className="bg-card px-2 text-sm text-gray-500">Ou continue com</span>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="register-phone">Telefone</Label>
+                    <Input
+                      id="register-phone"
+                      name="phone"
+                      placeholder="(00) 00000-0000"
+                      value={registerForm.phone}
+                      onChange={handleRegisterChange}
+                    />
                   </div>
-                </div>
-                
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleGoogleLogin}
-                  disabled={isLoading}
-                >
-                  <img src="https://www.google.com/favicon.ico" alt="Google" className="h-4 w-4 mr-2" />
-                  Google
-                </Button>
-              </CardContent>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="register-password">Senha</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
+                      <Input
+                        id="register-password"
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        className="pl-10"
+                        value={registerForm.password}
+                        onChange={handleRegisterChange}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="register-confirmPassword">Confirmar Senha</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
+                      <Input
+                        id="register-confirmPassword"
+                        name="confirmPassword"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        className="pl-10"
+                        value={registerForm.confirmPassword}
+                        onChange={handleRegisterChange}
+                        required
+                      />
+                    </div>
+                  </div>
+                  
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? "Cadastrando..." : "Cadastrar"}
+                  </Button>
+                </form>
+              </TabsContent>
             </Tabs>
-          </CardHeader>
+            
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-gray-300"></span>
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-card px-2 text-sm text-gray-500">Ou continue com</span>
+              </div>
+            </div>
+            
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleGoogleLogin}
+              disabled={isLoading}
+            >
+              <img src="https://www.google.com/favicon.ico" alt="Google" className="h-4 w-4 mr-2" />
+              Google
+            </Button>
+          </CardContent>
           
           <CardFooter className="flex justify-center">
             <p className="text-sm text-gray-500">
