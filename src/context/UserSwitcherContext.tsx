@@ -7,6 +7,11 @@ interface UserSwitcherContextType {
   setCurrentUser: (user: CurrentUser | null) => void;
   showUserSwitcher: boolean;
   setShowUserSwitcher: (show: boolean) => void;
+  // Adding the missing properties
+  switchUser: (role: CurrentUser['role']) => void;
+  isUserSwitcherOpen: boolean;
+  toggleUserSwitcher: () => void;
+  closeUserSwitcher: () => void;
 }
 
 const UserSwitcherContext = createContext<UserSwitcherContextType | undefined>(undefined);
@@ -14,6 +19,32 @@ const UserSwitcherContext = createContext<UserSwitcherContextType | undefined>(u
 export const UserSwitcherProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [showUserSwitcher, setShowUserSwitcher] = useState(false);
+  const [isUserSwitcherOpen, setIsUserSwitcherOpen] = useState(false);
+
+  // Function to switch user based on role
+  const switchUser = (role: CurrentUser['role']) => {
+    // Create a mock user with the selected role
+    const mockedUser: CurrentUser = {
+      id: `mock-${role}-${Date.now()}`, // Generate a unique ID
+      role: role,
+      name: `${role.charAt(0).toUpperCase() + role.slice(1)} User`, // Capitalize role name
+      email: `${role}@example.com`,
+      avatar_url: null
+    };
+    
+    setCurrentUser(mockedUser);
+    closeUserSwitcher();
+  };
+
+  // Toggle user switcher menu
+  const toggleUserSwitcher = () => {
+    setIsUserSwitcherOpen(prev => !prev);
+  };
+
+  // Close user switcher menu
+  const closeUserSwitcher = () => {
+    setIsUserSwitcherOpen(false);
+  };
 
   return (
     <UserSwitcherContext.Provider 
@@ -21,7 +52,11 @@ export const UserSwitcherProvider = ({ children }: { children: ReactNode }) => {
         currentUser, 
         setCurrentUser, 
         showUserSwitcher, 
-        setShowUserSwitcher 
+        setShowUserSwitcher,
+        switchUser,
+        isUserSwitcherOpen,
+        toggleUserSwitcher,
+        closeUserSwitcher
       }}
     >
       {children}
