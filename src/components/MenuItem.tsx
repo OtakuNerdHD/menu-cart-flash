@@ -66,11 +66,12 @@ const MenuItem = ({ item }: MenuItemProps) => {
             onClick={handleOpenDetails}
             className="flex items-center gap-1"
           >
-            <InfoIcon className="h-4 w-4" /> Detalhes
+            <InfoIcon className="h-3 w-3" /> Detalhes
           </Button>
           <Button 
             onClick={handleAddToCart}
             size="sm"
+            className="text-sm px-3 py-1 h-8"
           >
             Adicionar
           </Button>

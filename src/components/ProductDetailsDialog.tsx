@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, MinusCircle } from 'lucide-react';
+import { PlusCircle, MinusCircle, MessageSquarePlus } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { toast } from '@/hooks/use-toast';
 import { Product } from '@/types/supabase';
@@ -39,6 +39,7 @@ const getProductImages = (product: Product) => {
 const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, open, onOpenChange }) => {
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
+  const [showNotesField, setShowNotesField] = useState(false);
   const { addToCart } = useCart();
 
   if (!product) return null;
@@ -64,6 +65,14 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
     onOpenChange(false);
     setNotes('');
     setQuantity(1);
+    setShowNotesField(false);
+  };
+  
+  const toggleNotesField = () => {
+    setShowNotesField(prev => !prev);
+    if (showNotesField) {
+      setNotes('');
+    }
   };
   
   const images = getProductImages(product);
@@ -71,7 +80,7 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">{product.name}</DialogTitle>
           <DialogDescription className="text-base font-medium text-gray-700">
@@ -80,7 +89,7 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
         </DialogHeader>
         
         {/* Carrossel de imagens */}
-        <div className="relative w-full mb-4">
+        <div className="relative w-full mb-3">
           <Carousel className="w-full">
             <CarouselContent>
               {images.map((image, index) => (
@@ -88,51 +97,67 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
                   <img 
                     src={image} 
                     alt={`${product.name} - imagem ${index + 1}`}
-                    className="object-cover rounded-md max-h-[300px] w-auto mx-auto"
+                    className="object-cover rounded-md max-h-[250px] w-auto mx-auto"
                   />
                 </CarouselItem>
               ))}
             </CarouselContent>
-            <CarouselPrevious />
-            <CarouselNext />
+            <CarouselPrevious className="h-8 w-8" />
+            <CarouselNext className="h-8 w-8" />
           </Carousel>
         </div>
         
         {/* Descrição do produto */}
-        <div className="mb-4">
-          <h3 className="font-medium text-lg mb-2">Descrição</h3>
-          <p className="text-gray-700">{product.description}</p>
+        <div className="mb-3">
+          <h3 className="font-medium text-lg mb-1">Descrição</h3>
+          <p className="text-gray-700 text-sm">{product.description}</p>
         </div>
         
         {/* Ingredientes */}
-        <div className="mb-4">
-          <h3 className="font-medium text-lg mb-2">Ingredientes</h3>
+        <div className="mb-3">
+          <h3 className="font-medium text-lg mb-1">Ingredientes</h3>
           <ul className="list-disc pl-5">
             {ingredients.map((ingredient, index) => (
-              <li key={index} className="text-gray-700">{ingredient}</li>
+              <li key={index} className="text-gray-700 text-sm">{ingredient}</li>
             ))}
           </ul>
         </div>
         
-        {/* Observações */}
-        <div className="mb-4">
-          <h3 className="font-medium text-lg mb-2">Observações</h3>
-          <Textarea 
-            placeholder="Alguma observação? Ex: sem cebola, sem molho, etc."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="w-full"
-          />
+        {/* Botão para mostrar/ocultar campo de observações */}
+        <div className="mb-3">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={toggleNotesField}
+            className="flex items-center gap-1 text-sm"
+          >
+            <MessageSquarePlus className="h-4 w-4" />
+            {showNotesField ? "Remover observações" : "Adicionar observações"}
+          </Button>
+          
+          {/* Campo de observações (aparece apenas se showNotesField for true) */}
+          {showNotesField && (
+            <div className="mt-2">
+              <Textarea 
+                placeholder="Alguma observação? Ex: sem cebola, sem molho, etc."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full text-sm"
+                rows={3}
+              />
+            </div>
+          )}
         </div>
         
         {/* Quantidade e botão de adicionar */}
-        <div className="flex items-center justify-between mt-4">
+        <div className="flex items-center justify-between mt-3">
           <div className="flex items-center space-x-3">
             <Button 
               variant="outline" 
               size="icon" 
               onClick={handleDecreaseQuantity}
               disabled={quantity <= 1}
+              className="h-8 w-8"
             >
               <MinusCircle className="h-4 w-4" />
             </Button>
@@ -141,13 +166,14 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
               variant="outline" 
               size="icon" 
               onClick={handleIncreaseQuantity}
+              className="h-8 w-8"
             >
               <PlusCircle className="h-4 w-4" />
             </Button>
           </div>
           
-          <Button onClick={handleAddToCart} className="px-6">
-            Adicionar ao Carrinho • R$ {(product.price * quantity).toFixed(2)}
+          <Button onClick={handleAddToCart} className="px-4 py-1 h-9 text-sm">
+            Adicionar • R$ {(product.price * quantity).toFixed(2)}
           </Button>
         </div>
       </DialogContent>

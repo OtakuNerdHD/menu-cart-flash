@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ interface RegisterFormState {
 
 const Login = () => {
   const navigate = useNavigate();
-  const { setCurrentUser } = useUserSwitcher();
+  const { setCurrentUser, currentUser } = useUserSwitcher();
   const [activeTab, setActiveTab] = useState<string>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,6 +44,13 @@ const Login = () => {
     confirmPassword: '',
     phone: ''
   });
+  
+  // Verifica se já está logado e redireciona para a página principal
+  useEffect(() => {
+    if (currentUser) {
+      navigate('/');
+    }
+  }, [currentUser, navigate]);
   
   const handleLoginChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -146,14 +153,14 @@ const Login = () => {
     
     try {
       // Simular login com Google para o protótipo
-      // Em produção, seria feito o login com Supabase e OAuth
+      // Em produção, seria feito o login com Google OAuth via Supabase
       
       toast({
         title: "Autenticando com Google",
         description: "Você será redirecionado...",
       });
       
-      // Simulando o login
+      // Simulando o login com Google
       setTimeout(() => {
         const mockedUser: CurrentUser = {
           id: '789',
@@ -170,7 +177,7 @@ const Login = () => {
         });
         navigate('/');
         setIsLoading(false);
-      }, 2000);
+      }, 1500);
       
     } catch (error: any) {
       console.error('Erro ao fazer login com Google:', error);
