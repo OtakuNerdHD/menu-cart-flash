@@ -80,7 +80,7 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto p-4">
+      <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto p-4 flex flex-col">
         <DialogHeader className="pb-2">
           <DialogTitle className="text-lg font-bold">{product.name}</DialogTitle>
           <DialogDescription className="text-base font-medium text-gray-700">
@@ -88,93 +88,97 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
           </DialogDescription>
         </DialogHeader>
         
-        {/* Carrossel de imagens */}
-        <div className="relative w-full mb-2">
-          <Carousel className="w-full">
-            <CarouselContent>
-              {images.map((image, index) => (
-                <CarouselItem key={index} className="flex justify-center">
-                  <img 
-                    src={image} 
-                    alt={`${product.name} - imagem ${index + 1}`}
-                    className="object-cover rounded-md max-h-[200px] w-auto mx-auto"
-                  />
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-            <CarouselPrevious className="h-7 w-7 -left-3" />
-            <CarouselNext className="h-7 w-7 -right-3" />
-          </Carousel>
-        </div>
-        
-        {/* Descrição do produto */}
-        <div className="mb-2">
-          <h3 className="font-medium text-base mb-1">Descrição</h3>
-          <p className="text-gray-700 text-xs">{product.description}</p>
-        </div>
-        
-        {/* Ingredientes */}
-        <div className="mb-2">
-          <h3 className="font-medium text-base mb-1">Ingredientes</h3>
-          <ul className="list-disc pl-4">
-            {ingredients.map((ingredient, index) => (
-              <li key={index} className="text-gray-700 text-xs">{ingredient}</li>
-            ))}
-          </ul>
-        </div>
-        
-        {/* Botão para mostrar/ocultar campo de observações */}
-        <div className="mb-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={toggleNotesField}
-            className="flex items-center gap-1 text-xs h-7 px-2"
-          >
-            <MessageSquarePlus className="h-3 w-3" />
-            {showNotesField ? "Remover observações" : "Adicionar observações"}
-          </Button>
-          
-          {/* Campo de observações (aparece apenas se showNotesField for true) */}
-          {showNotesField && (
-            <div className="mt-2">
-              <Textarea 
-                placeholder="Alguma observação? Ex: sem cebola, sem molho, etc."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full text-xs"
-                rows={2}
-              />
-            </div>
-          )}
-        </div>
-        
-        {/* Quantidade e botão de adicionar */}
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center space-x-2">
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={handleDecreaseQuantity}
-              disabled={quantity <= 1}
-              className="h-7 w-7"
-            >
-              <MinusCircle className="h-3 w-3" />
-            </Button>
-            <span className="text-base font-medium">{quantity}</span>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={handleIncreaseQuantity}
-              className="h-7 w-7"
-            >
-              <PlusCircle className="h-3 w-3" />
-            </Button>
+        <div className="flex-grow overflow-y-auto pr-1">
+          {/* Carrossel de imagens */}
+          <div className="relative w-full mb-2">
+            <Carousel className="w-full">
+              <CarouselContent>
+                {images.map((image, index) => (
+                  <CarouselItem key={index} className="flex justify-center">
+                    <img 
+                      src={image} 
+                      alt={`${product.name} - imagem ${index + 1}`}
+                      className="object-cover rounded-md max-h-[200px] w-auto mx-auto"
+                    />
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              <CarouselPrevious className="h-7 w-7 -left-3" />
+              <CarouselNext className="h-7 w-7 -right-3" />
+            </Carousel>
           </div>
           
-          <Button onClick={handleAddToCart} className="px-3 py-1 h-8 text-xs">
-            Adicionar • R$ {(product.price * quantity).toFixed(2)}
-          </Button>
+          {/* Descrição do produto */}
+          <div className="mb-2">
+            <h3 className="font-medium text-base mb-1">Descrição</h3>
+            <p className="text-gray-700 text-xs">{product.description}</p>
+          </div>
+          
+          {/* Ingredientes */}
+          <div className="mb-2">
+            <h3 className="font-medium text-base mb-1">Ingredientes</h3>
+            <ul className="list-disc pl-4">
+              {ingredients.map((ingredient, index) => (
+                <li key={index} className="text-gray-700 text-xs">{ingredient}</li>
+              ))}
+            </ul>
+          </div>
+          
+          {/* Botão para mostrar/ocultar campo de observações */}
+          <div className="mb-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={toggleNotesField}
+              className="flex items-center gap-1 text-xs h-7 px-2"
+            >
+              <MessageSquarePlus className="h-3 w-3" />
+              {showNotesField ? "Remover observações" : "Adicionar observações"}
+            </Button>
+            
+            {/* Campo de observações (aparece apenas se showNotesField for true) */}
+            {showNotesField && (
+              <div className="mt-2">
+                <Textarea 
+                  placeholder="Alguma observação? Ex: sem cebola, sem molho, etc."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full text-xs"
+                  rows={2}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Quantidade e botão de adicionar - agora em um container fixo */}
+        <div className="pt-3 mt-2 border-t sticky bottom-0 bg-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={handleDecreaseQuantity}
+                disabled={quantity <= 1}
+                className="h-7 w-7"
+              >
+                <MinusCircle className="h-3 w-3" />
+              </Button>
+              <span className="text-base font-medium">{quantity}</span>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={handleIncreaseQuantity}
+                className="h-7 w-7"
+              >
+                <PlusCircle className="h-3 w-3" />
+              </Button>
+            </div>
+            
+            <Button onClick={handleAddToCart} className="px-3 py-1 h-8 text-xs">
+              Adicionar • R$ {(product.price * quantity).toFixed(2)}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
