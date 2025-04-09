@@ -38,6 +38,125 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
     { ...DEFAULT_CUSTOMER_ADDRESS } // Destino (cliente)
   ]);
   const [direction, setDirection] = useState(0);
+  const [routeCoordinates, setRouteCoordinates] = useState<any[]>([]);
+  const animationRef = useRef<number | null>(null);
+  const currentPositionRef = useRef<[number, number] | null>(null);
+  const simulationSpeedRef = useRef(testMode ? 0.5 : 0.2); // Velocidade mais realista
+
+  // Função para obter rota do Mapbox Directions API
+  const fetchRouteCoordinates = async (
+    start: [number, number], 
+    end: [number, number]
+  ) => {
+    try {
+      const response = await fetch(
+        `https://api.mapbox.com/directions/v5/mapbox/driving/${start[0]},${start[1]};${end[0]},${end[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`
+      );
+      
+      const data = await response.json();
+      if (!data.routes || data.routes.length === 0) {
+        console.error('Nenhuma rota encontrada');
+        return null;
+      }
+      
+      return data.routes[0].geometry.coordinates;
+    } catch (error) {
+      console.error('Erro ao buscar rota:', error);
+      return null;
+    }
+  };
+
+  // Função para adicionar ou atualizar a rota no mapa
+  const updateRouteOnMap = (coordinates: any[]) => {
+    if (!map.current) return;
+
+    const routeGeoJSON = {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates
+      }
+    };
+    
+    // Adicionar ou atualizar fonte da rota
+    if (map.current.getSource('route')) {
+      // Atualizar fonte existente
+      (map.current.getSource('route') as mapboxgl.GeoJSONSource).setData(routeGeoJSON as any);
+    } else {
+      // Adicionar nova fonte e camada
+      map.current.addSource('route', {
+        type: 'geojson',
+        data: routeGeoJSON as any
+      });
+      
+      map.current.addLayer({
+        id: 'route',
+        type: 'line',
+        source: 'route',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': '#4285F4',
+          'line-width': 5,
+          'line-opacity': 0.75
+        }
+      });
+    }
+  };
+
+  // Função para recalcular a rota com base na posição atual
+  const recalculateRoute = async () => {
+    if (!currentPositionRef.current) return;
+    
+    // Obter coordenadas atualizadas da posição atual até o destino
+    const endPoint: [number, number] = [route[1].lng, route[1].lat];
+    const newCoordinates = await fetchRouteCoordinates(
+      currentPositionRef.current,
+      endPoint
+    );
+    
+    if (newCoordinates) {
+      setRouteCoordinates(newCoordinates);
+      updateRouteOnMap(newCoordinates);
+      return newCoordinates;
+    }
+    
+    return null;
+  };
+
+  // Simular desvio de rota a cada 10 segundos (apenas no modo de teste)
+  useEffect(() => {
+    if (!testMode || !isTracking) return;
+    
+    const deviationInterval = setInterval(() => {
+      if (currentPositionRef.current) {
+        // Simular um pequeno desvio aleatório da rota
+        const randomDeviation = 0.0002; // Pequeno desvio para simular mudança de rota
+        const deviatedPosition: [number, number] = [
+          currentPositionRef.current[0] + (Math.random() * randomDeviation - randomDeviation/2),
+          currentPositionRef.current[1] + (Math.random() * randomDeviation - randomDeviation/2)
+        ];
+        
+        // Atualizar posição atual e recalcular
+        currentPositionRef.current = deviatedPosition;
+        
+        // Atualizar marcador
+        if (marker.current) {
+          marker.current.setLngLat(deviatedPosition);
+        }
+        
+        // Recalcular rota
+        recalculateRoute();
+      }
+    }, 10000); // Recalcular a cada 10 segundos
+    
+    return () => {
+      clearInterval(deviationInterval);
+    };
+  }, [testMode, isTracking]);
 
   // Initialize the map
   useEffect(() => {
@@ -58,16 +177,32 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
     // Create custom element for bike marker
     const bikeElement = document.createElement('div');
     bikeElement.className = 'delivery-bike-marker';
-    bikeElement.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="12" cy="13" rx="10" ry="7" fill="rgba(0,0,0,0.1)" />
-      <circle cx="12" cy="12" r="7" fill="#333333" />
-      <rect x="9" y="7" width="6" height="6" fill="#E53935" rx="1" />
-      <circle cx="7" cy="12" r="3" fill="#666666" />
-      <circle cx="17" cy="12" r="3" fill="#666666" />
-      <circle cx="12" cy="9" r="3" fill="#444444" />
-      <rect x="10" y="8" width="4" height="1" fill="white" />
-      <rect x="10" y="10" width="4" height="1" fill="white" />
-    </svg>`;
+    bikeElement.innerHTML = `
+      <svg width="48" height="48" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="256" cy="460" rx="120" ry="20" fill="rgba(0,0,0,0.2)" />
+        <path d="M170 380 L340 380 L360 430 L150 430" fill="#ff1744" />
+        <path d="M200 430 L310 430 L290 460 L220 460" fill="#333333" />
+        <circle cx="180" cy="440" r="30" fill="#333333" stroke="#555555" strokeWidth="4" />
+        <circle cx="330" cy="440" r="30" fill="#333333" stroke="#555555" strokeWidth="4" />
+        <circle cx="180" cy="440" r="15" fill="#555555" />
+        <circle cx="330" cy="440" r="15" fill="#555555" />
+        <path d="M210 380 L300 380 L290 300 L220 300" fill="#78909c" />
+        <path d="M220 300 L290 300 L280 230 L230 230" fill="#78909c" />
+        <path d="M280 230 L230 230 L240 160 L270 160" fill="#78909c" />
+        <path d="M290 280 L340 250" stroke="#78909c" strokeWidth="20" strokeLinecap="round" />
+        <path d="M220 280 L170 250" stroke="#78909c" strokeWidth="20" strokeLinecap="round" />
+        <rect x="155" y="240" width="30" height="20" rx="5" fill="#333333" />
+        <rect x="325" y="240" width="30" height="20" rx="5" fill="#333333" />
+        <path d="M140 240 L155 250" stroke="#e57373" strokeWidth="20" strokeLinecap="round" />
+        <path d="M355 240 L340 250" stroke="#e57373" strokeWidth="20" strokeLinecap="round" />
+        <circle cx="255" cy="140" r="40" fill="#333333" />
+        <path d="M215 140 L295 140 L285 190 L225 190 Z" fill="#ff1744" />
+        <path d="M235 140 L275 140 L265 110 L245 110 Z" fill="#ff1744" />
+        <ellipse cx="255" cy="140" rx="25" ry="15" fill="white" />
+        <rect x="210" y="350" width="90" height="70" rx="5" fill="#deb887" />
+        <path d="M210 350 L300 350 L270 380 L240 380 Z" fill="#c19a6b" />
+      </svg>
+    `;
 
     // Create destination marker
     const destElement = document.createElement('div');
@@ -80,6 +215,19 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
     // Add style for pulse animation
     const style = document.createElement('style');
     style.innerHTML = `
+      .delivery-bike-marker {
+        width: 48px;
+        height: 48px;
+        margin-top: -24px;
+        margin-left: -24px;
+      }
+      
+      .destination-marker {
+        position: relative;
+        top: -36px;
+        left: -12px;
+      }
+      
       .pulse {
         display: block;
         width: 22px;
@@ -110,74 +258,60 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
     document.head.appendChild(style);
 
     // Add markers
-    marker.current = new mapboxgl.Marker({ element: bikeElement })
+    marker.current = new mapboxgl.Marker({
+      element: bikeElement
+    })
       .setLngLat([route[0].lng, route[0].lat])
       .addTo(map.current);
+      
+    currentPositionRef.current = [route[0].lng, route[0].lat];
 
-    destinationMarker.current = new mapboxgl.Marker({ element: destElement })
+    destinationMarker.current = new mapboxgl.Marker({
+      element: destElement
+    })
       .setLngLat([route[1].lng, route[1].lat])
       .addTo(map.current);
 
     // Add store popup
-    const storePopup = new mapboxgl.Popup({ closeButton: false, offset: 25 })
+    const storePopup = new mapboxgl.Popup({
+      closeButton: false,
+      offset: 25
+    })
       .setHTML('<div class="p-2 bg-white rounded"><strong>Restaurante</strong><br>Origem do pedido</div>');
 
-    const storeMarker = new mapboxgl.Marker({ color: '#3FB1CE' })
+    const storeMarker = new mapboxgl.Marker({
+      color: '#3FB1CE'
+    })
       .setLngLat([route[0].lng, route[0].lat])
       .setPopup(storePopup)
       .addTo(map.current);
 
     // Add destination popup
-    const destPopup = new mapboxgl.Popup({ closeButton: false, offset: 25 })
+    const destPopup = new mapboxgl.Popup({
+      closeButton: false,
+      offset: 25
+    })
       .setHTML('<div class="p-2 bg-white rounded"><strong>Seu endereço</strong><br>Destino da entrega</div>');
       
     destinationMarker.current.setPopup(destPopup);
 
-    // Get route from Mapbox Directions API
-    const getRoute = async () => {
-      const query = await fetch(
-        `https://api.mapbox.com/directions/v5/mapbox/driving/${route[0].lng},${route[0].lat};${route[1].lng},${route[1].lat}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`
+    // Get initial route
+    const getInitialRoute = async () => {
+      const coordinates = await fetchRouteCoordinates(
+        [route[0].lng, route[0].lat],
+        [route[1].lng, route[1].lat]
       );
-      const json = await query.json();
-      const data = json.routes[0];
-      const routeGeoJSON = {
-        type: 'Feature',
-        properties: {},
-        geometry: data.geometry
-      };
       
-      // Add route to map
-      if (map.current?.getSource('route')) {
-        // Update existing source
-        (map.current.getSource('route') as mapboxgl.GeoJSONSource).setData(routeGeoJSON as any);
-      } else {
-        // Add new source and layer
-        map.current?.addSource('route', {
-          type: 'geojson',
-          data: routeGeoJSON as any
-        });
-        
-        map.current?.addLayer({
-          id: 'route',
-          type: 'line',
-          source: 'route',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#4285F4',
-            'line-width': 5,
-            'line-opacity': 0.75
-          }
-        });
+      if (coordinates) {
+        setRouteCoordinates(coordinates);
+        updateRouteOnMap(coordinates);
       }
     };
 
     // When map is loaded
     map.current.on('load', () => {
       setLoadingMap(false);
-      getRoute();
+      getInitialRoute();
       
       // Fit map to show both markers
       const bounds = new mapboxgl.LngLatBounds()
@@ -191,6 +325,10 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
 
     // Cleanup function
     return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      
       if (map.current) {
         map.current.remove();
       }
@@ -199,86 +337,83 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
 
   // Animation effect for tracking
   useEffect(() => {
-    if (!isTracking || !map.current || !marker.current) return;
+    if (!isTracking || !map.current || !marker.current || routeCoordinates.length === 0) return;
 
-    let animationFrame: number;
-    let step = 0;
-    const totalSteps = 200; // More steps for smoother animation
+    let stepProgress = 0;
+    let currentSegment = 0;
     
-    // Function to get route coordinates from Mapbox Directions API
-    const fetchRouteCoordinates = async () => {
-      try {
-        const response = await fetch(
-          `https://api.mapbox.com/directions/v5/mapbox/driving/${route[0].lng},${route[0].lat};${route[1].lng},${route[1].lat}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`
-        );
-        
-        const data = await response.json();
-        if (!data.routes || data.routes.length === 0) {
-          console.error('No route found');
-          return null;
+    // Função para animar ao longo da rota de forma mais suave
+    const animateAlongRoute = () => {
+      if (currentSegment >= routeCoordinates.length - 1) {
+        if (testMode) {
+          onRouteComplete();
         }
-        
-        return data.routes[0].geometry.coordinates;
-      } catch (error) {
-        console.error('Error fetching route:', error);
-        return null;
+        return;
       }
-    };
-    
-    // Animate along route
-    const animateMarker = async () => {
-      const coordinates = await fetchRouteCoordinates();
-      if (!coordinates) return;
       
-      let currentStep = 0;
-      const routeAnimation = () => {
-        if (currentStep >= coordinates.length - 1) {
-          if (testMode) {
-            onRouteComplete();
-          }
-          return;
-        }
+      // Obter ponto atual e próximo
+      const currentPoint = routeCoordinates[currentSegment];
+      const nextPoint = routeCoordinates[currentSegment + 1];
+      
+      if (!currentPoint || !nextPoint) return;
+      
+      // Calcular posição intermediária com base no progresso
+      const lng = currentPoint[0] + (nextPoint[0] - currentPoint[0]) * stepProgress;
+      const lat = currentPoint[1] + (nextPoint[1] - currentPoint[1]) * stepProgress;
+      
+      // Atualizar marcador
+      if (marker.current) {
+        marker.current.setLngLat([lng, lat]);
+        currentPositionRef.current = [lng, lat];
         
-        // Get current point and next point
-        const currentPoint = coordinates[currentStep];
-        const nextPoint = coordinates[currentStep + 1];
-        
-        // Update marker position
-        if (marker.current) {
-          marker.current.setLngLat([currentPoint[0], currentPoint[1]]);
-          
-          // Calculate direction
-          const dx = nextPoint[0] - currentPoint[0];
-          const dy = nextPoint[1] - currentPoint[1];
+        // Calcular direção
+        const dx = nextPoint[0] - currentPoint[0];
+        const dy = nextPoint[1] - currentPoint[1];
+        if (dx !== 0 || dy !== 0) { // Evitar divisão por zero
           const rotation = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
           setDirection(rotation);
           
-          // Update the bike marker's rotation
+          // Atualizar rotação do SVG
           const markerEl = marker.current.getElement();
           const svgEl = markerEl.querySelector('svg');
           if (svgEl) {
             svgEl.style.transform = `rotate(${rotation}deg)`;
           }
         }
-        
-        // Center map on current position
-        map.current?.panTo([currentPoint[0], currentPoint[1]], { duration: 1000 });
-        
-        currentStep++;
-        animationFrame = requestAnimationFrame(routeAnimation);
-      };
+      }
       
-      routeAnimation();
+      // Centralizar mapa na posição atual com transição suave
+      if (currentSegment % 5 === 0) { // Atualizar a visualização do mapa apenas ocasionalmente para melhor desempenho
+        map.current?.panTo([lng, lat], { 
+          duration: 1000,
+          essential: true 
+        });
+      }
+      
+      // Incrementar progresso
+      stepProgress += simulationSpeedRef.current * 0.005; // Velocidade ajustada para movimento mais suave
+      
+      // Se completou o segmento atual, avance para o próximo
+      if (stepProgress >= 1) {
+        currentSegment++;
+        stepProgress = 0;
+      }
+      
+      // Continuar animação
+      animationRef.current = requestAnimationFrame(animateAlongRoute);
     };
     
-    animateMarker();
+    // Iniciar animação
+    animationRef.current = requestAnimationFrame(animateAlongRoute);
     
+    // Limpar na desmontagem
     return () => {
-      if (animationFrame) {
-        cancelAnimationFrame(animationFrame);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
       }
     };
-  }, [isTracking, testMode, onRouteComplete]);
+  }, [isTracking, routeCoordinates, testMode, onRouteComplete]);
 
   return (
     <div className="w-full h-[300px] bg-gray-100 rounded-lg overflow-hidden">
