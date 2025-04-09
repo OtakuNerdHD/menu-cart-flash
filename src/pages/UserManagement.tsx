@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useUserSwitcher } from '@/context/UserSwitcherContext';
@@ -15,35 +15,59 @@ const mockUsers = [
   { id: 4, name: 'Ana Oliveira', email: 'ana@email.com', role: 'waiter', status: 'inactive' },
 ];
 
+// Mock de usuários extras que podem ser "descobertos" ao atualizar
+const extraUsers = [
+  { id: 5, name: 'Roberto Alves', email: 'roberto@email.com', role: 'customer', status: 'active' },
+  { id: 6, name: 'Fernanda Lima', email: 'fernanda@email.com', role: 'chef', status: 'active' },
+];
+
 const UserManagement = () => {
   const { currentUser } = useUserSwitcher();
   const [users, setUsers] = useState(mockUsers);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [extraUsersAdded, setExtraUsersAdded] = useState(false);
   const navigate = useNavigate();
   
   const isAdminOrOwner = currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner';
+
+  useEffect(() => {
+    // Carregar usuários do localStorage se existirem
+    const storedUsers = localStorage.getItem('appUsers');
+    if (storedUsers) {
+      try {
+        setUsers(JSON.parse(storedUsers));
+      } catch (error) {
+        console.error('Erro ao carregar usuários:', error);
+      }
+    }
+  }, []);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
     
     // Simular uma requisição para atualizar os usuários
     setTimeout(() => {
-      // Adicionar um novo usuário aleatório para simular atualização
-      const newUser = {
-        id: users.length + 1,
-        name: `Novo Usuário ${Math.floor(Math.random() * 100)}`,
-        email: `novo${users.length + 1}@email.com`,
-        role: ['customer', 'waiter', 'chef'][Math.floor(Math.random() * 3)],
-        status: 'active'
-      };
+      if (!extraUsersAdded) {
+        // Adicionar usuários extras apenas na primeira atualização
+        const updatedUsers = [...users, ...extraUsers];
+        setUsers(updatedUsers);
+        setExtraUsersAdded(true);
+        
+        // Salvar no localStorage para persistência
+        localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
+        
+        toast({
+          title: "Lista de usuários atualizada",
+          description: "Foram encontrados 2 novos usuários no sistema."
+        });
+      } else {
+        toast({
+          title: "Lista de usuários atualizada",
+          description: "Nenhum novo usuário encontrado."
+        });
+      }
       
-      setUsers([...users, newUser]);
       setIsRefreshing(false);
-      
-      toast({
-        title: "Lista de usuários atualizada",
-        description: "Os dados dos usuários foram atualizados com sucesso."
-      });
     }, 800);
   };
 
