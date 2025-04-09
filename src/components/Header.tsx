@@ -60,6 +60,9 @@ const Header = () => {
                       <Link to="/user-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
                         Gerenciamento de Usuários
                       </Link>
+                      <Link to="/api-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                        Gerenciamento de APIs
+                      </Link>
                     </>
                   )}
                 </nav>

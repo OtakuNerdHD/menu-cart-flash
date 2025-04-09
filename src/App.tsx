@@ -13,6 +13,7 @@ import OrderTracking from "./pages/OrderTracking";
 import KitchenManagement from "./pages/KitchenManagement";
 import ProductManagement from "./pages/ProductManagement";
 import UserManagement from "./pages/UserManagement";
+import ApiManagement from "./pages/ApiManagement";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -33,6 +34,7 @@ const App = () => (
               <Route path="/order-tracking/:orderId?" element={<OrderTracking />} />
               <Route path="/product-management" element={<ProductManagement />} />
               <Route path="/user-management" element={<UserManagement />} />
+              <Route path="/api-management" element={<ApiManagement />} />
               <Route path="/login" element={<Login />} />
               {/* Redirect to home if just logged in */}
               <Route path="/auth/callback" element={<Navigate to="/" replace />} />
