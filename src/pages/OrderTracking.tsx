@@ -181,7 +181,8 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
         // Adicionar pequena variação aleatória para parecer mais natural
         const newPosition = {
           lat: streetPosition.lat + (Math.random() - 0.5) * 0.00004,
-          lng: streetPosition.lng + (Math.random() - 0.5) * 0.00004
+          lng: streetPosition.lng + (Math.random() - 0.5) * 0.00004,
+          address: route[0].address // Manter o endereço original
         };
         
         // Calcular direção (orientação) do motoboy
@@ -220,7 +221,8 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
         // Interpolar um ponto aleatório na rua
         const newDestination = {
           lat: randomStreet[0].lat + (randomStreet[1].lat - randomStreet[0].lat) * t,
-          lng: randomStreet[0].lng + (randomStreet[1].lng - randomStreet[0].lng) * t
+          lng: randomStreet[0].lng + (randomStreet[1].lng - randomStreet[0].lng) * t,
+          address: "Recalculando rota..." // Adicionar um endereço temporário
         };
         
         // Garantir que o destino final eventualmente seja a localização do cliente
