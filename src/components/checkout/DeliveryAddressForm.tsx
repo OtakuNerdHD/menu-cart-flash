@@ -21,19 +21,20 @@ const DeliveryAddressForm = () => {
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'address' | 'payment'>('address');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
+  const [paymentTab, setPaymentTab] = useState<'online' | 'delivery'>('online');
   const [needChange, setNeedChange] = useState(false);
   const [changeAmount, setChangeAmount] = useState('');
   const deliveryFee = 5;
   const total = subtotal + deliveryFee;
   
   // Dados de endereço
-  const [cep, setCep] = useState('');
-  const [endereco, setEndereco] = useState('');
-  const [numero, setNumero] = useState('');
-  const [bairro, setBairro] = useState('');
+  const [cep, setCep] = useState('45603652'); // CEP padrão para testes
+  const [endereco, setEndereco] = useState('R. Nova');
+  const [numero, setNumero] = useState('325');
+  const [bairro, setBairro] = useState('Califórnia');
   const [complemento, setComplemento] = useState('');
-  const [cidade, setCidade] = useState('');
-  const [estado, setEstado] = useState('');
+  const [cidade, setCidade] = useState('Itabuna');
+  const [estado, setEstado] = useState('BA');
   
   // Script do Mercado Pago
   useEffect(() => {
@@ -102,7 +103,7 @@ const DeliveryAddressForm = () => {
   };
   
   const initMercadoPago = () => {
-    if (window.MercadoPago && (paymentMethod === 'card' || paymentMethod === 'pix')) {
+    if ((paymentMethod === 'card' || paymentMethod === 'pix') && window.MercadoPago) {
       setIsLoading(true);
       
       // Simulação de processamento de pagamento
@@ -122,16 +123,19 @@ const DeliveryAddressForm = () => {
   };
 
   const handlePayment = () => {
-    if (paymentMethod === 'card' || paymentMethod === 'pix') {
+    if (paymentTab === 'online' && (paymentMethod === 'card' || paymentMethod === 'pix')) {
       initMercadoPago();
-    } else if (paymentMethod === 'cash' || paymentMethod === 'card_delivery') {
-      if (paymentMethod === 'cash' && needChange && (!changeAmount || parseFloat(changeAmount) <= total)) {
-        toast({
-          title: "Valor de troco inválido",
-          description: "O valor para troco deve ser maior que o valor da compra.",
-          variant: "destructive"
-        });
-        return;
+    } else if (paymentTab === 'delivery' && (paymentMethod === 'cash' || paymentMethod === 'card_delivery')) {
+      if (paymentMethod === 'cash' && needChange) {
+        const changeValue = parseFloat(changeAmount.replace(',', '.'));
+        if (!changeAmount || isNaN(changeValue) || changeValue <= total) {
+          toast({
+            title: "Valor de troco inválido",
+            description: "O valor para troco deve ser maior que o valor da compra.",
+            variant: "destructive"
+          });
+          return;
+        }
       }
       
       setIsLoading(true);
@@ -170,6 +174,17 @@ const DeliveryAddressForm = () => {
   const handleChangeAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/[^\d.,]/g, '');
     setChangeAmount(value);
+  };
+
+  const handleTabChange = (value: 'online' | 'delivery') => {
+    setPaymentTab(value);
+    
+    // Atualizar método de pagamento com base na aba selecionada
+    if (value === 'online') {
+      setPaymentMethod('card');
+    } else {
+      setPaymentMethod('card_delivery');
+    }
   };
 
   return (
@@ -293,7 +308,7 @@ const DeliveryAddressForm = () => {
         <div className="space-y-4">
           <h3 className="font-bold text-lg">Forma de pagamento</h3>
           
-          <Tabs defaultValue="online" className="w-full">
+          <Tabs defaultValue="online" value={paymentTab} onValueChange={(v) => handleTabChange(v as 'online' | 'delivery')} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="online">Pagar agora</TabsTrigger>
               <TabsTrigger value="delivery">Pagar na entrega</TabsTrigger>

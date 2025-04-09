@@ -80,7 +80,7 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto p-4 flex flex-col">
+      <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader className="pb-2">
           <DialogTitle className="text-lg font-bold">{product.name}</DialogTitle>
           <DialogDescription className="text-base font-medium text-gray-700">
@@ -88,7 +88,7 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex-grow overflow-y-auto pr-1">
+        <div className="flex-grow overflow-y-auto pr-1 pb-20">
           {/* Carrossel de imagens */}
           <div className="relative w-full mb-2">
             <Carousel className="w-full">
@@ -152,7 +152,7 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
         </div>
         
         {/* Quantidade e botão de adicionar - agora em um container fixo */}
-        <div className="pt-3 mt-2 border-t sticky bottom-0 bg-white">
+        <div className="pt-3 mt-2 border-t absolute bottom-0 left-0 right-0 bg-white p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Button 

@@ -8,15 +8,27 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@
 import { toast } from '@/hooks/use-toast';
 
 // SVG para o ícone do motoboy (visão aérea)
-const DeliveryBikeSvg = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="12" cy="12" r="10" fill="#E53935" />
-    <circle cx="12" cy="12" r="8" fill="#FFCDD2" />
-    <rect x="9" y="9" width="6" height="6" fill="#B71C1C" />
-    <rect x="11" y="7" width="2" height="4" fill="#B71C1C" />
-    <rect x="7" y="11" width="4" height="2" fill="#B71C1C" />
-    <rect x="13" y="11" width="4" height="2" fill="#B71C1C" />
-    <rect x="11" y="13" width="2" height="4" fill="#B71C1C" />
+const DeliveryBikeSvg = ({ direction = 0 }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ transform: `rotate(${direction}deg)` }}>
+    {/* Sombra sob o motoboy */}
+    <ellipse cx="12" cy="13" rx="10" ry="7" fill="rgba(0,0,0,0.1)" />
+    
+    {/* Corpo da moto */}
+    <circle cx="12" cy="12" r="7" fill="#333333" />
+    
+    {/* Mochila de entrega */}
+    <rect x="9" y="7" width="6" height="6" fill="#E53935" rx="1" />
+    
+    {/* Detalhes da moto */}
+    <circle cx="7" cy="12" r="3" fill="#666666" />
+    <circle cx="17" cy="12" r="3" fill="#666666" />
+    
+    {/* Capacete/cabeça do motoboy */}
+    <circle cx="12" cy="9" r="3" fill="#444444" />
+    
+    {/* Detalhes visuais da mochila */}
+    <rect x="10" y="8" width="4" height="1" fill="white" />
+    <rect x="10" y="10" width="4" height="1" fill="white" />
   </svg>
 );
 
@@ -34,22 +46,42 @@ const generateRandomPoints = (center: {lat: number, lng: number}, radius: number
   return points;
 };
 
+// Endereços padrão para testes
+const DEFAULT_STORE_ADDRESS = {
+  lat: -14.7952,
+  lng: -39.2763, // Coordenadas para R. Nova, 325 - Califórnia, Itabuna - BA
+  address: "R. Nova, 325 - Califórnia, Itabuna - BA, 45603-652"
+};
+
+const DEFAULT_CUSTOMER_ADDRESS = {
+  lat: -14.8042,
+  lng: -39.2697, // Coordenadas para Shopping Jequitibá, Itabuna - BA
+  address: "Shopping Jequitibá, Av. Aziz Maron, s/n - Góes Calmon, Itabuna - BA, 45605-412"
+};
+
 // Converter coordenadas geográficas para SVG
-const latToY = (lat: number) => 300 - ((lat - minLat) / (maxLat - minLat)) * 300;
-const lngToX = (lng: number) => ((lng - minLng) / (maxLng - minLng)) * 400;
+const latToY = (lat: number, bounds: {minLat: number, maxLat: number, height: number}) => 
+  bounds.height - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * bounds.height;
+
+const lngToX = (lng: number, bounds: {minLng: number, maxLng: number, width: number}) => 
+  ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * bounds.width;
 
 // Componente do mapa OpenStreetMap
 const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = false }) => {
   const [loadingMap, setLoadingMap] = useState(true);
   const [route, setRoute] = useState([
-    { lat: -23.56576900000001, lng: -46.65468700000001 }, // Posição inicial
-    { lat: -23.56276900000001, lng: -46.65268700000001 } // Destino
+    { ...DEFAULT_STORE_ADDRESS },  // Posição inicial (loja)
+    { ...DEFAULT_CUSTOMER_ADDRESS } // Destino (cliente)
   ]);
   const [streets, setStreets] = useState<{lat: number, lng: number}[][]>([]);
+  const [direction, setDirection] = useState(0); // Direção do ícone do motoboy
   
   // Gerar ruas simuladas quando o componente é montado
   useEffect(() => {
-    const center = { lat: -23.564, lng: -46.653 };
+    const center = { 
+      lat: (DEFAULT_STORE_ADDRESS.lat + DEFAULT_CUSTOMER_ADDRESS.lat) / 2,
+      lng: (DEFAULT_STORE_ADDRESS.lng + DEFAULT_CUSTOMER_ADDRESS.lng) / 2
+    };
     const points = generateRandomPoints(center, 0.01, 30);
     
     // Criar segmentos simulando ruas
@@ -60,18 +92,24 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
     
     // Adicionar algumas ruas verticais e horizontais
     for (let i = 0; i < 5; i++) {
-      const latStart = -23.568 + i * 0.002;
+      const latStart = center.lat - 0.005 + i * 0.002;
       streetSegments.push([
-        { lat: latStart, lng: -46.658 },
-        { lat: latStart, lng: -46.648 }
+        { lat: latStart, lng: center.lng - 0.01 },
+        { lat: latStart, lng: center.lng + 0.01 }
       ]);
       
-      const lngStart = -46.658 + i * 0.002;
+      const lngStart = center.lng - 0.01 + i * 0.005;
       streetSegments.push([
-        { lat: -23.568, lng: lngStart },
-        { lat: -23.558, lng: lngStart }
+        { lat: center.lat - 0.01, lng: lngStart },
+        { lat: center.lat + 0.01, lng: lngStart }
       ]);
     }
+    
+    // Adicionar uma rua direta conectando a loja e o cliente
+    streetSegments.push([
+      { lat: DEFAULT_STORE_ADDRESS.lat, lng: DEFAULT_STORE_ADDRESS.lng },
+      { lat: DEFAULT_CUSTOMER_ADDRESS.lat, lng: DEFAULT_CUSTOMER_ADDRESS.lng }
+    ]);
     
     setStreets(streetSegments);
     
@@ -109,6 +147,14 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
     
     return closestPoint;
   };
+
+  // Calcular direção com base nos pontos atual e próximo
+  const calculateDirection = (current: {lat: number, lng: number}, next: {lat: number, lng: number}) => {
+    const dx = next.lng - current.lng;
+    const dy = next.lat - current.lat;
+    // Converter radianos para graus e ajustar para direção norte = 0
+    return Math.atan2(dy, dx) * (180 / Math.PI) + 90;
+  };
   
   // Simular movimento do motoboy nas ruas
   useEffect(() => {
@@ -116,7 +162,7 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
     
     let animationFrame: number;
     let step = 0;
-    const totalSteps = 100;
+    const totalSteps = 200; // Mais passos para animação mais lenta
     
     // Verificar se temos ruas simuladas
     if (streets.length === 0) return;
@@ -134,9 +180,19 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
         
         // Adicionar pequena variação aleatória para parecer mais natural
         const newPosition = {
-          lat: streetPosition.lat + (Math.random() - 0.5) * 0.0001,
-          lng: streetPosition.lng + (Math.random() - 0.5) * 0.0001
+          lat: streetPosition.lat + (Math.random() - 0.5) * 0.00004,
+          lng: streetPosition.lng + (Math.random() - 0.5) * 0.00004
         };
+        
+        // Calcular direção (orientação) do motoboy
+        const nextStep = step + 5 < totalSteps ? step + 5 : totalSteps - 1;
+        const nextPosition = {
+          lat: route[0].lat + (route[1].lat - route[0].lat) * (nextStep / totalSteps),
+          lng: route[0].lng + (route[1].lng - route[0].lng) * (nextStep / totalSteps)
+        };
+        
+        const newDirection = calculateDirection(newPosition, nextPosition);
+        setDirection(newDirection);
         
         setRoute(prev => [newPosition, prev[1]]);
         step++;
@@ -155,9 +211,6 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
     const routeChangeInterval = setInterval(() => {
       if (!isTracking) return;
       
-      // Gerar um destino ligeiramente diferente de vez em quando
-      const randomOffset = 0.002;
-      
       // Escolher um ponto aleatório nas ruas simuladas
       if (streets.length > 0) {
         const randomStreetIndex = Math.floor(Math.random() * streets.length);
@@ -170,14 +223,22 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
           lng: randomStreet[0].lng + (randomStreet[1].lng - randomStreet[0].lng) * t
         };
         
-        setRoute(prev => [prev[0], newDestination]);
+        // Garantir que o destino final eventualmente seja a localização do cliente
+        const progress = step / totalSteps;
+        if (progress > 0.8) {
+          // Quando está próximo do fim, voltar para a rota original
+          setRoute(prev => [prev[0], DEFAULT_CUSTOMER_ADDRESS]);
+        } else {
+          // Caso contrário, variar a rota para pontos intermediários
+          setRoute(prev => [prev[0], newDestination]);
+        }
         
         toast({
           title: "Rota atualizada",
           description: "O entregador alterou a rota de entrega.",
         });
       }
-    }, 15000);
+    }, 15000); // A cada 15s
     
     return () => {
       cancelAnimationFrame(animationFrame);
@@ -185,24 +246,23 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
     };
   }, [isTracking, streets, testMode, onRouteComplete]);
   
+  // Variáveis para o SVG
+  const svgBounds = {
+    width: 400,
+    height: 300,
+    minLat: -14.81,
+    maxLat: -14.79,
+    minLng: -39.29,
+    maxLng: -39.26
+  };
+  
   // Converter rota para SVG path para mostrar a linha
   const getPathD = () => {
-    const svgWidth = 400;
-    const svgHeight = 300;
-    
     // Converter coordenadas geográficas para coordenadas SVG
-    const minLat = -23.57;
-    const maxLat = -23.54;
-    const minLng = -46.67;
-    const maxLng = -46.63;
-    
-    const latToY = (lat: number) => svgHeight - ((lat - minLat) / (maxLat - minLat)) * svgHeight;
-    const lngToX = (lng: number) => ((lng - minLng) / (maxLng - minLng)) * svgWidth;
-    
-    const x1 = lngToX(route[0].lng);
-    const y1 = latToY(route[0].lat);
-    const x2 = lngToX(route[1].lng);
-    const y2 = latToY(route[1].lat);
+    const x1 = lngToX(route[0].lng, svgBounds);
+    const y1 = latToY(route[0].lat, svgBounds);
+    const x2 = lngToX(route[1].lng, svgBounds);
+    const y2 = latToY(route[1].lat, svgBounds);
     
     // Criar uma curva Bezier para simular rotas do Google Maps
     const controlPointX = x1 + (x2 - x1) / 2 + (Math.random() - 0.5) * 20;
@@ -214,10 +274,10 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
   // Renderizar ruas no SVG
   const renderStreets = () => {
     return streets.map((street, index) => {
-      const x1 = lngToX(street[0].lng);
-      const y1 = latToY(street[0].lat);
-      const x2 = lngToX(street[1].lng);
-      const y2 = latToY(street[1].lat);
+      const x1 = lngToX(street[0].lng, svgBounds);
+      const y1 = latToY(street[0].lat, svgBounds);
+      const x2 = lngToX(street[1].lng, svgBounds);
+      const y2 = latToY(street[1].lat, svgBounds);
       
       return (
         <line 
@@ -244,7 +304,7 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
           scrolling="no" 
           marginHeight={0} 
           marginWidth={0} 
-          src="https://www.openstreetmap.org/export/embed.html?bbox=-46.69601440429688%2C-23.588296175900284%2C-46.61335945129395%2C-23.54324143931328&layer=mapnik"
+          src={`https://www.openstreetmap.org/export/embed.html?bbox=-39.29,-14.81,-39.26,-14.79&layer=mapnik`}
           title="Mapa de localização do entregador"
           onLoad={() => setLoadingMap(false)}
           className={isTracking ? "opacity-60" : ""}
@@ -264,21 +324,44 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
             {/* Ruas simuladas */}
             {renderStreets()}
             
-            {/* Linha da rota */}
+            {/* Linha da rota - pontilhada */}
             <path 
               d={getPathD()} 
               stroke="#4285F4" 
-              strokeWidth="3" 
+              strokeWidth="2" 
               fill="none" 
               strokeDasharray="5,5" 
             />
             
-            {/* Pin de destino */}
-            <g transform={`translate(${lngToX(route[1].lng) - 10}, ${latToY(route[1].lat) - 20})`}>
-              <path d="M10,0 C4.5,0 0,4.5 0,10 C0,15.5 10,30 10,30 C10,30 20,15.5 20,10 C20,4.5 15.5,0 10,0 Z" 
-                fill="#E53935" />
-              <rect x="5" y="5" width="10" height="10" fill="white" />
+            {/* Pin de destino - casa estilizada com animação de pulso */}
+            <g transform={`translate(${lngToX(route[1].lng, svgBounds) - 10}, ${latToY(route[1].lat, svgBounds) - 22})`}>
+              {/* Pulso de radar */}
+              <circle 
+                cx="10" 
+                cy="10" 
+                r="15" 
+                fill="rgba(229, 57, 53, 0.2)" 
+                className="animate-ping"
+              />
+              
+              {/* Casinha estilizada */}
+              <path 
+                d="M10,0 L20,10 L17,10 L17,20 L3,20 L3,10 L0,10 Z" 
+                fill="#E53935" 
+              />
+              <rect x="7" y="14" width="6" height="6" fill="white" />
             </g>
+            
+            {/* Bairro de destino */}
+            <text 
+              x={lngToX(route[1].lng, svgBounds) + 10} 
+              y={latToY(route[1].lat, svgBounds) - 10} 
+              fill="#333" 
+              fontSize="8" 
+              fontWeight="bold"
+            >
+              Góes Calmon
+            </text>
           </svg>
         )}
         
@@ -286,15 +369,15 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
           <div className="absolute inset-0 pointer-events-none">
             {/* Motoboy animado */}
             <div 
-              className="absolute w-6 h-6"
+              className="absolute"
               style={{
-                left: `${(lngToX(route[0].lng) / 400) * 100}%`,
-                top: `${(latToY(route[0].lat) / 300) * 100}%`,
+                left: `${(lngToX(route[0].lng, svgBounds) / svgBounds.width) * 100}%`,
+                top: `${(latToY(route[0].lat, svgBounds) / svgBounds.height) * 100}%`,
                 transform: 'translate(-50%, -50%)',
                 zIndex: 1000
               }}
             >
-              <DeliveryBikeSvg />
+              <DeliveryBikeSvg direction={direction} />
             </div>
           </div>
         )}
@@ -316,12 +399,6 @@ const OrderMap = ({ isTracking = false, onRouteComplete = () => {}, testMode = f
   );
 };
 
-// Variáveis globais para o mapa
-const minLat = -23.57;
-const maxLat = -23.54;
-const minLng = -46.67;
-const maxLng = -46.63;
-
 const OrderTracking = () => {
   const navigate = useNavigate();
   const params = useParams();
@@ -339,7 +416,7 @@ const OrderTracking = () => {
     createdAt: new Date().toISOString(),
     estimatedTime: 25, // em minutos
     items: [
-      { name: 'X-Burguer', quantity: 2, price: 15.90 },
+      { name: 'X-Burguer', quantity: 2, price: 15.90, notes: 'Sem ketchup' },
       { name: 'Batata Frita', quantity: 1, price: 10.50 }
     ],
     total: 42.30,
@@ -363,7 +440,7 @@ const OrderTracking = () => {
     setMapOpen(true);
     setMapStatic(false);
     
-    // Simular que a entrega foi completada após 20s
+    // Simular que a entrega foi completada após 30s para dar tempo de visualizar
     setTimeout(() => {
       if (tracking) {
         setRouteCompleted(true);
@@ -373,7 +450,7 @@ const OrderTracking = () => {
           description: "Seu pedido foi entregue com sucesso!",
         });
       }
-    }, 20000);
+    }, 30000);
   };
   
   const handleTestTracking = () => {
@@ -383,10 +460,10 @@ const OrderTracking = () => {
     
     toast({
       title: "Modo de teste ativado",
-      description: "Simulando rota de entrega por 15 segundos...",
+      description: "Simulando rota de entrega por 30 segundos...",
     });
     
-    // Encerrar o teste após 15 segundos
+    // Encerrar o teste após 30 segundos
     setTimeout(() => {
       setTestMode(false);
       setRouteCompleted(true);
@@ -397,7 +474,7 @@ const OrderTracking = () => {
         title: "Teste concluído",
         description: "A simulação de entrega foi finalizada.",
       });
-    }, 15000);
+    }, 30000);
   };
   
   const handleConfirmOrder = () => {
