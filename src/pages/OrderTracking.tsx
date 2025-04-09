@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,12 +19,11 @@ const OrderTracking = () => {
   const [mapStatic, setMapStatic] = useState(true);
   const [testMode, setTestMode] = useState(false);
   
-  // Mockup de pedido - no futuro virá da API
   const order = {
     id: params.orderId || '#ORD123456',
-    status: 'in_transit', // alterado para 'in_transit' para mostrar os botões por padrão
+    status: 'in_transit',
     createdAt: new Date().toISOString(),
-    estimatedTime: 25, // em minutos
+    estimatedTime: 25,
     items: [
       { name: 'X-Burguer', quantity: 2, price: 15.90, notes: 'Sem ketchup' },
       { name: 'Batata Frita', quantity: 1, price: 10.50 }
@@ -51,7 +49,6 @@ const OrderTracking = () => {
     setMapOpen(true);
     setMapStatic(false);
     
-    // Simular que a entrega foi completada após 30s para dar tempo de visualizar
     setTimeout(() => {
       if (tracking) {
         setRouteCompleted(true);
@@ -74,7 +71,6 @@ const OrderTracking = () => {
       description: "Simulando rota de entrega por 30 segundos...",
     });
     
-    // Encerrar o teste após 30 segundos
     setTimeout(() => {
       setTestMode(false);
       setRouteCompleted(true);
@@ -138,10 +134,8 @@ const OrderTracking = () => {
             </CardHeader>
             
             <CardContent className="space-y-6">
-              {/* Status do Pedido */}
               <OrderStatus statusStep={statusStep} estimatedTime={order.estimatedTime} />
               
-              {/* Mapa de localização */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <h3 className="font-medium">Local de entrega</h3>
@@ -163,7 +157,6 @@ const OrderTracking = () => {
                   testMode={testMode}
                 />
                 
-                {/* Botões de rastreamento e confirmação */}
                 {(statusStep === 3 || statusStep === 4) && (
                   <div className="space-y-3 pt-2">
                     <Button 
@@ -188,7 +181,6 @@ const OrderTracking = () => {
                 )}
               </div>
               
-              {/* Resumo do Pedido */}
               <OrderSummary items={order.items} total={order.total} />
             </CardContent>
             
@@ -205,7 +197,6 @@ const OrderTracking = () => {
         </div>
       </div>
 
-      {/* Diálogo do mapa */}
       <Dialog open={mapOpen} onOpenChange={setMapOpen}>
         <DialogContent className="sm:max-w-md">
           <h2 className="text-lg font-medium mb-2">Rastreamento do pedido</h2>
