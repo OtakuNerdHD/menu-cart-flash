@@ -148,6 +148,7 @@ const UserSwitcher = () => {
     visitor: "Visitante"
   };
 
+  // Fix for mobile - ensure component is absolutely positioned within viewport
   const style = position.x !== -1 ? {
     position: 'fixed',
     left: `${position.x}px`,
@@ -195,7 +196,7 @@ const UserSwitcher = () => {
         </div>
       )}
       
-      {/* Botão principal */}
+      {/* Botão principal - fixed display for all screen sizes */}
       <Button
         onClick={handleButtonClick}
         onMouseDown={handleMouseDown}

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -151,11 +152,14 @@ const OrderTracking = () => {
                     </Button>
                   )}
                 </div>
-                <OrderMap 
-                  isTracking={routeCompleted ? false : tracking} 
-                  onRouteComplete={handleRouteComplete}
-                  testMode={testMode}
-                />
+                {/* Ensure map is visible with a fixed height */}
+                <div className="w-full h-[300px] relative">
+                  <OrderMap 
+                    isTracking={routeCompleted ? false : tracking} 
+                    onRouteComplete={handleRouteComplete}
+                    testMode={testMode}
+                  />
+                </div>
                 
                 {(statusStep === 3 || statusStep === 4) && (
                   <div className="space-y-3 pt-2">
@@ -200,7 +204,9 @@ const OrderTracking = () => {
       <Dialog open={mapOpen} onOpenChange={setMapOpen}>
         <DialogContent className="sm:max-w-md">
           <h2 className="text-lg font-medium mb-2">Rastreamento do pedido</h2>
-          <OrderMap isTracking={tracking} onRouteComplete={handleRouteComplete} testMode={testMode} />
+          <div className="w-full h-[300px] relative">
+            <OrderMap isTracking={tracking} onRouteComplete={handleRouteComplete} testMode={testMode} />
+          </div>
         </DialogContent>
       </Dialog>
     </div>
