@@ -58,7 +58,7 @@ const OrderTracking = () => {
           description: "Seu pedido foi entregue com sucesso!",
         });
       }
-    }, 60000);
+    }, 90000);
   };
   
   const handleTestTracking = () => {
@@ -68,7 +68,7 @@ const OrderTracking = () => {
     
     toast({
       title: "Modo de teste ativado",
-      description: "Simulando rota de entrega por 60 segundos...",
+      description: "Simulando rota de entrega por 90 segundos...",
     });
     
     setTimeout(() => {
@@ -81,7 +81,7 @@ const OrderTracking = () => {
         title: "Teste concluído",
         description: "A simulação de entrega foi finalizada.",
       });
-    }, 60000);
+    }, 90000);
   };
   
   const handleConfirmOrder = () => {

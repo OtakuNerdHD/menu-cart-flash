@@ -169,40 +169,32 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
       center: [DEFAULT_STORE_ADDRESS.lng, DEFAULT_STORE_ADDRESS.lat],
       zoom: 15,
       pitch: 45,
+      maxZoom: 18, // Limitar o zoom máximo
+      minZoom: 12, // Limitar o zoom mínimo
     });
 
-    // Add navigation controls
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    // Desabilitar rotação do mapa para uma experiência mais simples
+    map.current.dragRotate.disable();
+    map.current.touchZoomRotate.disableRotation();
 
-    // Create custom element for bike marker
+    // Add navigation controls
+    map.current.addControl(new mapboxgl.NavigationControl({
+      showCompass: false // Esconder a bússola
+    }), 'top-right');
+
+    // Criar elemento personalizado para o marcador do motoboy
     const bikeElement = document.createElement('div');
     bikeElement.className = 'delivery-bike-marker';
-    bikeElement.innerHTML = `
-      <svg width="48" height="48" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <ellipse cx="256" cy="460" rx="120" ry="20" fill="rgba(0,0,0,0.2)" />
-        <path d="M170 380 L340 380 L360 430 L150 430" fill="#ff1744" />
-        <path d="M200 430 L310 430 L290 460 L220 460" fill="#333333" />
-        <circle cx="180" cy="440" r="30" fill="#333333" stroke="#555555" strokeWidth="4" />
-        <circle cx="330" cy="440" r="30" fill="#333333" stroke="#555555" strokeWidth="4" />
-        <circle cx="180" cy="440" r="15" fill="#555555" />
-        <circle cx="330" cy="440" r="15" fill="#555555" />
-        <path d="M210 380 L300 380 L290 300 L220 300" fill="#78909c" />
-        <path d="M220 300 L290 300 L280 230 L230 230" fill="#78909c" />
-        <path d="M280 230 L230 230 L240 160 L270 160" fill="#78909c" />
-        <path d="M290 280 L340 250" stroke="#78909c" strokeWidth="20" strokeLinecap="round" />
-        <path d="M220 280 L170 250" stroke="#78909c" strokeWidth="20" strokeLinecap="round" />
-        <rect x="155" y="240" width="30" height="20" rx="5" fill="#333333" />
-        <rect x="325" y="240" width="30" height="20" rx="5" fill="#333333" />
-        <path d="M140 240 L155 250" stroke="#e57373" strokeWidth="20" strokeLinecap="round" />
-        <path d="M355 240 L340 250" stroke="#e57373" strokeWidth="20" strokeLinecap="round" />
-        <circle cx="255" cy="140" r="40" fill="#333333" />
-        <path d="M215 140 L295 140 L285 190 L225 190 Z" fill="#ff1744" />
-        <path d="M235 140 L275 140 L265 110 L245 110 Z" fill="#ff1744" />
-        <ellipse cx="255" cy="140" rx="25" ry="15" fill="white" />
-        <rect x="210" y="350" width="90" height="70" rx="5" fill="#deb887" />
-        <path d="M210 350 L300 350 L270 380 L240 380 Z" fill="#c19a6b" />
-      </svg>
-    `;
+    
+    // Usar a imagem PNG anexada
+    const img = document.createElement('img');
+    img.src = '/lovable-uploads/4dd85232-331e-4de5-9215-35686c444f0c.png';
+    img.width = 48; // Ajustar tamanho
+    img.height = 48;
+    img.style.transform = 'rotate(0deg)';
+    img.style.transformOrigin = 'center center';
+    
+    bikeElement.appendChild(img);
 
     // Create destination marker
     const destElement = document.createElement('div');
@@ -212,14 +204,16 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
         <path d="M12 0C5.382 0 0 5.382 0 12C0 20 12 36 12 36C12 36 24 20 24 12C24 5.382 18.618 0 12 0ZM12 16C9.791 16 8 14.209 8 12C8 9.791 9.791 8 12 8C14.209 8 16 9.791 16 12C16 14.209 14.209 16 12 16Z" fill="#E53935"/>
       </svg>`;
 
-    // Add style for pulse animation
+    // Add style for pulse animation and markers
     const style = document.createElement('style');
     style.innerHTML = `
       .delivery-bike-marker {
         width: 48px;
         height: 48px;
-        margin-top: -24px;
-        margin-left: -24px;
+        position: relative;
+        top: -24px;
+        left: -24px;
+        z-index: 1000;
       }
       
       .destination-marker {
@@ -259,7 +253,8 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
 
     // Add markers
     marker.current = new mapboxgl.Marker({
-      element: bikeElement
+      element: bikeElement,
+      anchor: 'center' // Importante para manter o motoboy centrado na rota
     })
       .setLngLat([route[0].lng, route[0].lat])
       .addTo(map.current);
@@ -313,13 +308,14 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
       setLoadingMap(false);
       getInitialRoute();
       
-      // Fit map to show both markers
+      // Fit map to show both markers com padding otimizado
       const bounds = new mapboxgl.LngLatBounds()
         .extend([route[0].lng, route[0].lat])
         .extend([route[1].lng, route[1].lat]);
         
       map.current?.fitBounds(bounds, {
-        padding: 50
+        padding: { top: 50, bottom: 50, left: 50, right: 50 },
+        maxZoom: 16 // Limitar o zoom quando está calculando a área visível
       });
     });
 
@@ -373,25 +369,28 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
           const rotation = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
           setDirection(rotation);
           
-          // Atualizar rotação do SVG
+          // Atualizar rotação da imagem do motoboy
           const markerEl = marker.current.getElement();
-          const svgEl = markerEl.querySelector('svg');
-          if (svgEl) {
-            svgEl.style.transform = `rotate(${rotation}deg)`;
+          const imgEl = markerEl.querySelector('img');
+          if (imgEl) {
+            imgEl.style.transform = `rotate(${rotation}deg)`;
           }
         }
       }
       
-      // Centralizar mapa na posição atual com transição suave
-      if (currentSegment % 5 === 0) { // Atualizar a visualização do mapa apenas ocasionalmente para melhor desempenho
+      // Centralizar mapa na posição atual com transição mais fluida e suave
+      if (currentSegment % 3 === 0) { // Suavizar atualizações de visualização
         map.current?.panTo([lng, lat], { 
-          duration: 1000,
-          essential: true 
+          duration: 1500, // Transição mais lenta para uma animação mais fluida
+          essential: true,
+          easing: (t) => {
+            return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // Curva de easing personalizada
+          }
         });
       }
       
-      // Incrementar progresso
-      stepProgress += simulationSpeedRef.current * 0.005; // Velocidade ajustada para movimento mais suave
+      // Incrementar progresso de forma mais lenta para animação mais realista
+      stepProgress += simulationSpeedRef.current * 0.003; // Velocidade ajustada para ser mais lenta e realista
       
       // Se completou o segmento atual, avance para o próximo
       if (stepProgress >= 1) {
