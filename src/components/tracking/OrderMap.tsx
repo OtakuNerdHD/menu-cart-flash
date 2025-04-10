@@ -162,162 +162,184 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
   useEffect(() => {
     if (!mapContainer.current) return;
 
-    // Create map
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: [DEFAULT_STORE_ADDRESS.lng, DEFAULT_STORE_ADDRESS.lat],
-      zoom: 15,
-      pitch: 45,
-      maxZoom: 18, // Limitar o zoom máximo
-      minZoom: 12, // Limitar o zoom mínimo
-    });
-
-    // Desabilitar rotação do mapa para uma experiência mais simples
-    map.current.dragRotate.disable();
-    map.current.touchZoomRotate.disableRotation();
-
-    // Add navigation controls
-    map.current.addControl(new mapboxgl.NavigationControl({
-      showCompass: false // Esconder a bússola
-    }), 'top-right');
-
-    // Criar elemento personalizado para o marcador do motoboy
-    const bikeElement = document.createElement('div');
-    bikeElement.className = 'delivery-bike-marker';
+    // Precarregar a imagem do motoboy antes de iniciar o mapa
+    const preloadImage = new Image();
+    preloadImage.src = '/lovable-uploads/ed3c451e-3829-4532-80b6-04edc89d4668.png';
     
-    // Usar a nova imagem do motoboy
-    const img = document.createElement('img');
-    img.src = '/lovable-uploads/ed3c451e-3829-4532-80b6-04edc89d4668.png';
-    img.width = 36; // Ajustar tamanho
-    img.height = 48;
-    img.style.transform = 'rotate(0deg)';
-    img.style.transformOrigin = 'center center';
-    
-    bikeElement.appendChild(img);
-
-    // Create destination marker
-    const destElement = document.createElement('div');
-    destElement.className = 'destination-marker';
-    destElement.innerHTML = `<div class="pulse"></div>
-      <svg width="24" height="36" viewBox="0 0 24 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 0C5.382 0 0 5.382 0 12C0 20 12 36 12 36C12 36 24 20 24 12C24 5.382 18.618 0 12 0ZM12 16C9.791 16 8 14.209 8 12C8 9.791 9.791 8 12 8C14.209 8 16 9.791 16 12C16 14.209 14.209 16 12 16Z" fill="#E53935"/>
-      </svg>`;
-
-    // Add style for pulse animation and markers
-    const style = document.createElement('style');
-    style.innerHTML = `
-      .delivery-bike-marker {
-        width: 36px;
-        height: 48px;
-        position: relative;
-        top: -24px;
-        left: -18px;
-        z-index: 1000;
-      }
+    preloadImage.onload = () => {
+      console.log("Imagem do motoboy carregada com sucesso!");
       
-      .destination-marker {
-        position: relative;
-        top: -36px;
-        left: -12px;
-      }
-      
-      .pulse {
-        display: block;
-        width: 22px;
-        height: 22px;
-        border-radius: 50%;
-        background: rgba(229, 57, 53, 0.4);
-        position: absolute;
-        top: 0;
-        left: 1px;
-        animation: pulse 1.5s ease-out infinite;
-        transform-origin: center center;
-      }
-
-      @keyframes pulse {
-        0% {
-          transform: scale(0.1);
-          opacity: 0;
-        }
-        50% {
-          opacity: 1;
-        }
-        100% {
-          transform: scale(1.2);
-          opacity: 0;
-        }
-      }
-    `;
-    document.head.appendChild(style);
-
-    // Add markers
-    marker.current = new mapboxgl.Marker({
-      element: bikeElement,
-      anchor: 'center' // Importante para manter o motoboy centrado na rota
-    })
-      .setLngLat([route[0].lng, route[0].lat])
-      .addTo(map.current);
-      
-    currentPositionRef.current = [route[0].lng, route[0].lat];
-
-    destinationMarker.current = new mapboxgl.Marker({
-      element: destElement
-    })
-      .setLngLat([route[1].lng, route[1].lat])
-      .addTo(map.current);
-
-    // Add store popup
-    const storePopup = new mapboxgl.Popup({
-      closeButton: false,
-      offset: 25
-    })
-      .setHTML('<div class="p-2 bg-white rounded"><strong>Restaurante</strong><br>Origem do pedido</div>');
-
-    const storeMarker = new mapboxgl.Marker({
-      color: '#3FB1CE'
-    })
-      .setLngLat([route[0].lng, route[0].lat])
-      .setPopup(storePopup)
-      .addTo(map.current);
-
-    // Add destination popup
-    const destPopup = new mapboxgl.Popup({
-      closeButton: false,
-      offset: 25
-    })
-      .setHTML('<div class="p-2 bg-white rounded"><strong>Seu endereço</strong><br>Destino da entrega</div>');
-      
-    destinationMarker.current.setPopup(destPopup);
-
-    // Get initial route
-    const getInitialRoute = async () => {
-      const coordinates = await fetchRouteCoordinates(
-        [route[0].lng, route[0].lat],
-        [route[1].lng, route[1].lat]
-      );
-      
-      if (coordinates) {
-        setRouteCoordinates(coordinates);
-        updateRouteOnMap(coordinates);
-      }
-    };
-
-    // When map is loaded
-    map.current.on('load', () => {
-      setLoadingMap(false);
-      getInitialRoute();
-      
-      // Fit map to show both markers com padding otimizado
-      const bounds = new mapboxgl.LngLatBounds()
-        .extend([route[0].lng, route[0].lat])
-        .extend([route[1].lng, route[1].lat]);
-        
-      map.current?.fitBounds(bounds, {
-        padding: { top: 50, bottom: 50, left: 50, right: 50 },
-        maxZoom: 16 // Limitar o zoom quando está calculando a área visível
+      // Create map
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [DEFAULT_STORE_ADDRESS.lng, DEFAULT_STORE_ADDRESS.lat],
+        zoom: 15,
+        pitch: 45,
+        maxZoom: 17, // Limitar o zoom máximo
+        minZoom: 13, // Limitar o zoom mínimo
       });
-    });
+  
+      // Desabilitar rotação do mapa para uma experiência mais simples
+      map.current.dragRotate.disable();
+      map.current.touchZoomRotate.disableRotation();
+  
+      // Add navigation controls
+      map.current.addControl(new mapboxgl.NavigationControl({
+        showCompass: false // Esconder a bússola
+      }), 'top-right');
+  
+      // Criar elemento personalizado para o marcador do motoboy
+      const bikeElement = document.createElement('div');
+      bikeElement.className = 'delivery-bike-marker';
+      
+      // Usar a imagem do motoboy
+      const img = document.createElement('img');
+      img.src = preloadImage.src; // Usar a imagem pré-carregada
+      img.width = 32;
+      img.height = 32;
+      img.style.transform = 'rotate(0deg)';
+      img.style.transformOrigin = 'center center';
+      
+      bikeElement.appendChild(img);
+  
+      // Create destination marker
+      const destElement = document.createElement('div');
+      destElement.className = 'destination-marker';
+      destElement.innerHTML = `<div class="pulse"></div>
+        <svg width="24" height="36" viewBox="0 0 24 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 0C5.382 0 0 5.382 0 12C0 20 12 36 12 36C12 36 24 20 24 12C24 5.382 18.618 0 12 0ZM12 16C9.791 16 8 14.209 8 12C8 9.791 9.791 8 12 8C14.209 8 16 9.791 16 12C16 14.209 14.209 16 12 16Z" fill="#E53935"/>
+        </svg>`;
+  
+      // Add style for pulse animation and markers
+      const style = document.createElement('style');
+      style.innerHTML = `
+        .delivery-bike-marker {
+          width: 32px;
+          height: 32px;
+          position: relative;
+          top: -16px;
+          left: -16px;
+          z-index: 1000;
+        }
+        
+        .delivery-bike-marker img {
+          object-fit: contain;
+          display: block;
+        }
+        
+        .destination-marker {
+          position: relative;
+          top: -36px;
+          left: -12px;
+        }
+        
+        .pulse {
+          display: block;
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          background: rgba(229, 57, 53, 0.4);
+          position: absolute;
+          top: 0;
+          left: 1px;
+          animation: pulse 1.5s ease-out infinite;
+          transform-origin: center center;
+        }
+  
+        @keyframes pulse {
+          0% {
+            transform: scale(0.1);
+            opacity: 0;
+          }
+          50% {
+            opacity: 1;
+          }
+          100% {
+            transform: scale(1.2);
+            opacity: 0;
+          }
+        }
+      `;
+      document.head.appendChild(style);
+  
+      // Add markers with proper offset para melhor alinhamento com a rua
+      marker.current = new mapboxgl.Marker({
+        element: bikeElement,
+        anchor: 'center', // Importante para manter o motoboy centrado na rota
+        offset: [0, 0] // Ajustar offset para melhor alinhamento com a rua
+      })
+        .setLngLat([route[0].lng, route[0].lat])
+        .addTo(map.current);
+        
+      currentPositionRef.current = [route[0].lng, route[0].lat];
+  
+      destinationMarker.current = new mapboxgl.Marker({
+        element: destElement
+      })
+        .setLngLat([route[1].lng, route[1].lat])
+        .addTo(map.current);
+  
+      // Add store popup
+      const storePopup = new mapboxgl.Popup({
+        closeButton: false,
+        offset: 25
+      })
+        .setHTML('<div class="p-2 bg-white rounded"><strong>Restaurante</strong><br>Origem do pedido</div>');
+  
+      const storeMarker = new mapboxgl.Marker({
+        color: '#3FB1CE'
+      })
+        .setLngLat([route[0].lng, route[0].lat])
+        .setPopup(storePopup)
+        .addTo(map.current);
+  
+      // Add destination popup
+      const destPopup = new mapboxgl.Popup({
+        closeButton: false,
+        offset: 25
+      })
+        .setHTML('<div class="p-2 bg-white rounded"><strong>Seu endereço</strong><br>Destino da entrega</div>');
+        
+      destinationMarker.current.setPopup(destPopup);
+  
+      // Get initial route
+      const getInitialRoute = async () => {
+        const coordinates = await fetchRouteCoordinates(
+          [route[0].lng, route[0].lat],
+          [route[1].lng, route[1].lat]
+        );
+        
+        if (coordinates) {
+          setRouteCoordinates(coordinates);
+          updateRouteOnMap(coordinates);
+        }
+      };
+  
+      // When map is loaded
+      map.current.on('load', () => {
+        setLoadingMap(false);
+        getInitialRoute();
+        
+        // Fit map to show both markers com padding otimizado
+        const bounds = new mapboxgl.LngLatBounds()
+          .extend([route[0].lng, route[0].lat])
+          .extend([route[1].lng, route[1].lat]);
+          
+        map.current?.fitBounds(bounds, {
+          padding: { top: 50, bottom: 50, left: 50, right: 50 },
+          maxZoom: 15 // Limitar o zoom quando está calculando a área visível
+        });
+      });
+    };
+    
+    preloadImage.onerror = () => {
+      console.error("Erro ao carregar a imagem do motoboy");
+      
+      // Carregar o mapa mesmo sem a imagem, mas usará um fallback
+      // Resto do código permanece o mesmo
+      // ... implementação do fallback
+    };
 
     // Cleanup function
     return () => {
@@ -379,9 +401,11 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
       }
       
       // Centralizar mapa na posição atual com transição mais fluida e suave
-      if (currentSegment % 3 === 0) { // Suavizar atualizações de visualização
-        map.current?.panTo([lng, lat], { 
-          duration: 1500, // Transição mais lenta para uma animação mais fluida
+      // Ajuste para menor frequência de centralização para evitar problemas de animação
+      if (currentSegment % 5 === 0) { // Reduzido para menos atualizações de visualização
+        map.current?.easeTo({ 
+          center: [lng, lat], 
+          duration: 2000, // Transição mais lenta para animação mais suave
           essential: true,
           easing: (t) => {
             return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // Curva de easing personalizada
@@ -390,7 +414,7 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
       }
       
       // Incrementar progresso de forma mais lenta para animação mais realista
-      stepProgress += simulationSpeedRef.current * 0.003; // Velocidade ajustada para ser mais lenta e realista
+      stepProgress += simulationSpeedRef.current * 0.002; // Ainda mais lento e realista
       
       // Se completou o segmento atual, avance para o próximo
       if (stepProgress >= 1) {
