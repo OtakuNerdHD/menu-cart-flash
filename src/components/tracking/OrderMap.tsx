@@ -186,10 +186,10 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
     const bikeElement = document.createElement('div');
     bikeElement.className = 'delivery-bike-marker';
     
-    // Usar a imagem PNG anexada
+    // Usar a nova imagem do motoboy
     const img = document.createElement('img');
-    img.src = '/lovable-uploads/4dd85232-331e-4de5-9215-35686c444f0c.png';
-    img.width = 48; // Ajustar tamanho
+    img.src = '/lovable-uploads/ed3c451e-3829-4532-80b6-04edc89d4668.png';
+    img.width = 36; // Ajustar tamanho
     img.height = 48;
     img.style.transform = 'rotate(0deg)';
     img.style.transformOrigin = 'center center';
@@ -208,11 +208,11 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
     const style = document.createElement('style');
     style.innerHTML = `
       .delivery-bike-marker {
-        width: 48px;
+        width: 36px;
         height: 48px;
         position: relative;
         top: -24px;
-        left: -24px;
+        left: -18px;
         z-index: 1000;
       }
       
