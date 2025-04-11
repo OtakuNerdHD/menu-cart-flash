@@ -122,24 +122,32 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
           </Button>
         </div>
       ) : (
-        <div className="flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md h-40 bg-gray-50">
+        <div className="relative flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md h-40 bg-gray-50">
           <div className="space-y-2 text-center">
             <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
             <div className="text-gray-500 text-sm">
               {isUploading ? 'Carregando...' : 'Arraste e solte ou clique para selecionar'}
             </div>
           </div>
+          <input
+            type="file"
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            onChange={handleFileChange}
+            accept={acceptedFileTypes}
+            disabled={isUploading}
+          />
         </div>
       )}
       
       <div className="flex justify-center">
-        {!isUploading && (
-          <div className="relative">
+        {!isUploading && !preview && (
+          <div className="relative w-full">
             <input
               type="file"
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               onChange={handleFileChange}
               accept={acceptedFileTypes}
+              disabled={isUploading}
             />
             <Button
               type="button"

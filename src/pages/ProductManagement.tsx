@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -593,7 +594,7 @@ const ProductManagement = () => {
             <Button variant="outline" onClick={() => setShowAddEditDialog(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSubmitProduct}>
+            <Button onClick={handleSubmitProduct} type="button">
               {currentProduct ? 'Salvar Alterações' : 'Adicionar Produto'}
             </Button>
           </DialogFooter>

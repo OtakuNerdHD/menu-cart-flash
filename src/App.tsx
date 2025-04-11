@@ -17,6 +17,7 @@ import UserManagement from "./pages/UserManagement";
 import ApiManagement from "./pages/ApiManagement";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import Cart from "./components/Cart";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
             <UserSwitcher />
+            <Cart />
           </BrowserRouter>
         </CartProvider>
       </UserSwitcherProvider>

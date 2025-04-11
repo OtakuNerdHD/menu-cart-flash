@@ -172,7 +172,7 @@ const MultipleImageUpload: React.FC<MultipleImageUploadProps> = ({
         ))}
         
         {previews.length < maxImages && (
-          <div className="flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md h-40 bg-gray-50">
+          <div className="relative flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md h-40 bg-gray-50">
             <div className="space-y-2 text-center">
               <Plus className="mx-auto h-12 w-12 text-gray-400" />
               <div className="text-gray-500 text-sm">
