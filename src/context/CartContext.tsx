@@ -50,6 +50,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       title: "Item adicionado",
       description: `${item.name} foi adicionado ao carrinho`,
     });
+    
+    // Abrir o carrinho automaticamente ao adicionar um item
+    setCartOpen(true);
   };
 
   const removeFromCart = (id: number) => {

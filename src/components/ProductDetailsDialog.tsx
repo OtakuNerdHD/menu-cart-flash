@@ -53,6 +53,9 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
       name: product.name, 
       price: product.price,
       image: product.image_url,
+      imageUrl: product.image_url,
+      description: product.description,
+      category: product.category,
       quantity,
       notes: notes.trim() || undefined
     });

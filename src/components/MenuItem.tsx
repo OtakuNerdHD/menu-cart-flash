@@ -26,11 +26,6 @@ const MenuItem = ({ item }: MenuItemProps) => {
       description: item.description,
       category: item.category
     });
-    
-    toast({
-      title: "Item adicionado ao carrinho",
-      description: `${item.name} foi adicionado ao seu pedido`,
-    });
   };
   
   const handleOpenDetails = () => {
