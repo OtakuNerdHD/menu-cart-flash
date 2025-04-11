@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,11 +9,12 @@ import { toast } from '@/hooks/use-toast';
 import { useCart } from '@/context/CartContext';
 import { Loader2, CreditCard, Wallet, CreditCardIcon, DollarSign, QrCode } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { DeliveryAddressFormProps } from './DeliveryAddressFormProps';
 
 // Payment method type
 type PaymentMethod = 'card' | 'pix' | 'cash' | 'card_delivery';
 
-const DeliveryAddressForm = () => {
+const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
   const { subtotal, cartItems, clearCart } = useCart();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
@@ -110,6 +110,11 @@ const DeliveryAddressForm = () => {
       setTimeout(() => {
         const orderId = `ORDER-${Math.floor(Math.random() * 1000000)}`;
         clearCart();
+        
+        if (onSuccess) {
+          onSuccess();
+        }
+        
         navigate(`/order-tracking/${orderId}`);
         
         toast({
@@ -148,6 +153,11 @@ const DeliveryAddressForm = () => {
           
         const orderId = `ORDER-${Math.floor(Math.random() * 1000000)}`;
         clearCart();
+        
+        if (onSuccess) {
+          onSuccess();
+        }
+        
         navigate(`/order-tracking/${orderId}`);
         
         toast({

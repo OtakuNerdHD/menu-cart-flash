@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import MenuGrid from '@/components/MenuGrid';
 import CategoryFilter from '@/components/CategoryFilter';
@@ -28,10 +27,17 @@ const Index = () => {
         } else if (data && data.length > 0) {
           // Se encontrar dados no Supabase, use-os
           // Adicionando restaurant_id padrão se não existir
-          const productsWithRestaurantId = data.map(product => ({
-            ...product,
-            restaurant_id: product.restaurant_id || 1, // Definindo um valor padrão
-          })) as Product[];
+          const productsWithRestaurantId = data.map(product => {
+            // Check if product already has restaurant_id
+            if ('restaurant_id' in product) {
+              return product as Product;
+            }
+            // Otherwise add it
+            return {
+              ...product,
+              restaurant_id: 1, // Definindo um valor padrão
+            } as Product;
+          });
           
           setProducts(productsWithRestaurantId);
         } else {
