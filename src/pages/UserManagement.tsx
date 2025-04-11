@@ -2,10 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useUserSwitcher } from '@/context/UserSwitcherContext';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, UserPlus, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from "@/integrations/supabase/client";
 
 // Mock de dados de usuários
 const mockUsers = [
@@ -27,6 +32,14 @@ const UserManagement = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [extraUsersAdded, setExtraUsersAdded] = useState(false);
   const navigate = useNavigate();
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [newUser, setNewUser] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'customer',
+    status: 'active'
+  });
   
   const isAdminOrOwner = currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner';
 
@@ -40,7 +53,39 @@ const UserManagement = () => {
         console.error('Erro ao carregar usuários:', error);
       }
     }
+    
+    // Se temos Supabase conectado, buscar usuários de lá também
+    fetchUsersFromSupabase();
   }, []);
+  
+  const fetchUsersFromSupabase = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*');
+        
+      if (error) {
+        console.error('Erro ao buscar usuários do Supabase:', error);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        // Transformar dados do Supabase para o formato esperado pela UI
+        const supabaseUsers = data.map(user => ({
+          id: user.id,
+          name: `${user.first_name} ${user.last_name}`,
+          email: user.email,
+          role: user.role,
+          status: 'active'  // Assumindo que todos estão ativos por padrão
+        }));
+        
+        setUsers(supabaseUsers);
+        localStorage.setItem('appUsers', JSON.stringify(supabaseUsers));
+      }
+    } catch (error) {
+      console.error('Erro ao processar dados do Supabase:', error);
+    }
+  };
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -69,6 +114,106 @@ const UserManagement = () => {
       
       setIsRefreshing(false);
     }, 800);
+  };
+  
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setNewUser(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleRoleChange = (value) => {
+    setNewUser(prev => ({ ...prev, role: value }));
+  };
+  
+  const handleStatusChange = (value) => {
+    setNewUser(prev => ({ ...prev, status: value }));
+  };
+  
+  const handleAddUser = async () => {
+    // Validação básica
+    if (!newUser.name || !newUser.email || !newUser.password) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Preencha todos os campos obrigatórios",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Tente adicionar ao Supabase primeiro
+    try {
+      // Dividir nome e sobrenome
+      const nameParts = newUser.name.split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
+      const { data, error } = await supabase
+        .from('users')
+        .insert([
+          {
+            first_name: firstName,
+            last_name: lastName,
+            email: newUser.email,
+            password: newUser.password, // Nota: em um sistema real, a senha seria hasheada
+            role: newUser.role,
+            username: newUser.email // Usando email como username por padrão
+          }
+        ])
+        .select();
+        
+      if (error) {
+        console.error('Erro ao adicionar usuário ao Supabase:', error);
+        // Continua com o fallback para localStorage
+      } else if (data) {
+        toast({
+          title: "Usuário adicionado com sucesso",
+          description: `${newUser.name} foi adicionado ao sistema.`
+        });
+        
+        // Atualizar a lista de usuários
+        fetchUsersFromSupabase();
+        setIsAddUserOpen(false);
+        setNewUser({
+          name: '',
+          email: '',
+          password: '',
+          role: 'customer',
+          status: 'active'
+        });
+        return;
+      }
+    } catch (error) {
+      console.error('Erro ao processar adição de usuário:', error);
+    }
+    
+    // Fallback para localStorage se o Supabase falhar
+    const newId = Math.max(...users.map(u => u.id), 0) + 1;
+    const userToAdd = {
+      id: newId,
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role,
+      status: newUser.status
+    };
+    
+    const updatedUsers = [...users, userToAdd];
+    setUsers(updatedUsers);
+    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
+    
+    toast({
+      title: "Usuário adicionado com sucesso",
+      description: `${newUser.name} foi adicionado ao sistema.`
+    });
+    
+    // Limpar o formulário e fechar o modal
+    setIsAddUserOpen(false);
+    setNewUser({
+      name: '',
+      email: '',
+      password: '',
+      role: 'customer',
+      status: 'active'
+    });
   };
 
   if (!isAdminOrOwner) {
@@ -112,9 +257,14 @@ const UserManagement = () => {
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </Button>
           </div>
-          <Button onClick={() => navigate('/')}>
-            Voltar para o menu
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setIsAddUserOpen(true)}>
+              <UserPlus className="h-4 w-4 mr-2" /> Adicionar Usuário
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/')}>
+              Voltar para o menu
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -156,6 +306,80 @@ const UserManagement = () => {
           ))}
         </div>
       </div>
+      
+      {/* Modal de Adicionar Usuário */}
+      <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Adicionar Novo Usuário</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Nome Completo</Label>
+              <Input
+                id="name"
+                name="name"
+                value={newUser.name}
+                onChange={handleInputChange}
+                placeholder="Digite o nome completo"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={newUser.email}
+                onChange={handleInputChange}
+                placeholder="email@exemplo.com"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="password">Senha</Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                value={newUser.password}
+                onChange={handleInputChange}
+                placeholder="Digite a senha"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="role">Função</Label>
+              <Select value={newUser.role} onValueChange={handleRoleChange}>
+                <SelectTrigger id="role">
+                  <SelectValue placeholder="Selecione a função" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Administrador</SelectItem>
+                  <SelectItem value="restaurant_owner">Proprietário</SelectItem>
+                  <SelectItem value="chef">Chef</SelectItem>
+                  <SelectItem value="waiter">Garçom</SelectItem>
+                  <SelectItem value="customer">Cliente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="status">Status</Label>
+              <Select value={newUser.status} onValueChange={handleStatusChange}>
+                <SelectTrigger id="status">
+                  <SelectValue placeholder="Selecione o status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Ativo</SelectItem>
+                  <SelectItem value="inactive">Inativo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddUserOpen(false)}>Cancelar</Button>
+            <Button onClick={handleAddUser}>Adicionar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

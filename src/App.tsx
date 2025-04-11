@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { UserSwitcherProvider } from "@/context/UserSwitcherContext";
 import { CartProvider } from "@/context/CartContext";
 import UserSwitcher from "@/components/UserSwitcher";
+import Header from "@/components/Header";
 import Index from "./pages/Index";
 import OrderManagement from "./pages/OrderManagement";
 import OrderTracking from "./pages/OrderTracking";
@@ -27,6 +28,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <Header />
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/order-management" element={<OrderManagement />} />

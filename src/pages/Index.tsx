@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import { menuItems } from '@/data/menuItems';
 import { CartProvider } from '@/context/CartContext';
-import Header from '@/components/Header';
 import MenuGrid from '@/components/MenuGrid';
 import CategoryFilter from '@/components/CategoryFilter';
 import Cart from '@/components/Cart';
@@ -16,9 +15,7 @@ const Index = () => {
   
   return (
     <CartProvider>
-      <div className="min-h-screen flex flex-col">
-        <Header />
-        
+      <div className="min-h-screen flex flex-col pt-16">
         <main className="flex-grow container mx-auto px-4 py-8">
           <section className="mb-8">
             <h1 className="text-3xl font-bold mb-2 text-menu-secondary">Cardápio Digital</h1>

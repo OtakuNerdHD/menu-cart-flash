@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Image, Star, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Star } from 'lucide-react';
 import { useUserSwitcher } from '@/context/UserSwitcherContext';
 import { toast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
@@ -22,6 +22,8 @@ import {
   CarouselNext, 
   CarouselPrevious 
 } from '@/components/ui/carousel';
+import MultipleImageUpload from '@/components/MultipleImageUpload';
+import { supabase } from "@/integrations/supabase/client";
 
 interface ProductFormState {
   name: string;
@@ -54,32 +56,31 @@ const ProductManagement = () => {
   });
   
   const isAdminOrOwner = ['admin', 'restaurant_owner'].includes(currentUser?.role || '');
-
-  if (!isAdminOrOwner) {
-    return (
-      <div className="min-h-screen bg-gray-50 pt-16">
-        <div className="container mx-auto px-4 py-8">
-          <Card className="w-full max-w-md mx-auto">
-            <CardHeader>
-              <CardTitle>Acesso restrito</CardTitle>
-              <CardDescription>
-                Você não tem permissão para acessar esta página
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-500">
-                Esta página é destinada apenas para administradores e proprietários.
-              </p>
-              <Button className="mt-4" onClick={() => navigate('/')}>
-                Voltar para o início
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
   
+  useEffect(() => {
+    // Buscar produtos do Supabase se disponível
+    fetchProductsFromSupabase();
+  }, []);
+  
+  const fetchProductsFromSupabase = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*');
+        
+      if (error) {
+        console.error('Erro ao buscar produtos do Supabase:', error);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        setProducts(data);
+      }
+    } catch (error) {
+      console.error('Erro ao processar dados do Supabase:', error);
+    }
+  };
+
   const resetForm = () => {
     setFormState({
       name: '',
@@ -119,9 +120,35 @@ const ProductManagement = () => {
     setShowDeleteDialog(true);
   };
   
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!currentProduct) return;
     
+    // Tentar excluir do Supabase primeiro
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', currentProduct.id);
+        
+      if (error) {
+        console.error('Erro ao excluir produto do Supabase:', error);
+        // Continua com o fallback local
+      } else {
+        toast({
+          title: "Produto excluído",
+          description: `${currentProduct.name} foi removido com sucesso`,
+        });
+        
+        setProducts(products.filter(p => p.id !== currentProduct.id));
+        setShowDeleteDialog(false);
+        setCurrentProduct(null);
+        return;
+      }
+    } catch (error) {
+      console.error('Erro ao processar exclusão de produto:', error);
+    }
+    
+    // Fallback local
     setProducts(products.filter(p => p.id !== currentProduct.id));
     toast({
       title: "Produto excluído",
@@ -131,7 +158,7 @@ const ProductManagement = () => {
     setCurrentProduct(null);
   };
   
-  const handleSubmitProduct = () => {
+  const handleSubmitProduct = async () => {
     if (!formState.name || !formState.price || !formState.description) {
       toast({
         title: "Campos obrigatórios",
@@ -166,6 +193,80 @@ const ProductManagement = () => {
       }
     };
     
+    // Tentar salvar no Supabase primeiro
+    try {
+      if (currentProduct) {
+        // Atualizar produto existente
+        const { error } = await supabase
+          .from('products')
+          .update({
+            name: productData.name,
+            description: productData.description,
+            price: productData.price,
+            category: productData.category,
+            available: productData.available,
+            featured: productData.featured,
+            image_url: productData.image_url,
+            nutritional_info: productData.nutritional_info,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', currentProduct.id);
+          
+        if (error) {
+          console.error('Erro ao atualizar produto no Supabase:', error);
+          // Continua com o fallback local
+        } else {
+          toast({
+            title: "Produto atualizado",
+            description: `${formState.name} foi atualizado com sucesso`,
+          });
+          
+          setProducts(products.map(p => p.id === currentProduct.id ? productData : p));
+          setShowAddEditDialog(false);
+          resetForm();
+          setCurrentProduct(null);
+          fetchProductsFromSupabase();
+          return;
+        }
+      } else {
+        // Adicionar novo produto
+        const { data, error } = await supabase
+          .from('products')
+          .insert([{
+            name: productData.name,
+            description: productData.description,
+            price: productData.price,
+            category: productData.category,
+            available: productData.available,
+            featured: productData.featured,
+            image_url: productData.image_url,
+            nutritional_info: productData.nutritional_info,
+            restaurant_id: 1
+          }])
+          .select();
+          
+        if (error) {
+          console.error('Erro ao adicionar produto no Supabase:', error);
+          // Continua com o fallback local
+        } else if (data) {
+          toast({
+            title: "Produto adicionado",
+            description: `${formState.name} foi adicionado com sucesso`,
+          });
+          
+          setProducts([...products, data[0]]);
+          setShowAddEditDialog(false);
+          resetForm();
+          setCurrentProduct(null);
+          fetchProductsFromSupabase();
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao processar produto no Supabase:', error);
+    }
+    
+    // Fallback local
     if (currentProduct) {
       setProducts(products.map(p => p.id === currentProduct.id ? productData : p));
       toast({
@@ -194,16 +295,8 @@ const ProductManagement = () => {
     setFormState(prev => ({ ...prev, [name]: checked }));
   };
   
-  const handleImageChange = (index: number, url: string) => {
-    const newImages = [...formState.images];
-    newImages[index] = url;
-    setFormState(prev => ({ ...prev, images: newImages }));
-  };
-  
-  const addImageField = () => {
-    if (formState.images.length < 5) {
-      setFormState(prev => ({ ...prev, images: [...prev.images, ''] }));
-    }
+  const handleImagesChange = (urls: string[]) => {
+    setFormState(prev => ({ ...prev, images: urls }));
   };
   
   const filteredProducts = products.filter(product => 
@@ -220,6 +313,31 @@ const ProductManagement = () => {
     { id: 'entradas', name: 'Entradas' },
     { id: 'acompanhamentos', name: 'Acompanhamentos' }
   ];
+
+  if (!isAdminOrOwner) {
+    return (
+      <div className="min-h-screen bg-gray-50 pt-16">
+        <div className="container mx-auto px-4 py-8">
+          <Card className="w-full max-w-md mx-auto">
+            <CardHeader>
+              <CardTitle>Acesso restrito</CardTitle>
+              <CardDescription>
+                Você não tem permissão para acessar esta página
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-500">
+                Esta página é destinada apenas para administradores e proprietários.
+              </p>
+              <Button className="mt-4" onClick={() => navigate('/')}>
+                Voltar para o início
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
@@ -413,43 +531,12 @@ const ProductManagement = () => {
                   A primeira imagem será usada como thumbnail no cardápio.
                 </p>
                 
-                {formState.images.map((img, index) => (
-                  <div key={index} className="flex items-center gap-2 mb-2">
-                    <Input
-                      placeholder={`URL da imagem ${index + 1}${index === 0 ? ' (thumbnail)' : ''}`}
-                      value={img}
-                      onChange={(e) => handleImageChange(index, e.target.value)}
-                    />
-                    <div className="w-10 h-10 flex-shrink-0 rounded overflow-hidden bg-gray-100">
-                      {img ? (
-                        <img 
-                          src={img} 
-                          alt={`Prévia ${index + 1}`} 
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/placeholder.svg';
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gray-200">
-                          <Image className="w-5 h-5 text-gray-400" />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                
-                {formState.images.length < 5 && (
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={addImageField}
-                    className="mt-2"
-                  >
-                    <Plus className="h-4 w-4 mr-2" /> Adicionar mais imagens
-                  </Button>
-                )}
+                <MultipleImageUpload
+                  values={formState.images.filter(img => img !== '')}
+                  onImagesUpload={handleImagesChange}
+                  maxImages={5}
+                  label="Selecionar imagens"
+                />
               </div>
               
               <div className="flex items-center space-x-2">
