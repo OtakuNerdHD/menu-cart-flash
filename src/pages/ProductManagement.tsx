@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -34,6 +33,24 @@ interface ProductFormState {
   featured: boolean;
   images: string[];
   ingredients: string;
+}
+
+// Defining a type for the Supabase returned data
+interface SupabaseProduct {
+  available: boolean;
+  category: string;
+  created_at: string;
+  description: string;
+  featured: boolean;
+  id: number;
+  image_url: string;
+  name: string;
+  nutritional_info: any;
+  price: number;
+  rating: number;
+  review_count: number;
+  updated_at: string;
+  restaurant_id?: number;
 }
 
 const ProductManagement = () => {
@@ -75,7 +92,7 @@ const ProductManagement = () => {
       
       if (data && data.length > 0) {
         // Adicionar restaurant_id padrão como 1 se não existir
-        const productsWithRestaurantId = data.map(product => ({
+        const productsWithRestaurantId = data.map((product: SupabaseProduct) => ({
           ...product,
           restaurant_id: product.restaurant_id || 1
         })) as Product[];
@@ -261,7 +278,13 @@ const ProductManagement = () => {
             description: `${formState.name} foi adicionado com sucesso`,
           });
           
-          setProducts([...products, data[0] as Product]);
+          // Convertendo explicitamente para o tipo Product
+          const newProduct: Product = {
+            ...(data[0] as SupabaseProduct),
+            restaurant_id: (data[0] as SupabaseProduct).restaurant_id || 1
+          };
+          
+          setProducts([...products, newProduct]);
           setShowAddEditDialog(false);
           resetForm();
           setCurrentProduct(null);
