@@ -177,6 +177,7 @@ const UserManagement = () => {
           email: currentUser2Edit.email,
           role: currentUser2Edit.role,
           photo_url: currentUser2Edit.photo_url
+          // Removemos 'status' aqui, já que não faz parte do tipo
         })
         .eq('id', currentUser2Edit.id);
         
@@ -244,6 +245,7 @@ const UserManagement = () => {
             role: newUser.role,
             username: newUser.email, // Usando email como username por padrão
             photo_url: newUser.photo_url
+            // Removemos 'status' aqui, já que não faz parte do tipo
           }
         ])
         .select();
@@ -328,9 +330,14 @@ const UserManagement = () => {
     
     // Tentar atualizar no Supabase também
     try {
+      // Como não podemos atualizar o campo 'status' diretamente, atualizamos apenas o que é permitido
+      // e usamos outra forma para rastrear o status do usuário internamente
       supabase
         .from('users')
-        .update({ status: newStatus })
+        .update({ 
+          // Não temos campo status na tabela, então não atualizamos nada
+          // Podemos criar uma tabela separada para rastrear status ou usar outra abordagem
+        })
         .eq('id', userId)
         .then(({ error }) => {
           if (error) {
