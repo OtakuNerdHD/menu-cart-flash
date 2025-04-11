@@ -1,15 +1,50 @@
 
-import React, { useState } from 'react';
-import { menuItems } from '@/data/menuItems';
+import React, { useState, useEffect } from 'react';
 import MenuGrid from '@/components/MenuGrid';
 import CategoryFilter from '@/components/CategoryFilter';
+import { Product } from '@/types/supabase';
+import { supabase } from '@/integrations/supabase/client';
+import { menuItems as fallbackMenuItems } from '@/data/menuItems';
+import { categories } from '@/data/menuItems';
 
 const Index = () => {
   const [selectedCategory, setSelectedCategory] = useState('todos');
+  const [products, setProducts] = useState<Product[]>(fallbackMenuItems);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setLoading(true);
+      try {
+        // Tentar carregar produtos do Supabase
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('available', true);
+
+        if (error) {
+          console.error('Erro ao buscar produtos:', error);
+          // Em caso de erro, mantém os produtos locais como fallback
+        } else if (data && data.length > 0) {
+          // Se encontrar dados no Supabase, use-os
+          setProducts(data);
+        } else {
+          console.log('Nenhum produto encontrado no Supabase, usando dados locais.');
+          // Se não encontrar produtos, mantenha os produtos locais
+        }
+      } catch (err) {
+        console.error('Erro ao buscar produtos:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
 
   const filteredItems = selectedCategory === 'todos'
-    ? menuItems
-    : menuItems.filter(item => item.category === selectedCategory);
+    ? products
+    : products.filter(item => item.category === selectedCategory);
   
   return (
     <div className="min-h-screen flex flex-col pt-16">
@@ -38,7 +73,13 @@ const Index = () => {
             <span className="text-sm text-gray-500">{filteredItems.length} itens</span>
           </div>
           
-          <MenuGrid items={filteredItems} />
+          {loading ? (
+            <div className="py-10 text-center">
+              <p className="text-gray-500">Carregando produtos...</p>
+            </div>
+          ) : (
+            <MenuGrid items={filteredItems} />
+          )}
         </section>
       </main>
       

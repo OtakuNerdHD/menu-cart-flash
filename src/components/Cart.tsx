@@ -17,7 +17,8 @@ const Cart = () => {
     removeFromCart, 
     updateQuantity,
     clearCart,
-    subtotal
+    subtotal,
+    closeCart
   } = useCart();
 
   const handleCheckout = () => {

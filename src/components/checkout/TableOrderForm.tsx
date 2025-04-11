@@ -8,7 +8,7 @@ import { useCart } from '@/context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
 
-const TableOrderForm = () => {
+const TableOrderForm = ({ onSuccess }: { onSuccess?: () => void }) => {
   const [tableName, setTableName] = useState('');
   const { cartItems, subtotal, clearCart } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -84,7 +84,7 @@ const TableOrderForm = () => {
         throw new Error("Não foi possível adicionar os itens ao pedido");
       }
 
-      // Salvar o pedido no localStorage também (para compatibilidade offline)
+      // Salvar o pedido no localStorage também (para compatibilidade offline e sistema de mesas dinâmico)
       const tableOrders = JSON.parse(localStorage.getItem('tableOrders') || '[]');
       const newOrder = {
         id: orderId,
@@ -105,6 +105,11 @@ const TableOrderForm = () => {
 
       // Limpar o carrinho
       clearCart();
+      
+      // Chamar o callback de sucesso (que irá fechar o carrinho)
+      if (onSuccess) {
+        onSuccess();
+      }
       
       // Mostrar mensagem de sucesso
       toast({

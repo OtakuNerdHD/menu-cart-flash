@@ -18,6 +18,7 @@ interface CartContextType {
   clearCart: () => void;
   totalItems: number;
   subtotal: number;
+  closeCart: () => void; // Adicionando método para fechar o carrinho
 }
 
 export const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -29,6 +30,10 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   const toggleCart = () => {
     setCartOpen(!cartOpen);
+  };
+
+  const closeCart = () => {
+    setCartOpen(false);
   };
 
   const addToCart = (item: MenuItem) => {
@@ -51,8 +56,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       description: `${item.name} foi adicionado ao carrinho`,
     });
     
-    // Abrir o carrinho automaticamente ao adicionar um item
-    setCartOpen(true);
+    // Removendo a abertura automática do carrinho
   };
 
   const removeFromCart = (id: number) => {
@@ -104,6 +108,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         clearCart,
         totalItems,
         subtotal,
+        closeCart, // Expondo o método para fechar o carrinho
       }}
     >
       {children}
