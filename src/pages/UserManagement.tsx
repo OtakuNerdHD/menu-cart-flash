@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useUserSwitcher } from '@/context/UserSwitcherContext';
@@ -16,16 +16,16 @@ import ImageUpload from '@/components/ImageUpload';
 
 // Mock de dados de usuários
 const mockUsers = [
-  { id: 1, name: 'João Silva', email: 'joao@email.com', role: 'waiter', status: 'active', avatar_url: '' },
-  { id: 2, name: 'Maria Souza', email: 'maria@email.com', role: 'chef', status: 'active', avatar_url: '' },
-  { id: 3, name: 'Carlos Pereira', email: 'carlos@email.com', role: 'customer', status: 'active', avatar_url: '' },
-  { id: 4, name: 'Ana Oliveira', email: 'ana@email.com', role: 'waiter', status: 'inactive', avatar_url: '' },
+  { id: 1, name: 'João Silva', email: 'joao@email.com', role: 'waiter', status: 'active', photo_url: '' },
+  { id: 2, name: 'Maria Souza', email: 'maria@email.com', role: 'chef', status: 'active', photo_url: '' },
+  { id: 3, name: 'Carlos Pereira', email: 'carlos@email.com', role: 'customer', status: 'active', photo_url: '' },
+  { id: 4, name: 'Ana Oliveira', email: 'ana@email.com', role: 'waiter', status: 'inactive', photo_url: '' },
 ];
 
 // Mock de usuários extras que podem ser "descobertos" ao atualizar
 const extraUsers = [
-  { id: 5, name: 'Roberto Alves', email: 'roberto@email.com', role: 'customer', status: 'active', avatar_url: '' },
-  { id: 6, name: 'Fernanda Lima', email: 'fernanda@email.com', role: 'chef', status: 'active', avatar_url: '' },
+  { id: 5, name: 'Roberto Alves', email: 'roberto@email.com', role: 'customer', status: 'active', photo_url: '' },
+  { id: 6, name: 'Fernanda Lima', email: 'fernanda@email.com', role: 'chef', status: 'active', photo_url: '' },
 ];
 
 const UserManagement = () => {
@@ -43,7 +43,7 @@ const UserManagement = () => {
     password: '',
     role: 'customer',
     status: 'active',
-    avatar_url: ''
+    photo_url: ''
   });
   
   const isAdminOrOwner = currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner';
@@ -82,7 +82,7 @@ const UserManagement = () => {
           email: user.email,
           role: user.role,
           status: 'active',  // Assumindo que todos estão ativos por padrão
-          avatar_url: user.avatar_url || ''
+          photo_url: user.photo_url || ''
         }));
         
         setUsers(supabaseUsers);
@@ -149,9 +149,9 @@ const UserManagement = () => {
   
   const handleImageUpload = (url: string) => {
     if (isEditUserOpen) {
-      setCurrentUser2Edit(prev => ({ ...prev, avatar_url: url }));
+      setCurrentUser2Edit(prev => ({ ...prev, photo_url: url }));
     } else {
-      setNewUser(prev => ({ ...prev, avatar_url: url }));
+      setNewUser(prev => ({ ...prev, photo_url: url }));
     }
   };
   
@@ -176,7 +176,7 @@ const UserManagement = () => {
           last_name: lastName,
           email: currentUser2Edit.email,
           role: currentUser2Edit.role,
-          avatar_url: currentUser2Edit.avatar_url
+          photo_url: currentUser2Edit.photo_url
         })
         .eq('id', currentUser2Edit.id);
         
@@ -243,7 +243,7 @@ const UserManagement = () => {
             password: newUser.password, // Nota: em um sistema real, a senha seria hasheada
             role: newUser.role,
             username: newUser.email, // Usando email como username por padrão
-            avatar_url: newUser.avatar_url
+            photo_url: newUser.photo_url
           }
         ])
         .select();
@@ -266,7 +266,7 @@ const UserManagement = () => {
           password: '',
           role: 'customer',
           status: 'active',
-          avatar_url: ''
+          photo_url: ''
         });
         return;
       }
@@ -282,7 +282,7 @@ const UserManagement = () => {
       email: newUser.email,
       role: newUser.role,
       status: newUser.status,
-      avatar_url: newUser.avatar_url
+      photo_url: newUser.photo_url
     };
     
     const updatedUsers = [...users, userToAdd];
@@ -302,7 +302,7 @@ const UserManagement = () => {
       password: '',
       role: 'customer',
       status: 'active',
-      avatar_url: ''
+      photo_url: ''
     });
   };
   
@@ -330,7 +330,7 @@ const UserManagement = () => {
     try {
       supabase
         .from('users')
-        .update({ active: newStatus === 'active' })
+        .update({ status: newStatus })
         .eq('id', userId)
         .then(({ error }) => {
           if (error) {
@@ -398,7 +398,7 @@ const UserManagement = () => {
             <Card key={user.id}>
               <CardHeader className="flex flex-row items-center gap-3 pb-2">
                 <Avatar className="h-12 w-12">
-                  <AvatarImage src={user.avatar_url} alt={user.name} />
+                  <AvatarImage src={user.photo_url} alt={user.name} />
                   <AvatarFallback className="bg-menu-primary text-white">
                     {user.name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)}
                   </AvatarFallback>
@@ -457,10 +457,10 @@ const UserManagement = () => {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="avatar_url">Foto de Perfil</Label>
+              <Label htmlFor="photo_url">Foto de Perfil</Label>
               <ImageUpload
                 onImageUpload={handleImageUpload}
-                value={newUser.avatar_url}
+                value={newUser.photo_url}
                 label="Selecionar foto de perfil"
                 maxSizeInMB={2}
                 acceptedFileTypes="image/*"
@@ -542,10 +542,10 @@ const UserManagement = () => {
           {currentUser2Edit && (
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit_avatar_url">Foto de Perfil</Label>
+                <Label htmlFor="edit_photo_url">Foto de Perfil</Label>
                 <ImageUpload
                   onImageUpload={handleImageUpload}
-                  value={currentUser2Edit.avatar_url}
+                  value={currentUser2Edit.photo_url}
                   label="Selecionar foto de perfil"
                   maxSizeInMB={2}
                   acceptedFileTypes="image/*"
