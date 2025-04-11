@@ -74,7 +74,13 @@ const ProductManagement = () => {
       }
       
       if (data && data.length > 0) {
-        setProducts(data);
+        // Adicionar restaurant_id padrão como 1 se não existir
+        const productsWithRestaurantId = data.map(product => ({
+          ...product,
+          restaurant_id: product.restaurant_id || 1
+        })) as Product[];
+        
+        setProducts(productsWithRestaurantId);
       }
     } catch (error) {
       console.error('Erro ao processar dados do Supabase:', error);
@@ -187,7 +193,7 @@ const ProductManagement = () => {
       available: formState.available,
       featured: formState.featured,
       image_url: formState.images[0] || '/placeholder.svg',
-      restaurant_id: 1,
+      restaurant_id: 1, // Definindo restaurant_id padrão como 1
       nutritional_info: {
         ingredients: formState.ingredients.split(',').map(i => i.trim()).filter(Boolean)
       }
@@ -208,6 +214,7 @@ const ProductManagement = () => {
             featured: productData.featured,
             image_url: productData.image_url,
             nutritional_info: productData.nutritional_info,
+            restaurant_id: productData.restaurant_id,
             updated_at: new Date().toISOString()
           })
           .eq('id', currentProduct.id);
@@ -241,7 +248,7 @@ const ProductManagement = () => {
             featured: productData.featured,
             image_url: productData.image_url,
             nutritional_info: productData.nutritional_info,
-            restaurant_id: 1
+            restaurant_id: productData.restaurant_id
           }])
           .select();
           
@@ -254,7 +261,7 @@ const ProductManagement = () => {
             description: `${formState.name} foi adicionado com sucesso`,
           });
           
-          setProducts([...products, data[0]]);
+          setProducts([...products, data[0] as Product]);
           setShowAddEditDialog(false);
           resetForm();
           setCurrentProduct(null);
