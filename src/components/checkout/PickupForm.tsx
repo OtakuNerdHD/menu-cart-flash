@@ -4,7 +4,12 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { useCart } from '@/context/CartContext';
 
-const PickupForm = () => {
+// Add the onSuccess prop to the component
+interface PickupFormProps {
+  onSuccess?: () => void;
+}
+
+const PickupForm = ({ onSuccess }: PickupFormProps) => {
   const { subtotal, clearCart } = useCart();
 
   const handlePickupOrder = () => {

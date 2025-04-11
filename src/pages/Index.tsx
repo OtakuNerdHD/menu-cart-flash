@@ -27,7 +27,13 @@ const Index = () => {
           // Em caso de erro, mantém os produtos locais como fallback
         } else if (data && data.length > 0) {
           // Se encontrar dados no Supabase, use-os
-          setProducts(data);
+          // Adicionando restaurant_id padrão se não existir
+          const productsWithRestaurantId = data.map(product => ({
+            ...product,
+            restaurant_id: product.restaurant_id || 1, // Definindo um valor padrão
+          })) as Product[];
+          
+          setProducts(productsWithRestaurantId);
         } else {
           console.log('Nenhum produto encontrado no Supabase, usando dados locais.');
           // Se não encontrar produtos, mantenha os produtos locais
