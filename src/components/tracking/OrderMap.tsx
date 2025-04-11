@@ -403,7 +403,7 @@ const OrderMap: React.FC<OrderMapProps> = ({ isTracking = false, onRouteComplete
           
           // Atualizar rotação da imagem do motoboy
           const markerEl = marker.current.getElement();
-          const bikeWrapper = markerEl.querySelector('.bike-wrapper');
+          const bikeWrapper = markerEl.querySelector('.bike-wrapper') as HTMLElement;
           if (bikeWrapper) {
             bikeWrapper.style.transform = `rotate(${rotation}deg)`;
           }
