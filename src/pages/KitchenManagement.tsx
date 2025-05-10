@@ -1,84 +1,104 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Clock, UtensilsCrossed, CheckCircle, ClipboardList } from 'lucide-react';
+import { Clock, UtensilsCrossed, CheckCircle, ClipboardList, RefreshCw } from 'lucide-react';
 import { useUserSwitcher } from '@/context/UserSwitcherContext';
 import { toast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
 import { useNavigate } from 'react-router-dom';
 import KitchenOrderDetails from '@/components/KitchenOrderDetails';
-
-// Dados de exemplo - futuramente virão da API
-const mockOrders = [
-  {
-    id: 1,
-    table: 'Mesa 10',
-    status: 'queued',
-    items: [
-      { name: 'X-Burguer', quantity: 2, price: 15.90, notes: 'Sem ketchup' },
-      { name: 'Batata Frita', quantity: 1, price: 10.50 }
-    ],
-    total: 42.30,
-    createdAt: new Date().toISOString(),
-    assignedTo: null
-  },
-  {
-    id: 2,
-    table: 'Mesa 5',
-    status: 'in_progress',
-    items: [
-      { name: 'Pizza Margherita', quantity: 1, price: 35.90 },
-      { name: 'Refrigerante', quantity: 2, price: 6.00 }
-    ],
-    total: 47.90,
-    createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(), // 15 min atrás
-    assignedTo: 'João'
-  },
-  {
-    id: 3,
-    table: 'Mesa 3',
-    status: 'ready',
-    items: [
-      { name: 'Salada Caesar', quantity: 1, price: 25.90 },
-      { name: 'Água sem gás', quantity: 1, price: 5.00 }
-    ],
-    total: 30.90,
-    createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 min atrás
-    assignedTo: 'João'
-  },
-  {
-    id: 4,
-    status: 'queued',
-    table: 'Delivery',
-    items: [
-      { name: 'Cheeseburger', quantity: 1, price: 25.00, notes: 'Sem ketchup' },
-      { name: 'Porção de batata', quantity: 2, price: 20.00 }
-    ],
-    total: 53.90,
-    createdAt: new Date().toISOString(),
-    assignedTo: null,
-    isDelivery: true,
-    customer: {
-      name: 'João Almeida',
-      phone: '(11) 98765-4321',
-      address: 'Rua Augusta, 500, São Paulo - SP'
-    },
-    deliveryFee: 8.90
-  }
-];
+import { supabase } from '@/integrations/supabase/client';
 
 const KitchenManagement = () => {
   const { currentUser } = useUserSwitcher();
-  const [orders, setOrders] = useState(mockOrders);
+  const [orders, setOrders] = useState([]);
   const [activeTab, setActiveTab] = useState('queued');
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   
   const isKitchenStaff = ['admin', 'restaurant_owner', 'chef'].includes(currentUser?.role || '');
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    setIsLoading(true);
+    try {
+      // Buscar pedidos do Supabase
+      const { data: ordersData, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items(
+            *,
+            product:product_id(name, price, image_url)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao buscar pedidos da cozinha:', error);
+        setIsLoading(false);
+        return;
+      }
+
+      if (ordersData && ordersData.length > 0) {
+        // Formatar os dados dos pedidos para a cozinha
+        const formattedOrders = ordersData.map(order => {
+          // Mapear status do pedido para status da cozinha
+          let kitchenStatus;
+          switch (order.status) {
+            case 'pending':
+              kitchenStatus = 'queued';
+              break;
+            case 'preparing':
+              kitchenStatus = 'in_progress';
+              break;
+            case 'ready':
+            case 'delivered':
+              kitchenStatus = 'ready';
+              break;
+            default:
+              kitchenStatus = 'queued';
+          }
+          
+          return {
+            id: order.id,
+            table: order.table_name || `Mesa ${order.table_id || 'Desconhecida'}`,
+            status: kitchenStatus,
+            items: order.order_items.map(item => ({
+              name: item.product?.name || 'Produto não encontrado',
+              quantity: item.quantity,
+              price: item.price || item.product?.price || 0,
+              notes: item.notes,
+              image_url: item.product?.image_url
+            })),
+            total: order.total,
+            createdAt: order.created_at,
+            assignedTo: order.assigned_to,
+            isDelivery: order.delivery_type === 'delivery',
+            customer: order.address ? {
+              name: order.address.name,
+              phone: order.address.phone,
+              address: `${order.address.street}, ${order.address.number} - ${order.address.neighborhood}, ${order.address.city} - ${order.address.state}`
+            } : null
+          };
+        });
+
+        setOrders(formattedOrders);
+      }
+    } catch (error) {
+      console.error('Erro ao processar pedidos da cozinha:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Se não for funcionário da cozinha, mostrar mensagem de acesso negado
   if (!isKitchenStaff) {
@@ -106,76 +126,148 @@ const KitchenManagement = () => {
     );
   }
   
-  const handleStartPreparation = (orderId: number) => {
-    setOrders(prevOrders =>
-      prevOrders.map(order =>
-        order.id === orderId
-          ? { ...order, status: 'in_progress', assignedTo: currentUser?.name || null }
-          : order
-      )
-    );
-    
-    toast({
-      title: "Preparo iniciado",
-      description: `Você começou a preparar o pedido da ${orders.find(o => o.id === orderId)?.table}`,
-    });
+  const handleStartPreparation = async (orderId) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          status: 'preparing',
+          assigned_to: currentUser?.name || null
+        })
+        .eq('id', orderId);
+
+      if (error) {
+        throw error;
+      }
+
+      setOrders(prevOrders =>
+        prevOrders.map(order =>
+          order.id === orderId
+            ? { ...order, status: 'in_progress', assignedTo: currentUser?.name || null }
+            : order
+        )
+      );
+      
+      toast({
+        title: "Preparo iniciado",
+        description: `Você começou a preparar o pedido da ${orders.find(o => o.id === orderId)?.table}`,
+      });
+    } catch (error) {
+      console.error('Erro ao iniciar preparo:', error);
+      toast({
+        title: "Erro ao iniciar preparo",
+        description: "Não foi possível iniciar o preparo. Tente novamente.",
+        variant: "destructive"
+      });
+    }
     
     // Fechar o modal se estiver aberto
     setDetailsOpen(false);
   };
   
-  const handleFinishPreparation = (orderId: number) => {
-    setOrders(prevOrders =>
-      prevOrders.map(order =>
-        order.id === orderId
-          ? { ...order, status: 'ready' }
-          : order
-      )
-    );
-    
-    toast({
-      title: "Pedido pronto",
-      description: `O pedido da ${orders.find(o => o.id === orderId)?.table} está pronto para entrega`,
-    });
+  const handleFinishPreparation = async (orderId) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'ready' })
+        .eq('id', orderId);
+
+      if (error) {
+        throw error;
+      }
+
+      setOrders(prevOrders =>
+        prevOrders.map(order =>
+          order.id === orderId
+            ? { ...order, status: 'ready' }
+            : order
+        )
+      );
+      
+      toast({
+        title: "Pedido pronto",
+        description: `O pedido da ${orders.find(o => o.id === orderId)?.table} está pronto para entrega`,
+      });
+    } catch (error) {
+      console.error('Erro ao finalizar preparo:', error);
+      toast({
+        title: "Erro ao finalizar preparo",
+        description: "Não foi possível marcar o pedido como pronto. Tente novamente.",
+        variant: "destructive"
+      });
+    }
     
     // Fechar o modal se estiver aberto
     setDetailsOpen(false);
   };
   
-  const handlePickedUp = (orderId: number) => {
-    setOrders(prevOrders =>
-      prevOrders.map(order =>
-        order.id === orderId
-          ? { ...order, status: 'picked_up' }
-          : order
-      )
-    );
-    
-    toast({
-      title: "Pedido retirado",
-      description: `O pedido da ${orders.find(o => o.id === orderId)?.table} foi retirado com sucesso`,
-    });
-    
-    // Remover o pedido após algum tempo para limpar a interface
-    setTimeout(() => {
+  const handlePickedUp = async (orderId) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'delivered' })
+        .eq('id', orderId);
+
+      if (error) {
+        throw error;
+      }
+
       setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
-    }, 3000);
+      
+      toast({
+        title: "Pedido entregue",
+        description: `O pedido foi marcado como entregue com sucesso`,
+      });
+    } catch (error) {
+      console.error('Erro ao marcar pedido como entregue:', error);
+      toast({
+        title: "Erro ao marcar como entregue",
+        description: "Não foi possível marcar o pedido como entregue. Tente novamente.",
+        variant: "destructive"
+      });
+    }
   };
   
-  const handleOpenDetails = (order: typeof orders[0]) => {
+  const handleOpenDetails = (order) => {
     setSelectedOrder(order);
     setDetailsOpen(true);
   };
   
-  const handleCancelOrder = (orderId: number) => {
-    setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
+  const handleCancelOrder = async (orderId) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('id', orderId);
+
+      if (error) {
+        throw error;
+      }
+
+      setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
+      
+      toast({
+        title: "Pedido cancelado",
+        description: `O pedido #${orderId} foi cancelado`,
+        variant: "destructive"
+      });
+    } catch (error) {
+      console.error('Erro ao cancelar pedido:', error);
+      toast({
+        title: "Erro ao cancelar pedido",
+        description: "Não foi possível cancelar o pedido. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+    
+    setDetailsOpen(false);
   };
 
   const queuedOrders = orders.filter(order => order.status === 'queued');
   const inProgressOrders = orders.filter(order => order.status === 'in_progress');
   const readyOrders = orders.filter(order => order.status === 'ready');
 
-  const renderOrderCard = (order: typeof orders[0]) => (
+  const renderOrderCard = (order) => (
     <Card key={order.id} className="overflow-hidden mb-4">
       <div className={`h-2 ${
         order.status === 'queued' ? 'bg-yellow-500' : 
@@ -282,73 +374,90 @@ const KitchenManagement = () => {
     <div className="min-h-screen bg-gray-50 pt-16">
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Gerenciamento de Cozinha</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">Gerenciamento de Cozinha</h1>
+            <Button 
+              size="icon"
+              variant="outline"
+              onClick={fetchOrders}
+              className="rounded-full h-8 w-8"
+              disabled={isLoading}
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
           <Button variant="outline" onClick={() => navigate('/order-management')}>
             Ver Mesas
           </Button>
         </div>
         
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-3">
-            <TabsTrigger value="queued" className="flex items-center gap-2">
-              Na Fila
-              {queuedOrders.length > 0 && (
-                <Badge variant="outline" className="ml-1">{queuedOrders.length}</Badge>
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-menu-primary"></div>
+          </div>
+        ) : (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="w-full grid grid-cols-3">
+              <TabsTrigger value="queued" className="flex items-center gap-2">
+                Na Fila
+                {queuedOrders.length > 0 && (
+                  <Badge variant="outline" className="ml-1">{queuedOrders.length}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="in_progress" className="flex items-center gap-2">
+                Em Preparo
+                {inProgressOrders.length > 0 && (
+                  <Badge variant="outline" className="ml-1">{inProgressOrders.length}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="ready" className="flex items-center gap-2">
+                Prontos
+                {readyOrders.length > 0 && (
+                  <Badge variant="outline" className="ml-1">{readyOrders.length}</Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="queued" className="mt-4">
+              {queuedOrders.length === 0 ? (
+                <div className="text-center py-8">
+                  <UtensilsCrossed className="mx-auto h-12 w-12 text-gray-400" />
+                  <p className="mt-2 text-gray-500">Não há pedidos na fila no momento</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {queuedOrders.map(renderOrderCard)}
+                </div>
               )}
-            </TabsTrigger>
-            <TabsTrigger value="in_progress" className="flex items-center gap-2">
-              Em Preparo
-              {inProgressOrders.length > 0 && (
-                <Badge variant="outline" className="ml-1">{inProgressOrders.length}</Badge>
+            </TabsContent>
+            
+            <TabsContent value="in_progress" className="mt-4">
+              {inProgressOrders.length === 0 ? (
+                <div className="text-center py-8">
+                  <UtensilsCrossed className="mx-auto h-12 w-12 text-gray-400" />
+                  <p className="mt-2 text-gray-500">Não há pedidos em preparo no momento</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {inProgressOrders.map(renderOrderCard)}
+                </div>
               )}
-            </TabsTrigger>
-            <TabsTrigger value="ready" className="flex items-center gap-2">
-              Prontos
-              {readyOrders.length > 0 && (
-                <Badge variant="outline" className="ml-1">{readyOrders.length}</Badge>
+            </TabsContent>
+            
+            <TabsContent value="ready" className="mt-4">
+              {readyOrders.length === 0 ? (
+                <div className="text-center py-8">
+                  <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
+                  <p className="mt-2 text-gray-500">Não há pedidos prontos para retirada</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {readyOrders.map(renderOrderCard)}
+                </div>
               )}
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="queued" className="mt-4">
-            {queuedOrders.length === 0 ? (
-              <div className="text-center py-8">
-                <UtensilsCrossed className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2 text-gray-500">Não há pedidos na fila no momento</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {queuedOrders.map(renderOrderCard)}
-              </div>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="in_progress" className="mt-4">
-            {inProgressOrders.length === 0 ? (
-              <div className="text-center py-8">
-                <UtensilsCrossed className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2 text-gray-500">Não há pedidos em preparo no momento</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {inProgressOrders.map(renderOrderCard)}
-              </div>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="ready" className="mt-4">
-            {readyOrders.length === 0 ? (
-              <div className="text-center py-8">
-                <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2 text-gray-500">Não há pedidos prontos para retirada</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {readyOrders.map(renderOrderCard)}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
 
       {/* Modal de Detalhes do Pedido */}

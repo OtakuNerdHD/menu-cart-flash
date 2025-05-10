@@ -18,6 +18,7 @@ interface OrderItem {
   quantity: number;
   price: number;
   notes?: string;
+  image_url?: string;
 }
 
 interface OrderProps {
@@ -56,7 +57,7 @@ const KitchenOrderDetails: React.FC<KitchenOrderDetailsProps> = ({
 }) => {
   const [currentStatus, setCurrentStatus] = useState(order.status);
   
-  // Item placeholders - em produção isso viria de um banco de imagens
+  // Item placeholders para quando não há imagem
   const itemPlaceholders = [
     "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9",
     "https://images.unsplash.com/photo-1568901346375-23c9450c58cd",
@@ -186,9 +187,13 @@ const KitchenOrderDetails: React.FC<KitchenOrderDetailsProps> = ({
                 <div key={index} className="flex gap-3">
                   <div className="w-16 h-16 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
                     <img
-                      src={itemPlaceholders[index % itemPlaceholders.length]}
+                      src={item.image_url || itemPlaceholders[index % itemPlaceholders.length]}
                       alt={item.name}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback para imagem padrão se a imagem não carregar
+                        (e.target as HTMLImageElement).src = itemPlaceholders[index % itemPlaceholders.length];
+                      }}
                     />
                   </div>
 

@@ -4,23 +4,22 @@ import {
   Dialog, 
   DialogContent, 
   DialogHeader, 
-  DialogTitle, 
-  DialogClose 
+  DialogTitle,
+  DialogDescription
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Edit, X, Trash2, Plus, Minus } from 'lucide-react';
+import { Clock, User } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
+import { supabase } from '@/integrations/supabase/client';
 
 interface OrderItem {
   name: string;
   quantity: number;
   price: number;
   notes?: string;
-  image?: string;
+  image_url?: string;
 }
 
 interface OrderProps {
@@ -40,341 +39,171 @@ interface OrderDetailsDialogProps {
   currentUserRole: string;
 }
 
-const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({ 
-  order, 
-  open, 
-  onOpenChange,
-  currentUserRole
-}) => {
-  const [currentStatus, setCurrentStatus] = useState<'pending' | 'preparing' | 'ready' | 'delivered'>(order.status as any || 'pending');
-  const [localOrder, setLocalOrder] = useState<OrderProps>(order);
-  const [activeTab, setActiveTab] = useState('pending');
-  const [editingTable, setEditingTable] = useState(false);
-  const [newTableName, setNewTableName] = useState(order.table);
-  const [preparingItems, setPreparingItems] = useState<OrderItem[]>([]);
-  const [deliveredItems, setDeliveredItems] = useState<OrderItem[]>([]);
+const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({ order, open, onOpenChange, currentUserRole }) => {
+  const [status, setStatus] = useState(order.status);
   
-  const canEdit = ['admin', 'restaurant_owner', 'waiter'].includes(currentUserRole);
-  
-  // Item placeholders - em produção isso viria de um banco de imagens
+  // Item placeholders para quando não há imagem
   const itemPlaceholders = [
     "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9",
     "https://images.unsplash.com/photo-1568901346375-23c9450c58cd",
     "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38"
   ];
   
-  const handleSendToKitchen = () => {
-    // Atualiza o status para preparing
-    setCurrentStatus('preparing');
-    setActiveTab('preparing');
-    
-    // Mover todos os itens pendentes para a lista de em preparo
-    setPreparingItems([...localOrder.items]);
-    
-    toast({
-      title: "Pedido enviado para a cozinha",
-      description: `O pedido da ${localOrder.table} foi enviado para preparo`,
-    });
-  };
-  
-  const handleReleaseTable = () => {
-    toast({
-      title: "Mesa liberada",
-      description: `A ${localOrder.table} foi liberada com sucesso`,
-    });
-    onOpenChange(false);
-  };
-  
-  const handleEditTableName = () => {
-    if (editingTable) {
-      setLocalOrder(prev => ({...prev, table: newTableName}));
-      toast({
-        title: "Nome da mesa atualizado",
-        description: `Mesa renomeada para ${newTableName}`,
-      });
-      setEditingTable(false);
-    } else {
-      setEditingTable(true);
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'preparing':
+        return 'bg-blue-100 text-blue-800';
+      case 'ready':
+        return 'bg-green-100 text-green-800';
+      case 'delivered':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
   
-  const handleUpdateQuantity = (index: number, newQuantity: number) => {
-    if (newQuantity < 1) return; // Não permitir quantidade menor que 1
-    
-    const updatedItems = [...localOrder.items];
-    const oldQuantity = updatedItems[index].quantity;
-    updatedItems[index].quantity = newQuantity;
-    
-    // Recalcular o total
-    const priceDifference = updatedItems[index].price * (newQuantity - oldQuantity);
-    const newTotal = localOrder.total + priceDifference;
-    
-    setLocalOrder({
-      ...localOrder,
-      items: updatedItems,
-      total: newTotal
-    });
-    
-    toast({
-      title: "Quantidade atualizada",
-      description: `${updatedItems[index].name}: ${oldQuantity} → ${newQuantity}`,
-    });
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'Pendente';
+      case 'preparing':
+        return 'Em preparo';
+      case 'ready':
+        return 'Pronto';
+      case 'delivered':
+        return 'Entregue';
+      default:
+        return 'Desconhecido';
+    }
   };
   
-  const handleRemoveItem = (index: number) => {
-    if (currentStatus === 'pending') {
-      const newItems = [...localOrder.items];
-      const removedItem = newItems[index];
-      newItems.splice(index, 1);
+  const getNextStatus = (currentStatus: string) => {
+    switch (currentStatus) {
+      case 'pending':
+        return 'preparing';
+      case 'preparing':
+        return 'ready';
+      case 'ready':
+        return 'delivered';
+      default:
+        return currentStatus;
+    }
+  };
+  
+  const handleUpdateStatus = async () => {
+    const newStatus = getNextStatus(status);
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', order.id);
+
+      if (error) throw error;
       
-      const newTotal = localOrder.total - (removedItem.price * removedItem.quantity);
-      
-      setLocalOrder({
-        ...localOrder,
-        items: newItems,
-        total: newTotal
+      setStatus(newStatus);
+      toast({
+        title: "Status atualizado",
+        description: `Pedido atualizado para ${getStatusText(newStatus)}`
       });
       
+      if (newStatus === 'delivered') {
+        setTimeout(() => {
+          onOpenChange(false);
+        }, 1500);
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar status:", error);
       toast({
-        title: "Item removido",
-        description: `${removedItem.name} foi removido do pedido`,
-      });
-    } else {
-      toast({
-        title: "Não é possível remover",
-        description: "Pedidos em preparo ou entregues não podem ser editados",
+        title: "Erro",
+        description: "Não foi possível atualizar o status do pedido",
         variant: "destructive"
       });
     }
   };
-
-  const getPendingItems = () => localOrder.items.filter((_, i) => 
-    currentStatus === 'pending' || preparingItems.length === 0
-  );
   
-  const getPreparingItems = () => 
-    currentStatus !== 'pending' ? preparingItems : [];
-  
-  const getDeliveredItems = () => 
-    currentStatus === 'delivered' || currentStatus === 'ready' ? deliveredItems : [];
+  const canUpdateStatus = ['admin', 'restaurant_owner', 'waiter'].includes(currentUserRole);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <div className="flex justify-between items-center">
-            <DialogTitle className="text-2xl flex items-center gap-2">
-              {!editingTable ? (
-                <>
-                  {localOrder.table}
-                  {canEdit && (
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleEditTableName}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Input 
-                    value={newTableName} 
-                    onChange={(e) => setNewTableName(e.target.value)}
-                    className="h-9 w-40"
-                    autoFocus
-                  />
-                  <Button variant="outline" size="sm" onClick={handleEditTableName}>
-                    Salvar
-                  </Button>
-                </div>
-              )}
-            </DialogTitle>
-          </div>
+          <DialogTitle className="flex justify-between items-center">
+            <span>Pedido para {order.table}</span>
+            <Badge className={getStatusColor(status)}>
+              {getStatusText(status)}
+            </Badge>
+          </DialogTitle>
+          <DialogDescription className="flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            <span>
+              {new Date(order.createdAt).toLocaleTimeString('pt-BR', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                day: '2-digit',
+                month: '2-digit',
+              })}
+            </span>
+            
+            {order.assignedTo && (
+              <>
+                <span className="mx-1">•</span>
+                <User className="h-4 w-4" />
+                <span>Atendido por: {order.assignedTo}</span>
+              </>
+            )}
+          </DialogDescription>
         </DialogHeader>
         
-        <div className="flex items-center gap-2 mb-4">
-          <Badge className={`px-3 py-1 ${currentStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' : currentStatus === 'preparing' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-            {currentStatus === 'pending' ? 'Pendente' : 
-             currentStatus === 'preparing' ? 'Em produção' : 'Entregue'}
-          </Badge>
-          <span className="text-gray-600 text-sm">Sendo atendido por {localOrder.assignedTo || "ninguém"}</span>
-        </div>
-        
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-3">
-            <TabsTrigger value="pending">Pendente</TabsTrigger>
-            <TabsTrigger value="preparing">Em produção</TabsTrigger>
-            <TabsTrigger value="delivered">Entregue</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="pending" className="mt-4">
-            <h3 className="font-bold text-lg mb-2">Itens Pendentes</h3>
-            <div className="space-y-4 mb-4 max-h-64 overflow-y-auto">
-              {getPendingItems().length > 0 ? getPendingItems().map((item, index) => (
-                <div key={`pending-${index}`} className="flex items-start gap-3">
-                  <div className="w-16 h-16 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
-                    <img 
-                      src={item.image || itemPlaceholders[index % itemPlaceholders.length]} 
+        <div className="space-y-4">
+          <div>
+            <h3 className="font-medium mb-2">Itens do pedido</h3>
+            <div className="space-y-3 max-h-[300px] overflow-y-auto">
+              {order.items.map((item, index) => (
+                <div key={index} className="flex items-start gap-3 py-2 border-b border-gray-100">
+                  <div className="w-12 h-12 bg-gray-100 rounded-md overflow-hidden">
+                    <img
+                      src={item.image_url || itemPlaceholders[index % itemPlaceholders.length]}
                       alt={item.name}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback para imagem padrão se a imagem não carregar
+                        (e.target as HTMLImageElement).src = itemPlaceholders[index % itemPlaceholders.length];
+                      }}
                     />
                   </div>
-                  
                   <div className="flex-1">
                     <div className="flex justify-between">
-                      <h4 className="font-semibold">{item.name}</h4>
-                      <span className="font-medium">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                      <span className="font-medium">{item.quantity}x {item.name}</span>
+                      <span>R$ {(item.price * item.quantity).toFixed(2)}</span>
                     </div>
                     {item.notes && (
-                      <p className="text-sm text-gray-600 mt-1">{item.notes}</p>
+                      <p className="text-sm text-red-500 mt-1">{item.notes}</p>
                     )}
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Qtd:</span>
-                      {canEdit && currentStatus === 'pending' ? (
-                        <div className="flex items-center gap-2">
-                          <Button 
-                            variant="outline" 
-                            size="icon" 
-                            className="h-6 w-6"
-                            onClick={() => handleUpdateQuantity(index, Math.max(1, item.quantity - 1))}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="font-medium w-6 text-center">{item.quantity}</span>
-                          <Button 
-                            variant="outline" 
-                            size="icon" 
-                            className="h-6 w-6"
-                            onClick={() => handleUpdateQuantity(index, item.quantity + 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <span>{item.quantity}</span>
-                      )}
-                    </div>
                   </div>
-                  
-                  {canEdit && currentStatus === 'pending' && (
-                    <div className="flex-shrink-0">
-                      <Button 
-                        variant="outline" 
-                        size="icon" 
-                        className="h-8 w-8 text-red-500 hover:text-red-700"
-                        onClick={() => handleRemoveItem(index)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
                 </div>
-              )) : (
-                <p className="text-gray-500 text-center py-4">
-                  Não há itens pendentes.
-                </p>
-              )}
+              ))}
             </div>
-          </TabsContent>
+          </div>
           
-          <TabsContent value="preparing" className="mt-4">
-            <h3 className="font-bold text-lg mb-2">Itens em Preparo</h3>
-            <div className="space-y-4 mb-4 max-h-64 overflow-y-auto">
-              {currentStatus === 'pending' ? (
-                <p className="text-gray-500 text-center py-4">
-                  Não há itens em preparo. Envie o pedido para a cozinha primeiro.
-                </p>
-              ) : getPreparingItems().length > 0 ? (
-                getPreparingItems().map((item, index) => (
-                  <div key={`preparing-${index}`} className="flex items-start gap-3">
-                    <div className="w-16 h-16 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
-                      <img 
-                        src={item.image || itemPlaceholders[(index + 1) % itemPlaceholders.length]} 
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    
-                    <div className="flex-1">
-                      <div className="flex justify-between">
-                        <h4 className="font-semibold">{item.name}</h4>
-                        <span className="font-medium">R$ {(item.price * item.quantity).toFixed(2)}</span>
-                      </div>
-                      {item.notes && (
-                        <p className="text-sm text-gray-600 mt-1">{item.notes}</p>
-                      )}
-                      <div className="mt-1">
-                        <span className="text-sm text-gray-600">Qtd: {item.quantity}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-500 text-center py-4">
-                  Todos os itens estão prontos para entrega.
-                </p>
-              )}
-            </div>
-          </TabsContent>
+          <Separator />
           
-          <TabsContent value="delivered" className="mt-4">
-            <h3 className="font-bold text-lg mb-2">Itens Entregues</h3>
-            <div className="space-y-4 mb-4 max-h-64 overflow-y-auto">
-              {getDeliveredItems().length > 0 ? (
-                getDeliveredItems().map((item, index) => (
-                  <div key={`delivered-${index}`} className="flex items-start gap-3">
-                    <div className="w-16 h-16 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
-                      <img 
-                        src={item.image || itemPlaceholders[(index + 2) % itemPlaceholders.length]} 
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    
-                    <div className="flex-1">
-                      <div className="flex justify-between">
-                        <h4 className="font-semibold">{item.name}</h4>
-                        <span className="font-medium">R$ {(item.price * item.quantity).toFixed(2)}</span>
-                      </div>
-                      {item.notes && (
-                        <p className="text-sm text-gray-600 mt-1">{item.notes}</p>
-                      )}
-                      <div className="mt-1">
-                        <span className="text-sm text-gray-600">Qtd: {item.quantity}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-500 text-center py-4">
-                  Nenhum item foi entregue ainda.
-                </p>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
-        
-        <Separator className="my-4" />
-        
-        <div className="flex justify-between items-center text-lg font-bold mb-6">
-          <span>Total</span>
-          <span>R$ {localOrder.total.toFixed(2)}</span>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-3">
-          <Button 
-            className="w-full bg-blue-600 hover:bg-blue-700"
-            onClick={handleSendToKitchen}
-            disabled={currentStatus !== 'pending' || localOrder.items.length === 0}
-          >
-            Mandar p/ Cozinha
-          </Button>
+          <div className="flex justify-between font-bold">
+            <span>Total</span>
+            <span>R$ {order.total.toFixed(2)}</span>
+          </div>
           
-          <Button 
-            variant="destructive"
-            className="w-full"
-            onClick={handleReleaseTable}
-          >
-            Liberar Mesa
-          </Button>
+          {canUpdateStatus && status !== 'delivered' && (
+            <Button 
+              className="w-full" 
+              onClick={handleUpdateStatus}
+            >
+              {status === 'pending' && 'Iniciar Preparo'}
+              {status === 'preparing' && 'Marcar como Pronto'}
+              {status === 'ready' && 'Confirmar Entrega'}
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

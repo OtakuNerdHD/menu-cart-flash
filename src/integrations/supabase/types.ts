@@ -108,16 +108,79 @@ export type Database = {
         }
         Relationships: []
       }
+      order_tracking: {
+        Row: {
+          created_at: string | null
+          current_location: Json | null
+          destination_location: Json
+          driver_name: string | null
+          driver_photo: string | null
+          estimation_minutes: number | null
+          expires_at: string | null
+          id: string
+          order_id: number | null
+          snapshot: Json | null
+          snapshot_created: boolean | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          current_location?: Json | null
+          destination_location: Json
+          driver_name?: string | null
+          driver_photo?: string | null
+          estimation_minutes?: number | null
+          expires_at?: string | null
+          id?: string
+          order_id?: number | null
+          snapshot?: Json | null
+          snapshot_created?: boolean | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          current_location?: Json | null
+          destination_location?: Json
+          driver_name?: string | null
+          driver_photo?: string | null
+          estimation_minutes?: number | null
+          expires_at?: string | null
+          id?: string
+          order_id?: number | null
+          snapshot?: Json | null
+          snapshot_created?: boolean | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_tracking_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           address: Json | null
+          assigned_to: string | null
           created_at: string | null
+          created_by: string | null
           delivery_person_id: number | null
           delivery_type: string
           id: number
+          items_json: Json | null
+          kitchen_status: string | null
+          order_number: number | null
+          order_type: string | null
           payment_method: string | null
           restaurant_id: number | null
           status: string
+          table_id: number | null
           table_name: string | null
           total: number
           updated_at: string | null
@@ -125,13 +188,20 @@ export type Database = {
         }
         Insert: {
           address?: Json | null
+          assigned_to?: string | null
           created_at?: string | null
+          created_by?: string | null
           delivery_person_id?: number | null
           delivery_type: string
           id?: number
+          items_json?: Json | null
+          kitchen_status?: string | null
+          order_number?: number | null
+          order_type?: string | null
           payment_method?: string | null
           restaurant_id?: number | null
           status?: string
+          table_id?: number | null
           table_name?: string | null
           total: number
           updated_at?: string | null
@@ -139,13 +209,20 @@ export type Database = {
         }
         Update: {
           address?: Json | null
+          assigned_to?: string | null
           created_at?: string | null
+          created_by?: string | null
           delivery_person_id?: number | null
           delivery_type?: string
           id?: number
+          items_json?: Json | null
+          kitchen_status?: string | null
+          order_number?: number | null
+          order_type?: string | null
           payment_method?: string | null
           restaurant_id?: number | null
           status?: string
+          table_id?: number | null
           table_name?: string | null
           total?: number
           updated_at?: string | null
@@ -157,6 +234,89 @@ export type Database = {
             columns: ["restaurant_id"]
             isOneToOne: false
             referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "tables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_methods: {
+        Row: {
+          card_brand: string | null
+          card_last_four: string | null
+          created_at: string | null
+          expiry_date: string | null
+          id: string
+          is_default: boolean | null
+          method_type: string
+          nickname: string
+          profile_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          card_brand?: string | null
+          card_last_four?: string | null
+          created_at?: string | null
+          expiry_date?: string | null
+          id?: string
+          is_default?: boolean | null
+          method_type: string
+          nickname: string
+          profile_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          card_brand?: string | null
+          card_last_four?: string | null
+          created_at?: string | null
+          expiry_date?: string | null
+          id?: string
+          is_default?: boolean | null
+          method_type?: string
+          nickname?: string
+          profile_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_methods_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_images: {
+        Row: {
+          created_at: string | null
+          id: string
+          image_url: string
+          product_id: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          image_url: string
+          product_id?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          image_url?: string
+          product_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_images_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -184,49 +344,99 @@ export type Database = {
       }
       products: {
         Row: {
-          available: boolean | null
-          category: string
-          created_at: string | null
-          description: string
-          featured: boolean | null
+          available: boolean
+          category: string | null
+          description: string | null
+          featured: boolean
+          gallery: string[] | null
           id: number
           image_url: string | null
-          name: string
+          images: string[] | null
+          ingredients: string | null
+          name: string | null
+          note_hint: string | null
           nutritional_info: Json | null
-          price: number
-          rating: number | null
-          review_count: number | null
+          price: number | null
+          restaurant_id: number | null
+          thumbnail: string | null
           updated_at: string | null
         }
         Insert: {
-          available?: boolean | null
-          category: string
-          created_at?: string | null
-          description: string
-          featured?: boolean | null
+          available?: boolean
+          category?: string | null
+          description?: string | null
+          featured?: boolean
+          gallery?: string[] | null
           id?: number
           image_url?: string | null
-          name: string
+          images?: string[] | null
+          ingredients?: string | null
+          name?: string | null
+          note_hint?: string | null
           nutritional_info?: Json | null
-          price: number
-          rating?: number | null
-          review_count?: number | null
+          price?: number | null
+          restaurant_id?: number | null
+          thumbnail?: string | null
           updated_at?: string | null
         }
         Update: {
-          available?: boolean | null
-          category?: string
-          created_at?: string | null
-          description?: string
-          featured?: boolean | null
+          available?: boolean
+          category?: string | null
+          description?: string | null
+          featured?: boolean
+          gallery?: string[] | null
           id?: number
           image_url?: string | null
-          name?: string
+          images?: string[] | null
+          ingredients?: string | null
+          name?: string | null
+          note_hint?: string | null
           nutritional_info?: Json | null
-          price?: number
-          rating?: number | null
-          review_count?: number | null
+          price?: number | null
+          restaurant_id?: number | null
+          thumbnail?: string | null
           updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      produtos: {
+        Row: {
+          categoria: string
+          created_at: string | null
+          descricao: string | null
+          destaque: boolean | null
+          id: string
+          imagem: string | null
+          nome: string
+          preco: number
+        }
+        Insert: {
+          categoria: string
+          created_at?: string | null
+          descricao?: string | null
+          destaque?: boolean | null
+          id?: string
+          imagem?: string | null
+          nome: string
+          preco: number
+        }
+        Update: {
+          categoria?: string
+          created_at?: string | null
+          descricao?: string | null
+          destaque?: boolean | null
+          id?: string
+          imagem?: string | null
+          nome?: string
+          preco?: number
         }
         Relationships: []
       }
@@ -238,7 +448,9 @@ export type Database = {
           id: string
           name: string | null
           phone: string | null
+          restaurant_id: number | null
           role: string | null
+          username: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -247,7 +459,9 @@ export type Database = {
           id: string
           name?: string | null
           phone?: string | null
+          restaurant_id?: number | null
           role?: string | null
+          username?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -256,9 +470,19 @@ export type Database = {
           id?: string
           name?: string | null
           phone?: string | null
+          restaurant_id?: number | null
           role?: string | null
+          username?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       restaurants: {
         Row: {
@@ -331,8 +555,63 @@ export type Database = {
         }
         Relationships: []
       }
+      store_settings: {
+        Row: {
+          address: string | null
+          allow_delivery: boolean | null
+          allow_instore_payment: boolean | null
+          city: string | null
+          created_at: string | null
+          delivery_fee_per_km: number | null
+          delivery_radius: number | null
+          id: number
+          latitude: number | null
+          longitude: number | null
+          payment_provider: string | null
+          state: string | null
+          store_name: string | null
+          updated_at: string | null
+          zipcode: string | null
+        }
+        Insert: {
+          address?: string | null
+          allow_delivery?: boolean | null
+          allow_instore_payment?: boolean | null
+          city?: string | null
+          created_at?: string | null
+          delivery_fee_per_km?: number | null
+          delivery_radius?: number | null
+          id?: number
+          latitude?: number | null
+          longitude?: number | null
+          payment_provider?: string | null
+          state?: string | null
+          store_name?: string | null
+          updated_at?: string | null
+          zipcode?: string | null
+        }
+        Update: {
+          address?: string | null
+          allow_delivery?: boolean | null
+          allow_instore_payment?: boolean | null
+          city?: string | null
+          created_at?: string | null
+          delivery_fee_per_km?: number | null
+          delivery_radius?: number | null
+          id?: number
+          latitude?: number | null
+          longitude?: number | null
+          payment_provider?: string | null
+          state?: string | null
+          store_name?: string | null
+          updated_at?: string | null
+          zipcode?: string | null
+        }
+        Relationships: []
+      }
       tables: {
         Row: {
+          assigned_user_id: string | null
           created_at: string | null
           id: number
           name: string
@@ -340,6 +619,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          assigned_user_id?: string | null
           created_at?: string | null
           id?: number
           name: string
@@ -347,6 +627,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          assigned_user_id?: string | null
           created_at?: string | null
           id?: number
           name?: string
@@ -355,8 +636,66 @@ export type Database = {
         }
         Relationships: []
       }
+      user_addresses: {
+        Row: {
+          cep: string
+          city: string
+          complement: string | null
+          created_at: string | null
+          id: string
+          neighborhood: string
+          number: string
+          state: string
+          street: string
+        }
+        Insert: {
+          cep: string
+          city: string
+          complement?: string | null
+          created_at?: string | null
+          id?: string
+          neighborhood: string
+          number: string
+          state: string
+          street: string
+        }
+        Update: {
+          cep?: string
+          city?: string
+          complement?: string | null
+          created_at?: string | null
+          id?: string
+          neighborhood?: string
+          number?: string
+          state?: string
+          street?: string
+        }
+        Relationships: []
+      }
+      user_switcher_sessions: {
+        Row: {
+          session_id: string
+          updated_at: string | null
+          user_data: Json
+        }
+        Insert: {
+          session_id: string
+          updated_at?: string | null
+          user_data: Json
+        }
+        Update: {
+          session_id?: string
+          updated_at?: string | null
+          user_data?: Json
+        }
+        Relationships: []
+      }
       users: {
         Row: {
+          address: string | null
+          birth_date: string | null
+          city: string | null
+          cpf: string | null
           created_at: string | null
           email: string
           first_name: string
@@ -366,10 +705,16 @@ export type Database = {
           phone: string | null
           photo_url: string | null
           role: string
+          state: string | null
           updated_at: string | null
           username: string
+          zip_code: string | null
         }
         Insert: {
+          address?: string | null
+          birth_date?: string | null
+          city?: string | null
+          cpf?: string | null
           created_at?: string | null
           email: string
           first_name: string
@@ -379,10 +724,16 @@ export type Database = {
           phone?: string | null
           photo_url?: string | null
           role?: string
+          state?: string | null
           updated_at?: string | null
           username: string
+          zip_code?: string | null
         }
         Update: {
+          address?: string | null
+          birth_date?: string | null
+          city?: string | null
+          cpf?: string | null
           created_at?: string | null
           email?: string
           first_name?: string
@@ -392,8 +743,37 @@ export type Database = {
           phone?: string | null
           photo_url?: string | null
           role?: string
+          state?: string | null
           updated_at?: string | null
           username?: string
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
+      verification_codes: {
+        Row: {
+          code: string
+          created_at: string | null
+          expires_at: string
+          id: string
+          is_used: boolean | null
+          phone: string
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          is_used?: boolean | null
+          phone: string
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          is_used?: boolean | null
+          phone?: string
         }
         Relationships: []
       }
@@ -481,14 +861,14 @@ export type Database = {
       }
       _st_coveredby: {
         Args:
-          | { geom1: unknown; geom2: unknown }
           | { geog1: unknown; geog2: unknown }
+          | { geom1: unknown; geom2: unknown }
         Returns: boolean
       }
       _st_covers: {
         Args:
-          | { geom1: unknown; geom2: unknown }
           | { geog1: unknown; geog2: unknown }
+          | { geom1: unknown; geom2: unknown }
         Returns: boolean
       }
       _st_crosses: {
@@ -592,6 +972,17 @@ export type Database = {
             }
         Returns: string
       }
+      assign_table_to_user: {
+        Args: { p_table_id: number; p_user_id: string }
+        Returns: {
+          assigned_user_id: string | null
+          created_at: string | null
+          id: number
+          name: string
+          server_id: number | null
+          status: string
+        }
+      }
       box: {
         Args: { "": unknown } | { "": unknown }
         Returns: unknown
@@ -634,6 +1025,21 @@ export type Database = {
       }
       bytea: {
         Args: { "": unknown } | { "": unknown }
+        Returns: string
+      }
+      create_table: {
+        Args: { table_name: string }
+        Returns: {
+          assigned_user_id: string | null
+          created_at: string | null
+          id: number
+          name: string
+          server_id: number | null
+          status: string
+        }[]
+      }
+      delete_user_safely: {
+        Args: { user_uuid: string }
         Returns: string
       }
       disablelongtransactions: {
@@ -705,13 +1111,13 @@ export type Database = {
       }
       geometry: {
         Args:
-          | { "": unknown }
-          | { "": unknown }
-          | { "": unknown }
-          | { "": unknown }
-          | { "": unknown }
           | { "": string }
           | { "": string }
+          | { "": unknown }
+          | { "": unknown }
+          | { "": unknown }
+          | { "": unknown }
+          | { "": unknown }
           | { "": unknown }
         Returns: unknown
       }
@@ -891,6 +1297,10 @@ export type Database = {
         Args: { "": string }
         Returns: unknown
       }
+      get_jwt_claims: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       get_proj4_from_srid: {
         Args: { "": number }
         Returns: string
@@ -977,8 +1387,8 @@ export type Database = {
       }
       populate_geometry_columns: {
         Args:
-          | { use_typmod?: boolean }
           | { tbl_oid: unknown; use_typmod?: boolean }
+          | { use_typmod?: boolean }
         Returns: string
       }
       postgis_addbbox: {
@@ -1159,15 +1569,15 @@ export type Database = {
       }
       st_angle: {
         Args:
-          | { pt1: unknown; pt2: unknown; pt3: unknown; pt4?: unknown }
           | { line1: unknown; line2: unknown }
+          | { pt1: unknown; pt2: unknown; pt3: unknown; pt4?: unknown }
         Returns: number
       }
       st_area: {
         Args:
+          | { "": string }
           | { "": unknown }
           | { geog: unknown; use_spheroid?: boolean }
-          | { "": string }
         Returns: number
       }
       st_area2d: {
@@ -1187,11 +1597,13 @@ export type Database = {
         Returns: string
       }
       st_asewkt: {
-        Args: { "": unknown } | { "": unknown } | { "": string }
+        Args: { "": string } | { "": unknown } | { "": unknown }
         Returns: string
       }
       st_asgeojson: {
         Args:
+          | { "": string }
+          | { geog: unknown; maxdecimaldigits?: number; options?: number }
           | { geom: unknown; maxdecimaldigits?: number; options?: number }
           | {
               r: Record<string, unknown>
@@ -1199,13 +1611,27 @@ export type Database = {
               maxdecimaldigits?: number
               pretty_bool?: boolean
             }
-          | { geog: unknown; maxdecimaldigits?: number; options?: number }
-          | { "": string }
         Returns: string
       }
       st_asgml: {
         Args:
+          | { "": string }
+          | {
+              geog: unknown
+              maxdecimaldigits?: number
+              options?: number
+              nprefix?: string
+              id?: string
+            }
           | { geom: unknown; maxdecimaldigits?: number; options?: number }
+          | {
+              version: number
+              geog: unknown
+              maxdecimaldigits?: number
+              options?: number
+              nprefix?: string
+              id?: string
+            }
           | {
               version: number
               geom: unknown
@@ -1214,22 +1640,6 @@ export type Database = {
               nprefix?: string
               id?: string
             }
-          | {
-              version: number
-              geog: unknown
-              maxdecimaldigits?: number
-              options?: number
-              nprefix?: string
-              id?: string
-            }
-          | {
-              geog: unknown
-              maxdecimaldigits?: number
-              options?: number
-              nprefix?: string
-              id?: string
-            }
-          | { "": string }
         Returns: string
       }
       st_ashexewkb: {
@@ -1238,9 +1648,9 @@ export type Database = {
       }
       st_askml: {
         Args:
-          | { geom: unknown; maxdecimaldigits?: number; nprefix?: string }
-          | { geog: unknown; maxdecimaldigits?: number; nprefix?: string }
           | { "": string }
+          | { geog: unknown; maxdecimaldigits?: number; nprefix?: string }
+          | { geom: unknown; maxdecimaldigits?: number; nprefix?: string }
         Returns: string
       }
       st_aslatlontext: {
@@ -1263,19 +1673,20 @@ export type Database = {
       }
       st_assvg: {
         Args:
-          | { geom: unknown; rel?: number; maxdecimaldigits?: number }
-          | { geog: unknown; rel?: number; maxdecimaldigits?: number }
           | { "": string }
+          | { geog: unknown; rel?: number; maxdecimaldigits?: number }
+          | { geom: unknown; rel?: number; maxdecimaldigits?: number }
         Returns: string
       }
       st_astext: {
-        Args: { "": unknown } | { "": unknown } | { "": string }
+        Args: { "": string } | { "": unknown } | { "": unknown }
         Returns: string
       }
       st_astwkb: {
         Args:
           | {
-              geom: unknown
+              geom: unknown[]
+              ids: number[]
               prec?: number
               prec_z?: number
               prec_m?: number
@@ -1283,8 +1694,7 @@ export type Database = {
               with_boxes?: boolean
             }
           | {
-              geom: unknown[]
-              ids: number[]
+              geom: unknown
               prec?: number
               prec_z?: number
               prec_m?: number
@@ -1299,8 +1709,8 @@ export type Database = {
       }
       st_azimuth: {
         Args:
-          | { geom1: unknown; geom2: unknown }
           | { geog1: unknown; geog2: unknown }
+          | { geom1: unknown; geom2: unknown }
         Returns: number
       }
       st_boundary: {
@@ -1322,7 +1732,7 @@ export type Database = {
         Returns: unknown
       }
       st_centroid: {
-        Args: { "": unknown } | { "": string }
+        Args: { "": string } | { "": unknown }
         Returns: unknown
       }
       st_cleangeometry: {
@@ -1342,7 +1752,7 @@ export type Database = {
         Returns: unknown[]
       }
       st_collect: {
-        Args: { geom1: unknown; geom2: unknown } | { "": unknown[] }
+        Args: { "": unknown[] } | { geom1: unknown; geom2: unknown }
         Returns: unknown
       }
       st_collectionextract: {
@@ -1379,14 +1789,14 @@ export type Database = {
       }
       st_coveredby: {
         Args:
-          | { geom1: unknown; geom2: unknown }
           | { geog1: unknown; geog2: unknown }
+          | { geom1: unknown; geom2: unknown }
         Returns: boolean
       }
       st_covers: {
         Args:
-          | { geom1: unknown; geom2: unknown }
           | { geog1: unknown; geog2: unknown }
+          | { geom1: unknown; geom2: unknown }
         Returns: boolean
       }
       st_crosses: {
@@ -1415,8 +1825,8 @@ export type Database = {
       }
       st_distance: {
         Args:
-          | { geom1: unknown; geom2: unknown }
           | { geog1: unknown; geog2: unknown; use_spheroid?: boolean }
+          | { geom1: unknown; geom2: unknown }
         Returns: number
       }
       st_distancesphere: {
@@ -1545,8 +1955,8 @@ export type Database = {
       }
       st_geohash: {
         Args:
-          | { geom: unknown; maxchars?: number }
           | { geog: unknown; maxchars?: number }
+          | { geom: unknown; maxchars?: number }
         Returns: string
       }
       st_geomcollfromtext: {
@@ -1583,7 +1993,7 @@ export type Database = {
         Returns: unknown
       }
       st_geomfromgeojson: {
-        Args: { "": string } | { "": Json } | { "": Json }
+        Args: { "": Json } | { "": Json } | { "": string }
         Returns: unknown
       }
       st_geomfromgml: {
@@ -1640,8 +2050,8 @@ export type Database = {
       }
       st_intersects: {
         Args:
-          | { geom1: unknown; geom2: unknown }
           | { geog1: unknown; geog2: unknown }
+          | { geom1: unknown; geom2: unknown }
         Returns: boolean
       }
       st_isclosed: {
@@ -1690,9 +2100,9 @@ export type Database = {
       }
       st_length: {
         Args:
+          | { "": string }
           | { "": unknown }
           | { geog: unknown; use_spheroid?: boolean }
-          | { "": string }
         Returns: number
       }
       st_length2d: {
@@ -2023,7 +2433,7 @@ export type Database = {
         Returns: unknown
       }
       st_setsrid: {
-        Args: { geom: unknown; srid: number } | { geog: unknown; srid: number }
+        Args: { geog: unknown; srid: number } | { geom: unknown; srid: number }
         Returns: unknown
       }
       st_sharedpaths: {
@@ -2055,7 +2465,7 @@ export type Database = {
         Returns: Record<string, unknown>[]
       }
       st_srid: {
-        Args: { geom: unknown } | { geog: unknown }
+        Args: { geog: unknown } | { geom: unknown }
         Returns: number
       }
       st_startpoint: {
@@ -2098,9 +2508,9 @@ export type Database = {
       }
       st_transform: {
         Args:
-          | { geom: unknown; to_proj: string }
           | { geom: unknown; from_proj: string; to_proj: string }
           | { geom: unknown; from_proj: string; to_srid: number }
+          | { geom: unknown; to_proj: string }
         Returns: unknown
       }
       st_triangulatepolygon: {
@@ -2109,9 +2519,9 @@ export type Database = {
       }
       st_union: {
         Args:
+          | { "": unknown[] }
           | { geom1: unknown; geom2: unknown }
           | { geom1: unknown; geom2: unknown; gridsize: number }
-          | { "": unknown[] }
         Returns: unknown
       }
       st_voronoilines: {
@@ -2182,6 +2592,17 @@ export type Database = {
         Args: { "": unknown }
         Returns: string
       }
+      unassign_table: {
+        Args: { p_table_id: number }
+        Returns: {
+          assigned_user_id: string | null
+          created_at: string | null
+          id: number
+          name: string
+          server_id: number | null
+          status: string
+        }
+      }
       unlockrows: {
         Args: { "": string }
         Returns: number
@@ -2195,6 +2616,16 @@ export type Database = {
           new_srid_in: number
         }
         Returns: string
+      }
+      upsert_user: {
+        Args: {
+          user_id: string
+          user_email: string
+          user_username: string
+          user_avatar_url?: string
+          user_role?: string
+        }
+        Returns: Json
       }
     }
     Enums: {
