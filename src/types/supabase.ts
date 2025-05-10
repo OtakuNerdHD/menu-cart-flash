@@ -1,4 +1,3 @@
-
 // Tipos personalizados para trabalhar com o Supabase
 
 // Tipo para usuários/perfis
@@ -59,7 +58,7 @@ export interface Product {
   price: number;
   image_url?: string | null;
   restaurant_id: number;
-  category?: string | null; // Adicionando a propriedade category que está faltando
+  category?: string | null;
   category_id?: number | null;
   available: boolean;
   featured?: boolean;
@@ -67,6 +66,13 @@ export interface Product {
   preparation_time?: number | null;
   created_at?: string;
   updated_at?: string;
+  rating?: number;
+  review_count?: number;
+  images?: string[];
+  gallery?: string[];
+  ingredients?: string;
+  note_hint?: string;
+  thumbnail?: string;
 }
 
 // Tipo para opções de produtos

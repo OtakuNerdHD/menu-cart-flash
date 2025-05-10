@@ -33,14 +33,7 @@ const KitchenManagement = () => {
       // Buscar pedidos do Supabase
       const { data: ordersData, error } = await supabase
         .from('orders')
-        .select(`
-          *,
-          order_items(
-            *,
-            product:product_id(name, price, image_url)
-          )
-        `)
-        .order('created_at', { ascending: false });
+        .select('*, order_items(*, product_id)');
 
       if (error) {
         console.error('Erro ao buscar pedidos da cozinha:', error);
@@ -49,49 +42,74 @@ const KitchenManagement = () => {
       }
 
       if (ordersData && ordersData.length > 0) {
-        // Formatar os dados dos pedidos para a cozinha
-        const formattedOrders = ordersData.map(order => {
-          // Mapear status do pedido para status da cozinha
-          let kitchenStatus;
-          switch (order.status) {
-            case 'pending':
-              kitchenStatus = 'queued';
-              break;
-            case 'preparing':
-              kitchenStatus = 'in_progress';
-              break;
-            case 'ready':
-            case 'delivered':
-              kitchenStatus = 'ready';
-              break;
-            default:
-              kitchenStatus = 'queued';
-          }
-          
-          return {
-            id: order.id,
-            table: order.table_name || `Mesa ${order.table_id || 'Desconhecida'}`,
-            status: kitchenStatus,
-            items: order.order_items.map(item => ({
-              name: item.product?.name || 'Produto não encontrado',
-              quantity: item.quantity,
-              price: item.price || item.product?.price || 0,
-              notes: item.notes,
-              image_url: item.product?.image_url
-            })),
-            total: order.total,
-            createdAt: order.created_at,
-            assignedTo: order.assigned_to,
-            isDelivery: order.delivery_type === 'delivery',
-            customer: order.address ? {
-              name: order.address.name,
-              phone: order.address.phone,
-              address: `${order.address.street}, ${order.address.number} - ${order.address.neighborhood}, ${order.address.city} - ${order.address.state}`
-            } : null
-          };
-        });
+        // Buscar detalhes dos produtos para cada item do pedido
+        const ordersWithItems = await Promise.all(
+          ordersData.map(async (order) => {
+            // Se order_items não for um array, inicialize como array vazio
+            const orderItems = Array.isArray(order.order_items) ? order.order_items : [];
+            
+            // Buscar produtos associados aos itens do pedido
+            const itemsWithProducts = await Promise.all(
+              orderItems.map(async (item) => {
+                const { data: productData } = await supabase
+                  .from('products')
+                  .select('*')
+                  .eq('id', item.product_id)
+                  .single();
+                
+                return {
+                  name: productData?.name || 'Produto não encontrado',
+                  quantity: item.quantity,
+                  price: item.price || productData?.price || 0,
+                  notes: item.notes,
+                  image_url: productData?.image_url
+                };
+              })
+            );
 
-        setOrders(formattedOrders);
+            // Mapear status do pedido para status da cozinha
+            let kitchenStatus;
+            switch (order.status) {
+              case 'pending':
+                kitchenStatus = 'queued';
+                break;
+              case 'preparing':
+                kitchenStatus = 'in_progress';
+                break;
+              case 'ready':
+              case 'delivered':
+                kitchenStatus = 'ready';
+                break;
+              default:
+                kitchenStatus = 'queued';
+            }
+            
+            // Processar dados do cliente de forma segura
+            let customerInfo = null;
+            if (order.address && typeof order.address === 'object') {
+              const address = order.address as Record<string, any>;
+              customerInfo = {
+                name: address.name as string || '',
+                phone: address.phone as string || '',
+                address: `${address.street || ''}, ${address.number || ''} - ${address.neighborhood || ''}, ${address.city || ''} - ${address.state || ''}`
+              };
+            }
+
+            return {
+              id: order.id,
+              table: order.table_name || `Mesa ${order.table_id || 'Desconhecida'}`,
+              status: kitchenStatus,
+              items: itemsWithProducts,
+              total: order.total,
+              createdAt: order.created_at,
+              assignedTo: order.assigned_to,
+              isDelivery: order.delivery_type === 'delivery',
+              customer: customerInfo
+            };
+          })
+        );
+
+        setOrders(ordersWithItems);
       }
     } catch (error) {
       console.error('Erro ao processar pedidos da cozinha:', error);

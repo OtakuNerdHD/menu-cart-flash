@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import MenuGrid from '@/components/MenuGrid';
 import CategoryFilter from '@/components/CategoryFilter';
@@ -27,7 +28,7 @@ const Index = () => {
         } else if (data && data.length > 0) {
           // Se encontrar dados no Supabase, use-os
           // Adicionando restaurant_id padrão se não existir
-          const productsWithRestaurantId = data.map(product => {
+          const productsWithRestaurantId = data.map((product: any) => {
             // Check if product already has restaurant_id
             if ('restaurant_id' in product) {
               return product as Product;

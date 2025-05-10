@@ -63,14 +63,7 @@ const OrderManagement = () => {
       // Buscar pedidos do Supabase
       const { data: ordersData, error } = await supabase
         .from('orders')
-        .select(`
-          *,
-          order_items(
-            *,
-            product:product_id(name, price)
-          )
-        `)
-        .order('created_at', { ascending: false });
+        .select('*, order_items(*, product_id)');
 
       if (error) {
         console.error('Erro ao buscar pedidos:', error);
@@ -80,23 +73,44 @@ const OrderManagement = () => {
       }
 
       if (ordersData && ordersData.length > 0) {
-        // Formatar os dados dos pedidos
-        const formattedOrders = ordersData.map(order => ({
-          id: order.id,
-          table: order.table_name || `Mesa ${order.table_id || 'Desconhecida'}`,
-          status: order.status,
-          items: order.order_items.map(item => ({
-            name: item.product?.name || 'Produto não encontrado',
-            quantity: item.quantity,
-            price: item.price || item.product?.price || 0,
-            notes: item.notes
-          })),
-          total: order.total,
-          createdAt: order.created_at,
-          assignedTo: order.assigned_to
-        }));
+        // Buscar detalhes dos produtos para cada item do pedido
+        const ordersWithItems = await Promise.all(
+          ordersData.map(async (order) => {
+            // Se order_items não for um array, inicialize como array vazio
+            const orderItems = Array.isArray(order.order_items) ? order.order_items : [];
+            
+            // Buscar produtos associados aos itens do pedido
+            const itemsWithProducts = await Promise.all(
+              orderItems.map(async (item) => {
+                const { data: productData } = await supabase
+                  .from('products')
+                  .select('*')
+                  .eq('id', item.product_id)
+                  .single();
+                
+                return {
+                  name: productData?.name || 'Produto não encontrado',
+                  quantity: item.quantity,
+                  price: item.price || productData?.price || 0,
+                  notes: item.notes,
+                  image_url: productData?.image_url
+                };
+              })
+            );
 
-        setOrders(formattedOrders);
+            return {
+              id: order.id,
+              table: order.table_name || `Mesa ${order.table_id || 'Desconhecida'}`,
+              status: order.status,
+              items: itemsWithProducts,
+              total: order.total,
+              createdAt: order.created_at,
+              assignedTo: order.assigned_to
+            };
+          })
+        );
+
+        setOrders(ordersWithItems);
       } else {
         // Buscar os pedidos salvos no localStorage como fallback
         loadOrdersFromLocalStorage();
