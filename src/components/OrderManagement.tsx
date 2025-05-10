@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -110,13 +111,24 @@ const OrderManagement = () => {
             // Processar os itens do pedido
             const items = Array.isArray(orderItemsData) ? orderItemsData.map(item => {
               const product = item.product || {};
+              // Verificar se product é um objeto
+              if (typeof product !== 'object' || product === null) {
+                return {
+                  name: "Produto não disponível",
+                  quantity: item.quantity || 1,
+                  price: item.price || 0,
+                  notes: item.notes || "",
+                  image_url: null
+                };
+              }
+              
               // Garantir que product é um objeto e acessar suas propriedades com segurança
               return {
-                name: typeof product === 'object' && product !== null && 'name' in product ? String(product.name) || "Produto não disponível" : "Produto não disponível",
+                name: product.name ? String(product.name) : "Produto não disponível",
                 quantity: item.quantity || 1,
-                price: typeof product === 'object' && product !== null && 'price' in product ? item.price || Number(product.price) || 0 : 0,
+                price: item.price || (product.price ? Number(product.price) : 0),
                 notes: item.notes || "",
-                image_url: typeof product === 'object' && product !== null && 'image_url' in product ? String(product.image_url) || null : null
+                image_url: product.image_url ? String(product.image_url) : null
               };
             }) : [];
 

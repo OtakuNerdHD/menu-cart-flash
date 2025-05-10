@@ -10,7 +10,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, EyeIcon, EyeOffIcon, CheckCircle, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
-import ptBR from 'date-fns/locale/pt-BR';
+import { ptBR } from 'date-fns/locale/pt-BR';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -260,49 +260,40 @@ const ProgressiveRegistration = () => {
     });
   };
 
-  // Enviar OTP para e-mail
-  const sendOTP = async () => {
+  // Enviar link de confirmação para e-mail
+  const sendConfirmationLink = async () => {
     if (!isValidEmail(formData.email) || !emailAvailable) {
       return;
     }
 
     setIsLoading(true);
     try {
-      // Em um cenário real, aqui enviaríamos OTP via Supabase Auth
-      // Para demonstração, simularemos o envio
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Enviar e-mail de confirmação via Supabase Auth
+      const { error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: 'temporary-password', // Senha temporária, será atualizada posteriormente
+        options: {
+          emailRedirectTo: 'http://localhost:5173/auth/callback'
+        }
+      });
+      
+      if (error) throw error;
       
       setOtpSent(true);
       toast({
-        title: "Código enviado com sucesso",
-        description: `Um código de verificação foi enviado para ${formData.email}`,
+        title: "E-mail enviado com sucesso",
+        description: `Um link de confirmação foi enviado para ${formData.email}. Por favor, verifique sua caixa de entrada.`,
       });
 
-      // Para fins de demonstração, simulamos o OTP como "123456"
-      // Em produção, isso seria gerado e enviado pelo Supabase
-    } catch (error) {
-      console.error('Erro ao enviar OTP:', error);
+    } catch (error: any) {
+      console.error('Erro ao enviar e-mail de confirmação:', error);
       toast({
-        title: "Erro ao enviar código",
-        description: "Não foi possível enviar o código de verificação.",
+        title: "Erro ao enviar e-mail",
+        description: error.message || "Não foi possível enviar o e-mail de confirmação.",
         variant: "destructive"
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // Verificar OTP
-  const verifyOTP = () => {
-    // Para demonstração, aceitamos "123456" como código válido
-    if (otp === "123456") {
-      setStep(5);
-    } else {
-      toast({
-        title: "Código inválido",
-        description: "O código de verificação informado é inválido.",
-        variant: "destructive"
-      });
     }
   };
 
@@ -501,20 +492,12 @@ const ProgressiveRegistration = () => {
     }
     else if (step === 4) {
       if (!otpSent) {
-        sendOTP();
+        sendConfirmationLink();
         return;
       }
       
-      if (otp.length !== 6) {
-        toast({
-          title: "Código inválido",
-          description: "Por favor, informe o código de 6 dígitos enviado ao seu e-mail.",
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      verifyOTP();
+      // Neste ponto, não verificamos o código OTP, pois o usuário clicará no link enviado por e-mail
+      setStep(5);
       return;
     }
     else if (step === 5) {
@@ -778,32 +761,21 @@ const ProgressiveRegistration = () => {
               
               {otpSent ? (
                 <div className="space-y-2">
-                  <Label htmlFor="otp">Código de Verificação</Label>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Enviamos um código de 6 dígitos para {formData.email}.
-                    Para teste, use o código: 123456
+                  <p className="text-sm text-center">
+                    Um link de confirmação foi enviado para <strong>{formData.email}</strong>
                   </p>
-                  <InputOTP value={otp} onChange={setOtp} maxLength={6}>
-                    <InputOTPGroup>
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                    </InputOTPGroup>
-                    <InputOTPGroup>
-                      <InputOTPSlot index={3} />
-                      <InputOTPSlot index={4} />
-                      <InputOTPSlot index={5} />
-                    </InputOTPGroup>
-                  </InputOTP>
-                  <div className="mt-2">
+                  <p className="text-xs text-muted-foreground text-center mt-2">
+                    Por favor, verifique sua caixa de entrada e clique no link para continuar com o cadastro.
+                  </p>
+                  <div className="mt-4 text-center">
                     <Button 
                       type="button" 
                       variant="link" 
-                      onClick={sendOTP}
+                      onClick={sendConfirmationLink}
                       disabled={isLoading}
-                      className="p-0 h-auto text-sm"
+                      className="mx-auto"
                     >
-                      Reenviar código
+                      Reenviar link de confirmação
                     </Button>
                   </div>
                 </div>
@@ -996,7 +968,7 @@ const ProgressiveRegistration = () => {
   };
 
   const getNextButtonLabel = () => {
-    if (step === 4 && !otpSent) return "Enviar código";
+    if (step === 4 && !otpSent) return "Enviar e-mail";
     if (step === 7) return "Concluir cadastro";
     return "Próximo";
   };

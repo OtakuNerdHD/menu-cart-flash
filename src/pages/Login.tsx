@@ -64,7 +64,16 @@ const Login = () => {
       // Criar usuário para o contexto da aplicação
       const user: CurrentUser = {
         id: data.user.id,
-        role: profileData?.role || 'customer',
+        role: profileData?.role as 
+          | "admin" 
+          | "restaurant_owner" 
+          | "waiter" 
+          | "chef" 
+          | "manager" 
+          | "delivery_person" 
+          | "customer" 
+          | "visitor" 
+          || 'customer',
         name: profileData?.name || data.user.email?.split('@')[0] || 'Usuário',
         email: data.user.email || '',
         avatar_url: profileData?.avatar_url || null
