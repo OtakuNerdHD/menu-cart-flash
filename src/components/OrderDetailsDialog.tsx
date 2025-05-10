@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { 
   Dialog, 
   DialogContent, 
@@ -12,6 +13,13 @@ import { Separator } from '@/components/ui/separator';
 import { Clock, User } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from '@/components/ui/carousel';
 
 interface OrderItem {
   name: string;
@@ -158,32 +166,40 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({ order, open, on
         <div className="space-y-4">
           <div>
             <h3 className="font-medium mb-2">Itens do pedido</h3>
-            <div className="space-y-3 max-h-[300px] overflow-y-auto">
-              {order.items.map((item, index) => (
-                <div key={index} className="flex items-start gap-3 py-2 border-b border-gray-100">
-                  <div className="w-12 h-12 bg-gray-100 rounded-md overflow-hidden">
-                    <img
-                      src={item.image_url || itemPlaceholders[index % itemPlaceholders.length]}
-                      alt={item.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        // Fallback para imagem padrão se a imagem não carregar
-                        (e.target as HTMLImageElement).src = itemPlaceholders[index % itemPlaceholders.length];
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between">
-                      <span className="font-medium">{item.quantity}x {item.name}</span>
-                      <span>R$ {(item.price * item.quantity).toFixed(2)}</span>
+            <Carousel className="w-full max-h-[300px]">
+              <CarouselContent>
+                {order.items.map((item, index) => (
+                  <CarouselItem key={index} className="md:basis-1/1">
+                    <div className="flex items-start gap-3 py-2 border-b border-gray-100">
+                      <div className="w-12 h-12 bg-gray-100 rounded-md overflow-hidden">
+                        <img
+                          src={item.image_url || itemPlaceholders[index % itemPlaceholders.length]}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // Fallback para imagem padrão se a imagem não carregar
+                            (e.target as HTMLImageElement).src = itemPlaceholders[index % itemPlaceholders.length];
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex justify-between">
+                          <span className="font-medium">{item.quantity}x {item.name}</span>
+                          <span>R$ {(item.price * item.quantity).toFixed(2)}</span>
+                        </div>
+                        {item.notes && (
+                          <p className="text-sm text-red-500 mt-1">{item.notes}</p>
+                        )}
+                      </div>
                     </div>
-                    {item.notes && (
-                      <p className="text-sm text-red-500 mt-1">{item.notes}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              <div className="flex justify-center mt-2">
+                <CarouselPrevious className="relative inset-0 translate-y-0 left-0 mr-2" />
+                <CarouselNext className="relative inset-0 translate-y-0 right-0" />
+              </div>
+            </Carousel>
           </div>
           
           <Separator />

@@ -55,6 +55,23 @@ const OrderManagement = () => {
 
   useEffect(() => {
     fetchOrders();
+
+    // Configurar a escuta em tempo real para atualizações na tabela de pedidos
+    const ordersSubscription = supabase
+      .channel('orders-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'orders'
+      }, () => {
+        console.log('Detectada alteração em pedidos, atualizando...');
+        fetchOrders();
+      })
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(ordersSubscription);
+    };
   }, []);
 
   const fetchOrders = async () => {
@@ -63,7 +80,15 @@ const OrderManagement = () => {
       // Buscar pedidos do Supabase
       const { data: ordersData, error } = await supabase
         .from('orders')
-        .select('*, order_items(*, product_id)');
+        .select(`
+          *,
+          order_items (
+            *,
+            product:product_id (
+              name, price, image_url
+            )
+          )
+        `);
 
       if (error) {
         console.error('Erro ao buscar pedidos:', error);
@@ -73,45 +98,38 @@ const OrderManagement = () => {
       }
 
       if (ordersData && ordersData.length > 0) {
-        // Buscar detalhes dos produtos para cada item do pedido
-        const ordersWithItems = await Promise.all(
-          ordersData.map(async (order) => {
-            // Se order_items não for um array, inicialize como array vazio
-            const orderItems = Array.isArray(order.order_items) ? order.order_items : [];
-            
-            // Buscar produtos associados aos itens do pedido
-            const itemsWithProducts = await Promise.all(
-              orderItems.map(async (item) => {
-                const { data: productData } = await supabase
-                  .from('products')
-                  .select('*')
-                  .eq('id', item.product_id)
-                  .single();
-                
-                return {
-                  name: productData?.name || 'Produto não encontrado',
-                  quantity: item.quantity,
-                  price: item.price || productData?.price || 0,
-                  notes: item.notes,
-                  image_url: productData?.image_url
-                };
-              })
-            );
-
+        console.log("Pedidos recuperados do Supabase:", ordersData);
+        
+        // Processar os pedidos para o formato necessário
+        const processedOrders = ordersData.map(order => {
+          // Processar os itens do pedido
+          const items = Array.isArray(order.order_items) ? order.order_items.map(item => {
+            const product = item.product || {};
             return {
-              id: order.id,
-              table: order.table_name || `Mesa ${order.table_id || 'Desconhecida'}`,
-              status: order.status,
-              items: itemsWithProducts,
-              total: order.total,
-              createdAt: order.created_at,
-              assignedTo: order.assigned_to
+              name: product.name || "Produto não disponível",
+              quantity: item.quantity || 1,
+              price: item.price || product.price || 0,
+              notes: item.notes || "",
+              image_url: product.image_url || null
             };
-          })
-        );
+          }) : [];
 
-        setOrders(ordersWithItems);
+          return {
+            id: order.id,
+            table: order.table_name || `Mesa ${order.table_id || 'Desconhecida'}`,
+            status: order.status || 'pending',
+            items: items,
+            total: order.total || items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+            createdAt: order.created_at || new Date().toISOString(),
+            assignedTo: order.assigned_to || null
+          };
+        });
+
+        setOrders(processedOrders);
+        // Atualizar também o localStorage como backup
+        localStorage.setItem('tableOrders', JSON.stringify(processedOrders));
       } else {
+        console.log("Nenhum pedido encontrado no Supabase");
         // Buscar os pedidos salvos no localStorage como fallback
         loadOrdersFromLocalStorage();
       }
