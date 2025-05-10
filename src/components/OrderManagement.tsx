@@ -111,12 +111,13 @@ const OrderManagement = () => {
             // Processar os itens do pedido
             const items = Array.isArray(orderItemsData) ? orderItemsData.map(item => {
               const product = item.product || {};
+              // Garantir que product é um objeto e acessar suas propriedades com segurança
               return {
-                name: product.name || "Produto não disponível",
+                name: product && typeof product === 'object' ? product.name || "Produto não disponível" : "Produto não disponível",
                 quantity: item.quantity || 1,
-                price: item.price || product.price || 0,
+                price: product && typeof product === 'object' ? item.price || product.price || 0 : 0,
                 notes: item.notes || "",
-                image_url: product.image_url || null
+                image_url: product && typeof product === 'object' ? product.image_url || null : null
               };
             }) : [];
 

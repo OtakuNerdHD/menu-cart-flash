@@ -80,11 +80,11 @@ const KitchenManagement = () => {
             const items = Array.isArray(orderItemsData) ? orderItemsData.map(item => {
               const product = item.product || {};
               return {
-                name: product.name || "Produto não disponível",
+                name: product && typeof product === 'object' ? product.name || "Produto não disponível" : "Produto não disponível",
                 quantity: item.quantity || 1,
-                price: item.price || product.price || 0,
+                price: product && typeof product === 'object' ? item.price || product.price || 0 : 0,
                 notes: item.notes || "",
-                image_url: product.image_url || null
+                image_url: product && typeof product === 'object' ? product.image_url || null : null
               };
             }) : [];
 
@@ -107,12 +107,18 @@ const KitchenManagement = () => {
             
             // Processar dados do cliente de forma segura
             let customerInfo = null;
+            
+            // Garantir que address seja um objeto antes de acessar suas propriedades
             if (order.address && typeof order.address === 'object') {
               const address = order.address;
+              
+              // Verificação de tipos para garantir acesso seguro às propriedades
+              const isValidAddress = address && typeof address === 'object';
+              
               customerInfo = {
-                name: address.name || '',
-                phone: address.phone || '',
-                address: `${address.street || ''}, ${address.number || ''} - ${address.neighborhood || ''}, ${address.city || ''} - ${address.state || ''}`
+                name: isValidAddress && 'name' in address ? String(address.name || '') : '',
+                phone: isValidAddress && 'phone' in address ? String(address.phone || '') : '',
+                address: isValidAddress ? `${String('street' in address ? address.street || '' : '')}, ${String('number' in address ? address.number || '' : '')} - ${String('neighborhood' in address ? address.neighborhood || '' : '')}, ${String('city' in address ? address.city || '' : '')} - ${String('state' in address ? address.state || '' : '')}` : ''
               };
             }
 
