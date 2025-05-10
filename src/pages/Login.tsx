@@ -11,19 +11,11 @@ import { toast } from '@/hooks/use-toast';
 import { useUserSwitcher } from '@/context/UserSwitcherContext';
 import { supabase } from '@/integrations/supabase/client';
 import { CurrentUser } from '@/types/supabase';
+import ProgressiveRegistration from '@/components/ProgressiveRegistration';
 
 interface LoginFormState {
   email: string;
   password: string;
-}
-
-interface RegisterFormState {
-  firstName: string;
-  lastName: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-  phone: string;
 }
 
 const Login = () => {
@@ -35,14 +27,6 @@ const Login = () => {
   const [loginForm, setLoginForm] = useState<LoginFormState>({
     email: '',
     password: ''
-  });
-  const [registerForm, setRegisterForm] = useState<RegisterFormState>({
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    phone: ''
   });
   
   // Verifica se já está logado e redireciona para a página principal
@@ -57,38 +41,41 @@ const Login = () => {
     setLoginForm(prev => ({ ...prev, [name]: value }));
   };
   
-  const handleRegisterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setRegisterForm(prev => ({ ...prev, [name]: value }));
-  };
-  
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
     try {
-      // Simular login para o protótipo
-      // Em produção, seria feita a autenticação com Supabase
+      // Tentativa de login com Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginForm.email,
+        password: loginForm.password
+      });
       
-      setTimeout(() => {
-        // Simulando sucesso de login
-        const mockedUser: CurrentUser = {
-          id: '123',
-          role: 'customer',
-          name: 'Usuário Logado',
-          email: loginForm.email,
-          avatar_url: null
-        };
+      if (error) throw error;
+      
+      // Buscar dados adicionais do usuário
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
         
-        setCurrentUser(mockedUser);
-        toast({
-          title: "Login realizado com sucesso",
-          description: "Bem-vindo ao sistema!",
-        });
-        navigate('/');
-        setIsLoading(false);
-      }, 1000);
+      // Criar usuário para o contexto da aplicação
+      const user: CurrentUser = {
+        id: data.user.id,
+        role: profileData?.role || 'customer',
+        name: profileData?.name || data.user.email?.split('@')[0] || 'Usuário',
+        email: data.user.email || '',
+        avatar_url: profileData?.avatar_url || null
+      };
       
+      setCurrentUser(user);
+      toast({
+        title: "Login realizado com sucesso",
+        description: "Bem-vindo ao sistema!",
+      });
+      navigate('/');
     } catch (error: any) {
       console.error('Erro ao fazer login:', error);
       toast({
@@ -96,54 +83,7 @@ const Login = () => {
         description: error.message || "Verifique suas credenciais e tente novamente.",
         variant: "destructive"
       });
-      setIsLoading(false);
-    }
-  };
-  
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    
-    // Validações
-    if (registerForm.password !== registerForm.confirmPassword) {
-      toast({
-        title: "Senhas não coincidem",
-        description: "A senha e a confirmação da senha devem ser iguais.",
-        variant: "destructive"
-      });
-      setIsLoading(false);
-      return;
-    }
-    
-    try {
-      // Simular registro para o protótipo
-      // Em produção, seria feito o registro com Supabase
-      
-      setTimeout(() => {
-        const mockedUser: CurrentUser = {
-          id: '456',
-          role: 'customer',
-          name: `${registerForm.firstName} ${registerForm.lastName}`,
-          email: registerForm.email,
-          avatar_url: null
-        };
-        
-        setCurrentUser(mockedUser);
-        toast({
-          title: "Cadastro realizado com sucesso",
-          description: "Bem-vindo ao sistema!",
-        });
-        navigate('/');
-        setIsLoading(false);
-      }, 1000);
-      
-    } catch (error: any) {
-      console.error('Erro ao fazer cadastro:', error);
-      toast({
-        title: "Erro ao fazer cadastro",
-        description: error.message || "Não foi possível completar o cadastro. Tente novamente.",
-        variant: "destructive"
-      });
+    } finally {
       setIsLoading(false);
     }
   };
@@ -170,28 +110,6 @@ const Login = () => {
         title: "Autenticando com Google",
         description: "Você será redirecionado...",
       });
-      
-      // Simulando o login com Google para o protótipo
-      setTimeout(() => {
-        const mockedUser: CurrentUser = {
-          id: '789',
-          role: 'customer',
-          name: 'Usuário Google',
-          email: 'usuario@gmail.com',
-          avatar_url: null
-        };
-        
-        setCurrentUser(mockedUser);
-        
-        toast({
-          title: "Login com Google realizado",
-          description: "Bem-vindo ao sistema!",
-        });
-        
-        navigate('/');
-        setIsLoading(false);
-      }, 1500);
-      
     } catch (error: any) {
       console.error('Erro ao fazer login com Google:', error);
       toast({
@@ -273,106 +191,7 @@ const Login = () => {
               </TabsContent>
               
               <TabsContent value="register">
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="register-firstName">Nome</Label>
-                      <Input
-                        id="register-firstName"
-                        name="firstName"
-                        placeholder="Seu nome"
-                        value={registerForm.firstName}
-                        onChange={handleRegisterChange}
-                        required
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="register-lastName">Sobrenome</Label>
-                      <Input
-                        id="register-lastName"
-                        name="lastName"
-                        placeholder="Seu sobrenome"
-                        value={registerForm.lastName}
-                        onChange={handleRegisterChange}
-                        required
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="register-email">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
-                      <Input
-                        id="register-email"
-                        name="email"
-                        type="email"
-                        placeholder="seu@email.com"
-                        className="pl-10"
-                        value={registerForm.email}
-                        onChange={handleRegisterChange}
-                        required
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="register-phone">Telefone</Label>
-                    <Input
-                      id="register-phone"
-                      name="phone"
-                      placeholder="(00) 00000-0000"
-                      value={registerForm.phone}
-                      onChange={handleRegisterChange}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="register-password">Senha</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
-                      <Input
-                        id="register-password"
-                        name="password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="pl-10"
-                        value={registerForm.password}
-                        onChange={handleRegisterChange}
-                        required
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="register-confirmPassword">Confirmar Senha</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
-                      <Input
-                        id="register-confirmPassword"
-                        name="confirmPassword"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="pl-10"
-                        value={registerForm.confirmPassword}
-                        onChange={handleRegisterChange}
-                        required
-                      />
-                    </div>
-                  </div>
-                  
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Cadastrando..." : "Cadastrar"}
-                  </Button>
-                </form>
+                <ProgressiveRegistration />
               </TabsContent>
             </Tabs>
             
@@ -390,7 +209,7 @@ const Login = () => {
               variant="outline"
               className="w-full"
               onClick={handleGoogleLogin}
-              disabled={isLoading}
+              disabled={isLoading || activeTab === 'register'}
             >
               <img src="https://www.google.com/favicon.ico" alt="Google" className="h-4 w-4 mr-2" />
               Google

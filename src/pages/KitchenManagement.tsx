@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -80,11 +79,11 @@ const KitchenManagement = () => {
             const items = Array.isArray(orderItemsData) ? orderItemsData.map(item => {
               const product = item.product || {};
               return {
-                name: product && typeof product === 'object' ? product.name || "Produto não disponível" : "Produto não disponível",
+                name: typeof product === 'object' && product !== null && 'name' in product ? String(product.name) || "Produto não disponível" : "Produto não disponível",
                 quantity: item.quantity || 1,
-                price: product && typeof product === 'object' ? item.price || product.price || 0 : 0,
+                price: typeof product === 'object' && product !== null && 'price' in product ? item.price || Number(product.price) || 0 : 0,
                 notes: item.notes || "",
-                image_url: product && typeof product === 'object' ? product.image_url || null : null
+                image_url: typeof product === 'object' && product !== null && 'image_url' in product ? String(product.image_url) || null : null
               };
             }) : [];
 
@@ -118,7 +117,8 @@ const KitchenManagement = () => {
               customerInfo = {
                 name: isValidAddress && 'name' in address ? String(address.name || '') : '',
                 phone: isValidAddress && 'phone' in address ? String(address.phone || '') : '',
-                address: isValidAddress ? `${String('street' in address ? address.street || '' : '')}, ${String('number' in address ? address.number || '' : '')} - ${String('neighborhood' in address ? address.neighborhood || '' : '')}, ${String('city' in address ? address.city || '' : '')} - ${String('state' in address ? address.state || '' : '')}` : ''
+                address: isValidAddress ? 
+                  `${String('street' in address ? address.street || '' : '')}, ${String('number' in address ? address.number || '' : '')} - ${String('neighborhood' in address ? address.neighborhood || '' : '')}, ${String('city' in address ? address.city || '' : '')} - ${String('state' in address ? address.state || '' : '')}` : ''
               };
             }
 
