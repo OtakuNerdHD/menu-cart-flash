@@ -80,19 +80,10 @@ const OrderManagement = () => {
       // Buscar pedidos do Supabase
       const { data: ordersData, error } = await supabase
         .from('orders')
-        .select(`
-          *,
-          order_items (
-            *,
-            product:product_id (
-              name, price, image_url
-            )
-          )
-        `);
+        .select('*');
 
       if (error) {
         console.error('Erro ao buscar pedidos:', error);
-        // Buscar os pedidos salvos no localStorage como fallback
         loadOrdersFromLocalStorage();
         return;
       }
@@ -100,34 +91,53 @@ const OrderManagement = () => {
       if (ordersData && ordersData.length > 0) {
         console.log("Pedidos recuperados do Supabase:", ordersData);
         
-        // Processar os pedidos para o formato necessário
-        const processedOrders = ordersData.map(order => {
-          // Processar os itens do pedido
-          const items = Array.isArray(order.order_items) ? order.order_items.map(item => {
-            const product = item.product || {};
+        // Buscar os itens de cada pedido
+        const processedOrders = await Promise.all(
+          ordersData.map(async (order) => {
+            // Buscar itens do pedido
+            const { data: orderItemsData, error: orderItemsError } = await supabase
+              .from('order_items')
+              .select(`
+                *,
+                product:product_id (*)
+              `)
+              .eq('order_id', order.id);
+            
+            if (orderItemsError) {
+              console.error('Erro ao buscar itens do pedido:', orderItemsError);
+              return null;
+            }
+
+            // Processar os itens do pedido
+            const items = Array.isArray(orderItemsData) ? orderItemsData.map(item => {
+              const product = item.product || {};
+              return {
+                name: product.name || "Produto não disponível",
+                quantity: item.quantity || 1,
+                price: item.price || product.price || 0,
+                notes: item.notes || "",
+                image_url: product.image_url || null
+              };
+            }) : [];
+
             return {
-              name: product.name || "Produto não disponível",
-              quantity: item.quantity || 1,
-              price: item.price || product.price || 0,
-              notes: item.notes || "",
-              image_url: product.image_url || null
+              id: order.id,
+              table: order.table_name || `Mesa ${order.table_id || 'Desconhecida'}`,
+              status: order.status || 'pending',
+              items: items,
+              total: order.total || items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+              createdAt: order.created_at || new Date().toISOString(),
+              assignedTo: order.assigned_to || null
             };
-          }) : [];
+          })
+        );
 
-          return {
-            id: order.id,
-            table: order.table_name || `Mesa ${order.table_id || 'Desconhecida'}`,
-            status: order.status || 'pending',
-            items: items,
-            total: order.total || items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-            createdAt: order.created_at || new Date().toISOString(),
-            assignedTo: order.assigned_to || null
-          };
-        });
-
-        setOrders(processedOrders);
+        // Filtrar pedidos nulos (que podem ter ocorrido devido a erros)
+        const validOrders = processedOrders.filter(order => order !== null);
+        
+        setOrders(validOrders);
         // Atualizar também o localStorage como backup
-        localStorage.setItem('tableOrders', JSON.stringify(processedOrders));
+        localStorage.setItem('tableOrders', JSON.stringify(validOrders));
       } else {
         console.log("Nenhum pedido encontrado no Supabase");
         // Buscar os pedidos salvos no localStorage como fallback

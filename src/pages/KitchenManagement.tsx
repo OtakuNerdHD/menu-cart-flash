@@ -25,6 +25,23 @@ const KitchenManagement = () => {
 
   useEffect(() => {
     fetchOrders();
+    
+    // Configurar a escuta em tempo real para atualizações
+    const ordersSubscription = supabase
+      .channel('kitchen-orders-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'orders'
+      }, () => {
+        console.log('Detectada alteração em pedidos, atualizando a cozinha...');
+        fetchOrders();
+      })
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(ordersSubscription);
+    };
   }, []);
 
   const fetchOrders = async () => {
@@ -33,7 +50,7 @@ const KitchenManagement = () => {
       // Buscar pedidos do Supabase
       const { data: ordersData, error } = await supabase
         .from('orders')
-        .select('*, order_items(*, product_id)');
+        .select('*');
 
       if (error) {
         console.error('Erro ao buscar pedidos da cozinha:', error);
@@ -42,30 +59,34 @@ const KitchenManagement = () => {
       }
 
       if (ordersData && ordersData.length > 0) {
-        // Buscar detalhes dos produtos para cada item do pedido
+        // Buscar os itens de cada pedido
         const ordersWithItems = await Promise.all(
           ordersData.map(async (order) => {
-            // Se order_items não for um array, inicialize como array vazio
-            const orderItems = Array.isArray(order.order_items) ? order.order_items : [];
+            // Buscar itens do pedido
+            const { data: orderItemsData, error: orderItemsError } = await supabase
+              .from('order_items')
+              .select(`
+                *,
+                product:product_id (*)
+              `)
+              .eq('order_id', order.id);
             
-            // Buscar produtos associados aos itens do pedido
-            const itemsWithProducts = await Promise.all(
-              orderItems.map(async (item) => {
-                const { data: productData } = await supabase
-                  .from('products')
-                  .select('*')
-                  .eq('id', item.product_id)
-                  .single();
-                
-                return {
-                  name: productData?.name || 'Produto não encontrado',
-                  quantity: item.quantity,
-                  price: item.price || productData?.price || 0,
-                  notes: item.notes,
-                  image_url: productData?.image_url
-                };
-              })
-            );
+            if (orderItemsError) {
+              console.error('Erro ao buscar itens do pedido:', orderItemsError);
+              return null;
+            }
+
+            // Processar os itens do pedido
+            const items = Array.isArray(orderItemsData) ? orderItemsData.map(item => {
+              const product = item.product || {};
+              return {
+                name: product.name || "Produto não disponível",
+                quantity: item.quantity || 1,
+                price: item.price || product.price || 0,
+                notes: item.notes || "",
+                image_url: product.image_url || null
+              };
+            }) : [];
 
             // Mapear status do pedido para status da cozinha
             let kitchenStatus;
@@ -87,10 +108,10 @@ const KitchenManagement = () => {
             // Processar dados do cliente de forma segura
             let customerInfo = null;
             if (order.address && typeof order.address === 'object') {
-              const address = order.address as Record<string, any>;
+              const address = order.address;
               customerInfo = {
-                name: address.name as string || '',
-                phone: address.phone as string || '',
+                name: address.name || '',
+                phone: address.phone || '',
                 address: `${address.street || ''}, ${address.number || ''} - ${address.neighborhood || ''}, ${address.city || ''} - ${address.state || ''}`
               };
             }
@@ -99,8 +120,8 @@ const KitchenManagement = () => {
               id: order.id,
               table: order.table_name || `Mesa ${order.table_id || 'Desconhecida'}`,
               status: kitchenStatus,
-              items: itemsWithProducts,
-              total: order.total,
+              items: items,
+              total: order.total || items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
               createdAt: order.created_at,
               assignedTo: order.assigned_to,
               isDelivery: order.delivery_type === 'delivery',
@@ -109,7 +130,10 @@ const KitchenManagement = () => {
           })
         );
 
-        setOrders(ordersWithItems);
+        // Filtrar pedidos nulos (que podem ter ocorrido devido a erros)
+        const validOrders = ordersWithItems.filter(order => order !== null);
+        
+        setOrders(validOrders);
       }
     } catch (error) {
       console.error('Erro ao processar pedidos da cozinha:', error);

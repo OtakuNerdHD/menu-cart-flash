@@ -20,6 +20,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from '@/components/ui/carousel';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface OrderItem {
   name: string;
@@ -48,6 +49,7 @@ interface OrderDetailsDialogProps {
 
 const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({ order, open, onOpenChange, currentUserRole }) => {
   const [status, setStatus] = useState(order.status);
+  const [activeTab, setActiveTab] = useState('pending');
   
   // Item placeholders para quando não há imagem
   const itemPlaceholders = [
@@ -55,6 +57,24 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({ order, open, on
     "https://images.unsplash.com/photo-1568901346375-23c9450c58cd",
     "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38"
   ];
+
+  useEffect(() => {
+    // Determinar a aba ativa com base no status do pedido
+    switch (status) {
+      case 'pending':
+        setActiveTab('pending');
+        break;
+      case 'preparing':
+        setActiveTab('preparing');
+        break;
+      case 'ready':
+      case 'delivered':
+        setActiveTab('delivered');
+        break;
+      default:
+        setActiveTab('pending');
+    }
+  }, [status]);
   
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -110,6 +130,8 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({ order, open, on
       if (error) throw error;
       
       setStatus(newStatus);
+      setActiveTab(newStatus === 'ready' ? 'delivered' : newStatus);
+      
       toast({
         title: "Status atualizado",
         description: `Pedido atualizado para ${getStatusText(newStatus)}`
@@ -131,6 +153,11 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({ order, open, on
   };
   
   const canUpdateStatus = ['admin', 'restaurant_owner', 'waiter'].includes(currentUserRole);
+
+  // Filtrar os items com base na aba ativa
+  const pendingItems = order.items;
+  const preparingItems = status === 'pending' ? [] : order.items;
+  const deliveredItems = ['ready', 'delivered'].includes(status) ? order.items : [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -164,43 +191,147 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({ order, open, on
         </DialogHeader>
         
         <div className="space-y-4">
-          <div>
-            <h3 className="font-medium mb-2">Itens do pedido</h3>
-            <Carousel className="w-full max-h-[300px]">
-              <CarouselContent>
-                {order.items.map((item, index) => (
-                  <CarouselItem key={index} className="md:basis-1/1">
-                    <div className="flex items-start gap-3 py-2 border-b border-gray-100">
-                      <div className="w-12 h-12 bg-gray-100 rounded-md overflow-hidden">
-                        <img
-                          src={item.image_url || itemPlaceholders[index % itemPlaceholders.length]}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            // Fallback para imagem padrão se a imagem não carregar
-                            (e.target as HTMLImageElement).src = itemPlaceholders[index % itemPlaceholders.length];
-                          }}
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between">
-                          <span className="font-medium">{item.quantity}x {item.name}</span>
-                          <span>R$ {(item.price * item.quantity).toFixed(2)}</span>
-                        </div>
-                        {item.notes && (
-                          <p className="text-sm text-red-500 mt-1">{item.notes}</p>
-                        )}
-                      </div>
+          <Tabs 
+            value={activeTab}
+            onValueChange={setActiveTab} 
+            className="w-full"
+          >
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="pending">Pendente</TabsTrigger>
+              <TabsTrigger value="preparing">Em produção</TabsTrigger>
+              <TabsTrigger value="delivered">Entregue</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="pending" className="space-y-4 mt-2">
+              {pendingItems.length > 0 ? (
+                <div>
+                  <h3 className="font-medium mb-2">Itens Pendentes</h3>
+                  <Carousel className="w-full max-h-[300px]">
+                    <CarouselContent>
+                      {pendingItems.map((item, index) => (
+                        <CarouselItem key={index} className="md:basis-1/1">
+                          <div className="flex items-start gap-3 py-2 border-b border-gray-100">
+                            <div className="w-12 h-12 bg-gray-100 rounded-md overflow-hidden">
+                              <img
+                                src={item.image_url || itemPlaceholders[index % itemPlaceholders.length]}
+                                alt={item.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  // Fallback para imagem padrão se a imagem não carregar
+                                  (e.target as HTMLImageElement).src = itemPlaceholders[index % itemPlaceholders.length];
+                                }}
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex justify-between">
+                                <span className="font-medium">{item.quantity}x {item.name}</span>
+                                <span>R$ {(item.price * item.quantity).toFixed(2)}</span>
+                              </div>
+                              {item.notes && (
+                                <p className="text-sm text-red-500 mt-1">{item.notes}</p>
+                              )}
+                            </div>
+                          </div>
+                        </CarouselItem>
+                      ))}
+                    </CarouselContent>
+                    <div className="flex justify-center mt-2">
+                      <CarouselPrevious className="relative inset-0 translate-y-0 left-0 mr-2" />
+                      <CarouselNext className="relative inset-0 translate-y-0 right-0" />
                     </div>
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              <div className="flex justify-center mt-2">
-                <CarouselPrevious className="relative inset-0 translate-y-0 left-0 mr-2" />
-                <CarouselNext className="relative inset-0 translate-y-0 right-0" />
-              </div>
-            </Carousel>
-          </div>
+                  </Carousel>
+                </div>
+              ) : (
+                <p className="text-center text-gray-500 py-4">Não há itens pendentes</p>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="preparing" className="space-y-4 mt-2">
+              {preparingItems.length > 0 ? (
+                <div>
+                  <h3 className="font-medium mb-2">Itens em Produção</h3>
+                  <Carousel className="w-full max-h-[300px]">
+                    <CarouselContent>
+                      {preparingItems.map((item, index) => (
+                        <CarouselItem key={index} className="md:basis-1/1">
+                          <div className="flex items-start gap-3 py-2 border-b border-gray-100">
+                            <div className="w-12 h-12 bg-gray-100 rounded-md overflow-hidden">
+                              <img
+                                src={item.image_url || itemPlaceholders[index % itemPlaceholders.length]}
+                                alt={item.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = itemPlaceholders[index % itemPlaceholders.length];
+                                }}
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex justify-between">
+                                <span className="font-medium">{item.quantity}x {item.name}</span>
+                                <span>R$ {(item.price * item.quantity).toFixed(2)}</span>
+                              </div>
+                              {item.notes && (
+                                <p className="text-sm text-red-500 mt-1">{item.notes}</p>
+                              )}
+                            </div>
+                          </div>
+                        </CarouselItem>
+                      ))}
+                    </CarouselContent>
+                    <div className="flex justify-center mt-2">
+                      <CarouselPrevious className="relative inset-0 translate-y-0 left-0 mr-2" />
+                      <CarouselNext className="relative inset-0 translate-y-0 right-0" />
+                    </div>
+                  </Carousel>
+                </div>
+              ) : (
+                <p className="text-center text-gray-500 py-4">Não há itens em produção</p>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="delivered" className="space-y-4 mt-2">
+              {deliveredItems.length > 0 ? (
+                <div>
+                  <h3 className="font-medium mb-2">Itens Entregues</h3>
+                  <Carousel className="w-full max-h-[300px]">
+                    <CarouselContent>
+                      {deliveredItems.map((item, index) => (
+                        <CarouselItem key={index} className="md:basis-1/1">
+                          <div className="flex items-start gap-3 py-2 border-b border-gray-100">
+                            <div className="w-12 h-12 bg-gray-100 rounded-md overflow-hidden">
+                              <img
+                                src={item.image_url || itemPlaceholders[index % itemPlaceholders.length]}
+                                alt={item.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = itemPlaceholders[index % itemPlaceholders.length];
+                                }}
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex justify-between">
+                                <span className="font-medium">{item.quantity}x {item.name}</span>
+                                <span>R$ {(item.price * item.quantity).toFixed(2)}</span>
+                              </div>
+                              {item.notes && (
+                                <p className="text-sm text-red-500 mt-1">{item.notes}</p>
+                              )}
+                            </div>
+                          </div>
+                        </CarouselItem>
+                      ))}
+                    </CarouselContent>
+                    <div className="flex justify-center mt-2">
+                      <CarouselPrevious className="relative inset-0 translate-y-0 left-0 mr-2" />
+                      <CarouselNext className="relative inset-0 translate-y-0 right-0" />
+                    </div>
+                  </Carousel>
+                </div>
+              ) : (
+                <p className="text-center text-gray-500 py-4">Não há itens entregues</p>
+              )}
+            </TabsContent>
+          </Tabs>
           
           <Separator />
           
@@ -214,7 +345,7 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({ order, open, on
               className="w-full" 
               onClick={handleUpdateStatus}
             >
-              {status === 'pending' && 'Iniciar Preparo'}
+              {status === 'pending' && 'Mandar p/ Cozinha'}
               {status === 'preparing' && 'Marcar como Pronto'}
               {status === 'ready' && 'Confirmar Entrega'}
             </Button>
