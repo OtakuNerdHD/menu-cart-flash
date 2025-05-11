@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -269,10 +268,9 @@ const ProgressiveRegistration = () => {
       // Configurando o redirecionamento URL para a aplicação
       const redirectUrl = window.location.origin + '/auth/callback';
       
-      // Enviar e-mail de confirmação via Supabase Auth
-      const { error } = await supabase.auth.signUp({
+      // Enviar e-mail de confirmação via Supabase Auth - apenas envio do link sem criar usuário completo
+      const { error } = await supabase.auth.signInWithOtp({
         email: formData.email,
-        password: 'temporary-password', // Senha temporária, será atualizada posteriormente
         options: {
           emailRedirectTo: redirectUrl
         }
@@ -382,24 +380,12 @@ const ProgressiveRegistration = () => {
         }
       }
 
-      // 3. Criar perfil no Supabase
-      const { error: profileError } = await supabase.from('profiles').upsert({
-        id: authData.user!.id,
-        username: formData.username,
-        name: `${formData.firstName} ${formData.lastName}`,
-        avatar_url: avatarUrl,
-        phone: formData.phone.replace(/\D/g, ''),
-        role: 'customer'
-      });
-
-      if (profileError) throw profileError;
-
-      // 4. Inserir na tabela users
-      const { error: userError } = await supabase.rpc('upsert_user', {
+      // 3. Usar a função RPC upsert_user para inserir na tabela users
+      const { data: userData, error: userError } = await supabase.rpc('upsert_user', {
         user_id: authData.user!.id,
         user_email: formData.email,
-        user_username: formData.username,
-        user_avatar_url: avatarUrl,
+        user_username: formData.username, 
+        user_avatar_url: avatarUrl || '',
         user_role: 'customer'
       });
 

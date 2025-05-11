@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -108,12 +109,12 @@ const KitchenManagement = () => {
             <div>
               <p className="font-medium">{productData.name}</p>
               <p className="text-sm text-gray-500">
-                R$ {productData.price.toFixed(2)} × {item.quantity}
+                R$ {parseFloat(productData.price.toString()).toFixed(2)} × {item.quantity}
               </p>
             </div>
           </div>
           <p className="font-medium">
-            R$ {(productData.price * item.quantity).toFixed(2)}
+            R$ {(parseFloat(productData.price.toString()) * item.quantity).toFixed(2)}
           </p>
         </div>
       );
