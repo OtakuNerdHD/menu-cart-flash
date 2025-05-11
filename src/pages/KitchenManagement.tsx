@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -79,24 +78,26 @@ const KitchenManagement = () => {
             // Processar os itens do pedido
             const items = Array.isArray(orderItemsData) ? orderItemsData.map(item => {
               const product = item.product || {};
-              // Verificar se product é um objeto
-              if (typeof product !== 'object' || product === null) {
-                return {
-                  name: "Produto não disponível",
-                  quantity: item.quantity || 1,
-                  price: item.price || 0,
-                  notes: item.notes || "",
-                  image_url: null
-                };
-              }
               
-              // Garantir que product é um objeto e acessar suas propriedades com segurança
+              // Verificar se product é um objeto e tem as propriedades necessárias
+              const productName = typeof product === 'object' && product !== null && 'name' in product 
+                ? String(product.name || "Produto não disponível") 
+                : "Produto não disponível";
+                
+              const productPrice = typeof product === 'object' && product !== null && 'price' in product 
+                ? Number(product.price || 0) 
+                : 0;
+                
+              const productImageUrl = typeof product === 'object' && product !== null && 'image_url' in product 
+                ? String(product.image_url || null) 
+                : null;
+              
               return {
-                name: product.name ? String(product.name) : "Produto não disponível",
+                name: productName,
                 quantity: item.quantity || 1,
-                price: item.price || (product.price ? Number(product.price) : 0),
+                price: productPrice,
                 notes: item.notes || "",
-                image_url: product.image_url ? String(product.image_url) : null
+                image_url: productImageUrl
               };
             }) : [];
 
@@ -122,11 +123,12 @@ const KitchenManagement = () => {
             
             // Garantir que address seja um objeto antes de acessar suas propriedades
             if (order.address && typeof order.address === 'object') {
+              const address = order.address;
               customerInfo = {
-                name: typeof order.address === 'object' && 'name' in order.address ? String(order.address.name || '') : '',
-                phone: typeof order.address === 'object' && 'phone' in order.address ? String(order.address.phone || '') : '',
-                address: typeof order.address === 'object' ? 
-                  `${String('street' in order.address ? order.address.street || '' : '')}, ${String('number' in order.address ? order.address.number || '' : '')} - ${String('neighborhood' in order.address ? order.address.neighborhood || '' : '')}, ${String('city' in order.address ? order.address.city || '' : '')} - ${String('state' in order.address ? order.address.state || '' : '')}` : ''
+                name: typeof address === 'object' && 'name' in address ? String(address.name || '') : '',
+                phone: typeof address === 'object' && 'phone' in address ? String(address.phone || '') : '',
+                address: typeof address === 'object' ? 
+                  `${String('street' in address ? address.street || '' : '')}, ${String('number' in address ? address.number || '' : '')} - ${String('neighborhood' in address ? address.neighborhood || '' : '')}, ${String('city' in address ? address.city || '' : '')} - ${String('state' in address ? address.state || '' : '')}` : ''
               };
             }
 
