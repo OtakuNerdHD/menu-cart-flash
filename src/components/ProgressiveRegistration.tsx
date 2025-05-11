@@ -266,11 +266,12 @@ const ProgressiveRegistration = () => {
 
     setIsLoading(true);
     try {
-      // Configurando o redirecionamento URL para a aplicação
-      const redirectUrl = window.location.origin + '/auth/callback';
+      // URL de callback para a aplicação
+      const redirectUrl = `${window.location.origin}/auth/callback`;
+      console.log("URL de redirecionamento:", redirectUrl);
       
-      // Enviar e-mail de confirmação via Supabase Auth - apenas envio do link sem criar usuário completo
-      const { error } = await supabase.auth.signInWithOtp({
+      // Enviar e-mail de confirmação via Supabase Auth (OTP - One Time Password)
+      const { data, error } = await supabase.auth.signInWithOtp({
         email: formData.email,
         options: {
           emailRedirectTo: redirectUrl
@@ -279,6 +280,7 @@ const ProgressiveRegistration = () => {
       
       if (error) throw error;
       
+      // Se não houver erro, o link foi enviado com sucesso
       setLinkSent(true);
       toast({
         title: "E-mail de confirmação enviado",
@@ -302,7 +304,7 @@ const ProgressiveRegistration = () => {
     if (step === 4 && linkSent) {
       // Configurar um listener para verificar quando o usuário se autenticar
       const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log("Auth event:", event);
+        console.log("Auth event:", event, session);
         if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
           toast({
             title: "E-mail confirmado",
@@ -347,7 +349,27 @@ const ProgressiveRegistration = () => {
   const finalizeRegistration = async () => {
     setIsLoading(true);
     try {
-      // 1. Criar usuário no Auth com os dados completos
+      let avatarUrl = '';
+      
+      // 1. Fazer upload da imagem se houver
+      if (formData.avatar) {
+        const fileExt = formData.avatar.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `avatars/${fileName}`;
+
+        const { error: uploadError, data } = await supabase.storage
+          .from('profiles')
+          .upload(filePath, formData.avatar);
+
+        if (!uploadError && data) {
+          const { data: urlData } = supabase.storage
+            .from('profiles')
+            .getPublicUrl(filePath);
+          avatarUrl = urlData.publicUrl;
+        }
+      }
+
+      // 2. Criar usuário no Auth com os dados completos
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -356,42 +378,40 @@ const ProgressiveRegistration = () => {
             first_name: formData.firstName,
             last_name: formData.lastName,
             username: formData.username,
-            role: 'customer' // Todos os usuários registrados pelo form são clientes
-          }
+            role: 'customer',
+            avatar_url: avatarUrl
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`
         }
       });
 
       if (authError) throw authError;
 
-      // 2. Fazer upload da imagem se houver
-      let avatarUrl = '';
-      if (formData.avatar) {
-        const fileExt = formData.avatar.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-        const filePath = `avatars/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
+      if (authData.user) {
+        // 3. Criar perfil para o usuário
+        const { error: profileError } = await supabase
           .from('profiles')
-          .upload(filePath, formData.avatar);
+          .insert({
+            id: authData.user.id,
+            name: `${formData.firstName} ${formData.lastName}`,
+            username: formData.username,
+            role: 'customer',
+            avatar_url: avatarUrl
+          });
 
-        if (!uploadError) {
-          const { data } = supabase.storage
-            .from('profiles')
-            .getPublicUrl(filePath);
-          avatarUrl = data.publicUrl;
-        }
+        if (profileError) throw profileError;
+
+        // 4. Usar a função RPC para inserir na tabela users
+        const { error: userError } = await supabase.rpc('upsert_user', {
+          user_id: authData.user.id,
+          user_email: formData.email,
+          user_username: formData.username, 
+          user_avatar_url: avatarUrl,
+          user_role: 'customer'
+        });
+
+        if (userError) throw userError;
       }
-
-      // 3. Usar a função RPC upsert_user para inserir na tabela users
-      const { data: userData, error: userError } = await supabase.rpc('upsert_user', {
-        user_id: authData.user!.id,
-        user_email: formData.email,
-        user_username: formData.username, 
-        user_avatar_url: avatarUrl || '',
-        user_role: 'customer'
-      });
-
-      if (userError) throw userError;
 
       toast({
         title: "Cadastro realizado com sucesso",

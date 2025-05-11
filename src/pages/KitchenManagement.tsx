@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -119,6 +118,13 @@ const KitchenManagement = () => {
         </div>
       );
     });
+  };
+
+  const formatPrice = (price: string | number): number => {
+    if (typeof price === 'number') return price;
+    // Converte string para número, garantindo que seja um número
+    const numericPrice = parseFloat(price.replace(/[^\d,.]/g, '').replace(',', '.'));
+    return isNaN(numericPrice) ? 0 : numericPrice;
   };
 
   const filteredOrders = orders.filter(order => {

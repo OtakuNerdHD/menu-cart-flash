@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -101,7 +100,6 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      // Abrir janela de login Google para seleção de conta
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
