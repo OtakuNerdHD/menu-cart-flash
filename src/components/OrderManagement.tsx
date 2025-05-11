@@ -41,6 +41,48 @@ const getStatusText = (status) => {
   }
 };
 
+// Função auxiliar para gerenciar o tipo de produtos
+const ensureProductData = (product: any) => {
+  if (!product) return null;
+  return {
+    name: typeof product === 'object' && product.name ? product.name : '',
+    price: typeof product === 'object' && product.price ? product.price : 0,
+    image_url: typeof product === 'object' && product.image_url ? product.image_url : ''
+  };
+};
+
+const renderOrderItems = (items: any[]) => {
+  return items.map((item, index) => {
+    const productData = ensureProductData(item.product);
+    if (!productData) return null;
+    
+    return (
+      <div key={index} className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <div className="h-10 w-10 bg-gray-200 rounded-md overflow-hidden">
+            {productData.image_url && (
+              <img 
+                src={productData.image_url} 
+                alt={productData.name} 
+                className="h-full w-full object-cover"
+              />
+            )}
+          </div>
+          <div>
+            <p className="font-medium">{productData.name}</p>
+            <p className="text-sm text-gray-500">
+              R$ {productData.price.toFixed(2)} × {item.quantity}
+            </p>
+          </div>
+        </div>
+        <p className="font-medium">
+          R$ {(productData.price * item.quantity).toFixed(2)}
+        </p>
+      </div>
+    );
+  });
+};
+
 const OrderManagement = () => {
   const { currentUser } = useUserSwitcher();
   const [orders, setOrders] = useState([]);
@@ -329,12 +371,7 @@ const OrderManagement = () => {
                     <div>
                       <h4 className="text-sm font-medium text-gray-500 mb-2">Itens</h4>
                       <ul className="space-y-2">
-                        {order.items.map((item, index) => (
-                          <li key={index} className="flex justify-between text-sm">
-                            <span>{item.quantity}x {item.name}</span>
-                            <span>R$ {(item.price * item.quantity).toFixed(2)}</span>
-                          </li>
-                        ))}
+                        {renderOrderItems(order.items)}
                       </ul>
                     </div>
                     

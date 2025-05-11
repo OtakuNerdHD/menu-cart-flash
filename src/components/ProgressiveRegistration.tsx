@@ -347,7 +347,7 @@ const ProgressiveRegistration = () => {
   const finalizeRegistration = async () => {
     setIsLoading(true);
     try {
-      // 1. Criar usuário no Auth
+      // 1. Criar usuário no Auth com os dados completos
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -382,24 +382,28 @@ const ProgressiveRegistration = () => {
         }
       }
 
-      // 3. Criar/atualizar perfil com todos os dados
-      await supabase.from('profiles').upsert({
+      // 3. Criar perfil no Supabase
+      const { error: profileError } = await supabase.from('profiles').upsert({
         id: authData.user!.id,
         username: formData.username,
         name: `${formData.firstName} ${formData.lastName}`,
         avatar_url: avatarUrl,
         phone: formData.phone.replace(/\D/g, ''),
-        role: 'customer',
-        address: {
-          street: formData.street,
-          number: formData.number,
-          complement: formData.complement,
-          neighborhood: formData.neighborhood,
-          city: formData.city,
-          state: formData.state,
-          zipcode: formData.zipCode.replace(/\D/g, '')
-        }
+        role: 'customer'
       });
+
+      if (profileError) throw profileError;
+
+      // 4. Inserir na tabela users
+      const { error: userError } = await supabase.rpc('upsert_user', {
+        user_id: authData.user!.id,
+        user_email: formData.email,
+        user_username: formData.username,
+        user_avatar_url: avatarUrl,
+        user_role: 'customer'
+      });
+
+      if (userError) throw userError;
 
       toast({
         title: "Cadastro realizado com sucesso",
