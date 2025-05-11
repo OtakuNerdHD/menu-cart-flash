@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -301,6 +302,7 @@ const ProgressiveRegistration = () => {
     if (step === 4 && linkSent) {
       // Configurar um listener para verificar quando o usuário se autenticar
       const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log("Auth event:", event);
         if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
           toast({
             title: "E-mail confirmado",
