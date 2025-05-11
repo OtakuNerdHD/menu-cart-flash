@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, EyeIcon, EyeOffIcon, CheckCircle, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
@@ -48,8 +47,7 @@ const ProgressiveRegistration = () => {
   const [emailAvailable, setEmailAvailable] = useState<boolean | null>(null);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [isValidCpf, setIsValidCpf] = useState<boolean | null>(null);
-  const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState('');
+  const [linkSent, setLinkSent] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState({
     hasLowerCase: false,
     hasUpperCase: false,
@@ -268,21 +266,24 @@ const ProgressiveRegistration = () => {
 
     setIsLoading(true);
     try {
+      // Configurando o redirecionamento URL para a aplicação
+      const redirectUrl = window.location.origin + '/auth/callback';
+      
       // Enviar e-mail de confirmação via Supabase Auth
       const { error } = await supabase.auth.signUp({
         email: formData.email,
         password: 'temporary-password', // Senha temporária, será atualizada posteriormente
         options: {
-          emailRedirectTo: 'http://localhost:5173/auth/callback'
+          emailRedirectTo: redirectUrl
         }
       });
       
       if (error) throw error;
       
-      setOtpSent(true);
+      setLinkSent(true);
       toast({
-        title: "E-mail enviado com sucesso",
-        description: `Um link de confirmação foi enviado para ${formData.email}. Por favor, verifique sua caixa de entrada.`,
+        title: "E-mail de confirmação enviado",
+        description: `Um link de confirmação foi enviado para ${formData.email}. Por favor, verifique sua caixa de entrada e clique no link para continuar.`,
       });
 
     } catch (error: any) {
@@ -296,6 +297,29 @@ const ProgressiveRegistration = () => {
       setIsLoading(false);
     }
   };
+
+  // Verificar se o usuário confirmou o e-mail
+  useEffect(() => {
+    if (step === 4 && linkSent) {
+      // Configurar um listener para verificar quando o usuário se autenticar
+      const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+          toast({
+            title: "E-mail confirmado",
+            description: "Seu e-mail foi confirmado com sucesso!",
+          });
+          
+          // Avançar para a próxima etapa
+          setStep(5);
+        }
+      });
+
+      // Limpar o listener quando o componente desmontar
+      return () => {
+        authListener.subscription.unsubscribe();
+      };
+    }
+  }, [step, linkSent]);
 
   // Carregar imagem do avatar
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -382,7 +406,7 @@ const ProgressiveRegistration = () => {
         description: "Seu cadastro foi concluído! Faça login para continuar.",
       });
 
-      navigate('/');
+      navigate('/login');
     } catch (error: any) {
       console.error('Erro no cadastro:', error);
       toast({
@@ -432,7 +456,7 @@ const ProgressiveRegistration = () => {
     }
     else if (name === 'email' && value !== formData.email) {
       setFormData(prev => ({ ...prev, [name]: value }));
-      setOtpSent(false);
+      setLinkSent(false);
       if (isValidEmail(value)) {
         checkEmailAvailability(value);
       } else {
@@ -491,13 +515,12 @@ const ProgressiveRegistration = () => {
       }
     }
     else if (step === 4) {
-      if (!otpSent) {
+      if (!linkSent) {
         sendConfirmationLink();
         return;
       }
       
-      // Neste ponto, não verificamos o código OTP, pois o usuário clicará no link enviado por e-mail
-      setStep(5);
+      // A verificação de e-mail é feita via efeito usando supabase.auth.onAuthStateChange
       return;
     }
     else if (step === 5) {
@@ -755,11 +778,11 @@ const ProgressiveRegistration = () => {
                   onChange={handleInputChange}
                   placeholder="seu@email.com"
                   required
-                  disabled={otpSent}
+                  disabled={linkSent}
                 />
               </div>
               
-              {otpSent ? (
+              {linkSent ? (
                 <div className="space-y-2">
                   <p className="text-sm text-center">
                     Um link de confirmação foi enviado para <strong>{formData.email}</strong>
@@ -968,7 +991,7 @@ const ProgressiveRegistration = () => {
   };
 
   const getNextButtonLabel = () => {
-    if (step === 4 && !otpSent) return "Enviar e-mail";
+    if (step === 4 && !linkSent) return "Enviar link";
     if (step === 7) return "Concluir cadastro";
     return "Próximo";
   };
