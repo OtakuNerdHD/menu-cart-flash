@@ -22,7 +22,7 @@ const KitchenManagement = () => {
     if (!product) return null;
     return {
       name: typeof product === 'object' && product.name ? product.name : '',
-      price: typeof product === 'object' && product.price ? parseFloat(product.price) : 0, // Convertendo explicitamente para número
+      price: typeof product === 'object' && product.price ? parseFloat(String(product.price)) : 0, // Convertendo explicitamente para número
       image_url: typeof product === 'object' && product.image_url ? product.image_url : ''
     };
   };
@@ -212,4 +212,3 @@ const KitchenManagement = () => {
 };
 
 export default KitchenManagement;
-

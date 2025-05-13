@@ -40,6 +40,9 @@ const MultipleImageUpload: React.FC<MultipleImageUploadProps> = ({
     }
     
     setIsUploading(true);
+    
+    // Armazenar temporariamente os URLs de objeto para revogação posterior
+    const tempUrls: string[] = [];
     const newPreviews = [...previews];
     const uploadPromises = [];
     
@@ -58,45 +61,36 @@ const MultipleImageUpload: React.FC<MultipleImageUploadProps> = ({
         continue;
       }
       
-      // Mostrar preview local
+      // Criar preview temporário
       const objectUrl = URL.createObjectURL(file);
+      tempUrls.push(objectUrl);
       newPreviews.push(objectUrl);
       
-      // Criar função de upload
+      // Criar função de upload para o bucket do Supabase
       const uploadFunction = async () => {
         try {
-          // Tentar fazer upload para o Supabase Storage se disponível
-          let imageUrl = '';
-          try {
-            // Criar um nome de arquivo único
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-            const filePath = `product-images/${fileName}`;
+          // Criar um nome de arquivo único
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+          const filePath = `product-images/${fileName}`;
+          
+          // Upload para o Supabase Storage
+          const { data, error } = await supabase
+            .storage
+            .from('images')
+            .upload(filePath, file);
             
-            // Upload para o Supabase Storage
-            const { data, error } = await supabase
-              .storage
-              .from('images')
-              .upload(filePath, file);
-              
-            if (error) {
-              throw new Error(error.message);
-            }
-            
-            // Obter URL pública da imagem
-            const { data: publicUrl } = supabase
-              .storage
-              .from('images')
-              .getPublicUrl(filePath);
-              
-            imageUrl = publicUrl?.publicUrl || '';
-          } catch (err) {
-            console.error('Erro no upload para o Supabase:', err);
-            // Fallback para URL local temporária
-            imageUrl = objectUrl;
+          if (error) {
+            throw new Error(error.message);
           }
           
-          return imageUrl;
+          // Obter URL pública da imagem
+          const { data: publicUrl } = supabase
+            .storage
+            .from('images')
+            .getPublicUrl(filePath);
+            
+          return publicUrl?.publicUrl || '';
         } catch (error) {
           console.error('Erro no upload:', error);
           toast({
@@ -111,21 +105,24 @@ const MultipleImageUpload: React.FC<MultipleImageUploadProps> = ({
       uploadPromises.push(uploadFunction());
     }
     
-    // Atualizar previews
+    // Atualizar previews temporários
     setPreviews(newPreviews);
     
     // Executar todos os uploads
     try {
+      // Obter URLs permanentes do Supabase
       const results = await Promise.all(uploadPromises);
       const validUrls = results.filter(url => url !== null) as string[];
       
-      // Se temos URLs do Supabase, usamos elas, senão mantemos as locais temporárias
+      // Revogar as URLs temporárias
+      tempUrls.forEach(url => URL.revokeObjectURL(url));
+      
+      // Atualizar previews com URLs permanentes
       if (validUrls.length > 0) {
-        // Combinar URLs anteriores com novas
-        const allUrls = [...previews.slice(0, previews.length - files.length), ...validUrls];
-        onImagesUpload(allUrls);
-      } else {
-        onImagesUpload(newPreviews);
+        // Substituir as URLs temporárias pelos URLs permanentes, mantendo as URLs antigas
+        const permanentPreviews = [...previews.slice(0, previews.length - tempUrls.length), ...validUrls];
+        setPreviews(permanentPreviews);
+        onImagesUpload(permanentPreviews);
       }
       
       toast({

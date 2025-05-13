@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -80,17 +79,25 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
   
   const images = getProductImages(product);
   
-  // Vamos usar a coluna "ingredients" do produto, ou separar de nutritional_info se isso ainda existir no objeto
+  // Obter a lista de ingredientes do produto
   let ingredientsList: string[] = [];
   
   if (product.ingredients) {
     // Se o produto já tem ingredientes como string, transformamos em um array
-    ingredientsList = product.ingredients.split(',').map(item => item.trim());
+    ingredientsList = typeof product.ingredients === 'string'
+      ? product.ingredients.split(',').map(item => item.trim()) 
+      : Array.isArray(product.ingredients)
+        ? product.ingredients
+        : [];
   } else if (product.nutritional_info?.ingredients) {
     // Caso ainda esteja usando o formato antigo, pegamos dos dados nutricionais
-    ingredientsList = product.nutritional_info.ingredients;
-  } else {
-    // Fallback
+    ingredientsList = Array.isArray(product.nutritional_info.ingredients)
+      ? product.nutritional_info.ingredients
+      : [];
+  }
+  
+  // Se não tiver ingredientes, mostrar mensagem padrão
+  if (ingredientsList.length === 0) {
     ingredientsList = ['Sem informações de ingredientes'];
   }
 

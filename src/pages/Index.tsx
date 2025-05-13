@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import MenuGrid from '@/components/MenuGrid';
 import CategoryFilter from '@/components/CategoryFilter';
@@ -27,20 +26,26 @@ const Index = () => {
           // Em caso de erro, mantém os produtos locais como fallback
         } else if (data && data.length > 0) {
           // Se encontrar dados no Supabase, use-os
-          // Adicionando restaurant_id padrão se não existir
-          const productsWithRestaurantId = data.map((product: any) => {
-            // Check if product already has restaurant_id
-            if ('restaurant_id' in product) {
-              return product as Product;
-            }
-            // Otherwise add it
+          // Processando os dados recebidos para garantir compatibilidade
+          const processedProducts = data.map((product: any) => {
             return {
               ...product,
-              restaurant_id: 1, // Definindo um valor padrão
+              // Garantir que restaurant_id existe
+              restaurant_id: product.restaurant_id || 1,
+              // Se os ingredientes existirem, garantir que estejam no formato adequado
+              nutritional_info: {
+                ...product.nutritional_info,
+                // Se já temos ingredientes na coluna correta, usar como fallback para nutritional_info também
+                ingredients: product.ingredients 
+                  ? (typeof product.ingredients === 'string' 
+                      ? product.ingredients.split(',').map((i: string) => i.trim()) 
+                      : product.ingredients)
+                  : (product.nutritional_info?.ingredients || [])
+              }
             } as Product;
           });
           
-          setProducts(productsWithRestaurantId);
+          setProducts(processedProducts);
         } else {
           console.log('Nenhum produto encontrado no Supabase, usando dados locais.');
           // Se não encontrar produtos, mantenha os produtos locais

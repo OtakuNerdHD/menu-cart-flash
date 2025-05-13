@@ -125,6 +125,24 @@ const ProductManagement = () => {
   
   const handleEditProduct = (product: Product) => {
     setCurrentProduct(product);
+    
+    // Verificar se o produto tem ingredientes na coluna apropriada
+    let ingredientsText = '';
+    
+    if (product.ingredients) {
+      // Se já estiver usando a coluna de ingredientes
+      ingredientsText = typeof product.ingredients === 'string' 
+        ? product.ingredients 
+        : Array.isArray(product.ingredients) 
+          ? product.ingredients.join(', ') 
+          : '';
+    } else if (product.nutritional_info?.ingredients) {
+      // Fallback para compatibilidade com dados antigos
+      ingredientsText = Array.isArray(product.nutritional_info.ingredients) 
+        ? product.nutritional_info.ingredients.join(', ') 
+        : '';
+    }
+    
     setFormState({
       name: product.name,
       price: product.price.toString(),
@@ -133,8 +151,9 @@ const ProductManagement = () => {
       available: product.available !== false,
       featured: product.featured || false,
       images: product.image_url ? [product.image_url] : [''],
-      ingredients: (product.nutritional_info?.ingredients || []).join(', ')
+      ingredients: ingredientsText
     });
+    
     setShowAddEditDialog(true);
   };
   
@@ -201,6 +220,9 @@ const ProductManagement = () => {
       return;
     }
     
+    // Preparar os ingredientes como string para salvar na coluna ingredients
+    const ingredientsString = formState.ingredients.trim();
+    
     const productData: Product = {
       id: currentProduct ? currentProduct.id : Date.now(),
       name: formState.name,
@@ -211,8 +233,9 @@ const ProductManagement = () => {
       featured: formState.featured,
       image_url: formState.images[0] || '/placeholder.svg',
       restaurant_id: 1, // Definindo restaurant_id padrão como 1
-      nutritional_info: {
-        ingredients: formState.ingredients.split(',').map(i => i.trim()).filter(Boolean)
+      ingredients: ingredientsString, // Usando a coluna ingredients
+      nutritional_info: { // Mantendo para compatibilidade
+        ingredients: ingredientsString.split(',').map(i => i.trim()).filter(Boolean)
       }
     };
     
@@ -230,7 +253,8 @@ const ProductManagement = () => {
             available: productData.available,
             featured: productData.featured,
             image_url: productData.image_url,
-            nutritional_info: productData.nutritional_info,
+            ingredients: productData.ingredients, // Salvar ingredientes na coluna correta
+            nutritional_info: productData.nutritional_info, // Manter para compatibilidade
             restaurant_id: productData.restaurant_id,
             updated_at: new Date().toISOString()
           })
@@ -264,7 +288,8 @@ const ProductManagement = () => {
             available: productData.available,
             featured: productData.featured,
             image_url: productData.image_url,
-            nutritional_info: productData.nutritional_info,
+            ingredients: productData.ingredients, // Salvar ingredientes na coluna correta
+            nutritional_info: productData.nutritional_info, // Manter para compatibilidade
             restaurant_id: productData.restaurant_id
           }])
           .select();

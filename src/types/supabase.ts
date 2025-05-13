@@ -1,3 +1,4 @@
+
 // Tipos personalizados para trabalhar com o Supabase
 
 // Tipo para usuários/perfis
@@ -70,7 +71,7 @@ export interface Product {
   review_count?: number;
   images?: string[];
   gallery?: string[];
-  ingredients?: string;
+  ingredients?: string; // Adicionando o campo de ingredientes como string
   note_hint?: string;
   thumbnail?: string;
 }

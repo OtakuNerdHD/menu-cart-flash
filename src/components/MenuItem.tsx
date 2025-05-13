@@ -24,13 +24,30 @@ const MenuItem = ({ item }: MenuItemProps) => {
       imageUrl: item.image_url,
       image: item.image_url, // Para compatibilidade
       description: item.description,
-      category: item.category
+      category: item.category,
+      ingredients: item.ingredients // Adicionando os ingredientes ao carrinho
     });
   };
   
   const handleOpenDetails = () => {
     setShowDetails(true);
   };
+
+  // Extrair uma descrição curta dos ingredientes para exibir no card
+  let shortDescription = item.description || '';
+  
+  // Se não tiver descrição mas tiver ingredientes, usar os ingredientes como descrição
+  if (!shortDescription && item.ingredients) {
+    shortDescription = `Ingredientes: ${typeof item.ingredients === 'string' ? item.ingredients : ''}`;
+  } else if (!shortDescription && item.nutritional_info?.ingredients) {
+    // Fallback para compatibilidade
+    const ingredients = Array.isArray(item.nutritional_info.ingredients) 
+      ? item.nutritional_info.ingredients.join(', ') 
+      : '';
+    if (ingredients) {
+      shortDescription = `Ingredientes: ${ingredients}`;
+    }
+  }
 
   return (
     <>
@@ -52,7 +69,7 @@ const MenuItem = ({ item }: MenuItemProps) => {
           <CardDescription className="text-xs">R$ {item.price.toFixed(2)}</CardDescription>
         </CardHeader>
         <CardContent className="pb-1 pt-0 px-3">
-          <p className="text-gray-600 text-xs line-clamp-1">{item.description}</p>
+          <p className="text-gray-600 text-xs line-clamp-1">{shortDescription}</p>
         </CardContent>
         <CardFooter className="flex justify-between px-3 py-2">
           <Button 
