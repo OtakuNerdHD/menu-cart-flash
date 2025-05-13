@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,7 +22,7 @@ const KitchenManagement = () => {
     if (!product) return null;
     return {
       name: typeof product === 'object' && product.name ? product.name : '',
-      price: typeof product === 'object' && product.price ? parseFloat(product.price) : 0, // Convertendo para número
+      price: typeof product === 'object' && product.price ? parseFloat(product.price) : 0, // Convertendo explicitamente para número
       image_url: typeof product === 'object' && product.image_url ? product.image_url : ''
     };
   };
@@ -211,3 +212,4 @@ const KitchenManagement = () => {
 };
 
 export default KitchenManagement;
+
