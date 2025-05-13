@@ -198,4 +198,5 @@ export interface MenuItem {
   category?: string;
   quantity?: number;
   notes?: string;
+  ingredients?: string; // Adicionando o campo de ingredientes para o MenuItem
 }
