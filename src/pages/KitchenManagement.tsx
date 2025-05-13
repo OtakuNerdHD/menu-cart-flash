@@ -21,7 +21,7 @@ const KitchenManagement = () => {
     if (!product) return null;
     return {
       name: typeof product === 'object' && product.name ? product.name : '',
-      price: typeof product === 'object' && product.price ? product.price : 0,
+      price: typeof product === 'object' && product.price ? parseFloat(product.price) : 0, // Convertendo para número
       image_url: typeof product === 'object' && product.image_url ? product.image_url : ''
     };
   };
@@ -108,12 +108,12 @@ const KitchenManagement = () => {
             <div>
               <p className="font-medium">{productData.name}</p>
               <p className="text-sm text-gray-500">
-                R$ {parseFloat(productData.price.toString()).toFixed(2)} × {item.quantity}
+                R$ {productData.price.toFixed(2)} × {item.quantity}
               </p>
             </div>
           </div>
           <p className="font-medium">
-            R$ {(parseFloat(productData.price.toString()) * item.quantity).toFixed(2)}
+            R$ {(productData.price * item.quantity).toFixed(2)}
           </p>
         </div>
       );

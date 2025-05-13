@@ -79,7 +79,20 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
   };
   
   const images = getProductImages(product);
-  const ingredients = product.nutritional_info?.ingredients || ['Sem informações de ingredientes'];
+  
+  // Vamos usar a coluna "ingredients" do produto, ou separar de nutritional_info se isso ainda existir no objeto
+  let ingredientsList: string[] = [];
+  
+  if (product.ingredients) {
+    // Se o produto já tem ingredientes como string, transformamos em um array
+    ingredientsList = product.ingredients.split(',').map(item => item.trim());
+  } else if (product.nutritional_info?.ingredients) {
+    // Caso ainda esteja usando o formato antigo, pegamos dos dados nutricionais
+    ingredientsList = product.nutritional_info.ingredients;
+  } else {
+    // Fallback
+    ingredientsList = ['Sem informações de ingredientes'];
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -121,7 +134,7 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
           <div className="mb-2">
             <h3 className="font-medium text-base mb-1">Ingredientes</h3>
             <ul className="list-disc pl-4">
-              {ingredients.map((ingredient, index) => (
+              {ingredientsList.map((ingredient, index) => (
                 <li key={index} className="text-gray-700 text-xs">{ingredient}</li>
               ))}
             </ul>
