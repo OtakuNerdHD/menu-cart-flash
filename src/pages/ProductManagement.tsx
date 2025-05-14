@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -36,13 +37,32 @@ const ProductManagement = () => {
   const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
     queryKey: ['categories'],
     queryFn: async () => {
+      // Mudança aqui: "categories" não consta nas tabelas do Supabase
+      // Usando uma busca com filtro em "products" para obter categorias distintas 
       const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name');
+        .from('products')
+        .select('category')
+        .not('category', 'is', null)
+        .order('category');
         
       if (error) throw error;
-      return data as Category[];
+      
+      // Transformando resultados em formato de categorias distintas
+      const uniqueCategories: Category[] = [];
+      const categorySet = new Set<string>();
+      
+      data.forEach(item => {
+        if (item.category && !categorySet.has(item.category)) {
+          categorySet.add(item.category);
+          uniqueCategories.push({
+            id: uniqueCategories.length + 1,
+            name: item.category,
+            restaurant_id: 1
+          });
+        }
+      });
+      
+      return uniqueCategories;
     }
   });
 
@@ -69,16 +89,32 @@ const ProductManagement = () => {
   // Mutação para criar categoria
   const createCategoryMutation = useMutation({
     mutationFn: async (categoryName: string) => {
+      // Em vez de inserir em uma tabela "categories", 
+      // criaremos um produto com essa categoria como exemplo
       const { data, error } = await supabase
-        .from('categories')
-        .insert([{ name: categoryName, restaurant_id: 1 }])
+        .from('products')
+        .insert([{ 
+          name: `Exemplo de ${categoryName}`, 
+          category: categoryName, 
+          price: 0,
+          restaurant_id: 1,
+          available: false,
+          description: 'Categoria criada automaticamente' 
+        }])
         .select();
         
       if (error) throw error;
-      return data[0];
+      
+      // Retorna um objeto de categoria simulado
+      return {
+        id: Date.now(),
+        name: categoryName,
+        restaurant_id: 1
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
       setNewCategory('');
       toast({
         title: "Categoria criada",
@@ -223,7 +259,9 @@ const ProductManagement = () => {
     setFormData(prev => ({ 
       ...prev, 
       image_url: urls[0] || prev.image_url, // A primeira imagem como principal
-      images: urls // Todas as imagens no array
+      images: urls, // Todas as imagens no array
+      // Adiciona também como thumbnail
+      thumbnail: urls[0] || prev.image_url
     }));
   };
 
@@ -323,9 +361,11 @@ const ProductManagement = () => {
                     </div>
                     <div>
                       <Label htmlFor="category">Categoria</Label>
-                      <Select onValueChange={(value) => handleSelectChange('category', value)}>
+                      <Select 
+                        value={formData.category || ''} 
+                        onValueChange={(value) => handleSelectChange('category', value)}>
                         <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Selecione uma categoria" defaultValue={formData.category || ''} />
+                          <SelectValue placeholder="Selecione uma categoria" />
                         </SelectTrigger>
                         <SelectContent>
                           {categoriesLoading ? (
@@ -354,8 +394,8 @@ const ProductManagement = () => {
                         onCheckedChange={(checked) => handleSwitchChange('featured', checked)}
                       />
                     </div>
-                    <Button type="submit" disabled={productMutation.isLoading}>
-                      {productMutation.isLoading
+                    <Button type="submit" disabled={productMutation.isPending}>
+                      {productMutation.isPending
                         ? 'Salvando...'
                         : selectedProduct
                         ? 'Atualizar Produto'
@@ -366,9 +406,9 @@ const ProductManagement = () => {
                         type="button"
                         variant="destructive"
                         onClick={handleDeleteProduct}
-                        disabled={deleteProductMutation.isLoading}
+                        disabled={deleteProductMutation.isPending}
                       >
-                        {deleteProductMutation.isLoading ? 'Excluindo...' : 'Excluir Produto'}
+                        {deleteProductMutation.isPending ? 'Excluindo...' : 'Excluir Produto'}
                       </Button>
                     )}
                     {selectedProduct && (
@@ -380,7 +420,7 @@ const ProductManagement = () => {
                 </div>
                 <div>
                   <h3 className="text-xl font-semibold mb-2">Imagens do Produto</h3>
-                  <MultipleImageUpload onUpload={handleImageUpload} />
+                  <MultipleImageUpload onUploadComplete={handleImageUpload} />
                   {formData.image_url && (
                     <img
                       src={formData.image_url}
@@ -400,8 +440,8 @@ const ProductManagement = () => {
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value)}
                 />
-                <Button onClick={handleAddCategory} disabled={createCategoryMutation.isLoading}>
-                  {createCategoryMutation.isLoading ? 'Adicionando...' : 'Adicionar'}
+                <Button onClick={handleAddCategory} disabled={createCategoryMutation.isPending}>
+                  {createCategoryMutation.isPending ? 'Adicionando...' : 'Adicionar'}
                 </Button>
               </div>
               <ul>

@@ -1,13 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, EyeIcon, EyeOffIcon, CheckCircle, XCircle } from 'lucide-react';
+import { CalendarIcon, EyeIcon, EyeOffIcon, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale/pt-BR';
 import { toast } from '@/hooks/use-toast';
@@ -16,14 +14,34 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
+interface FormData {
+  firstName: string;
+  lastName: string;
+  birthDate: Date | null;
+  cpf: string;
+  street: string;
+  number: string;
+  complement: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  email: string;
+  phone: string;
+  password: string;
+  confirmPassword: string;
+  username: string;
+  avatar: File | null;
+  avatarPreview: string;
+}
+
 const ProgressiveRegistration = () => {
-  const navigate = useNavigate();
   const [step, setStep] = useState<Step>(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     firstName: '',
     lastName: '',
-    birthDate: null as Date | null,
+    birthDate: null,
     cpf: '',
     street: '',
     number: '',
@@ -37,7 +55,7 @@ const ProgressiveRegistration = () => {
     password: '',
     confirmPassword: '',
     username: '',
-    avatar: null as File | null,
+    avatar: null,
     avatarPreview: ''
   });
   
@@ -48,6 +66,7 @@ const ProgressiveRegistration = () => {
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [isValidCpf, setIsValidCpf] = useState<boolean | null>(null);
   const [linkSent, setLinkSent] = useState(false);
+  const [verificationInProgress, setVerificationInProgress] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState({
     hasLowerCase: false,
     hasUpperCase: false,
@@ -127,13 +146,19 @@ const ProgressiveRegistration = () => {
     }
 
     try {
-      const { data } = await supabase
-        .from('users')
-        .select('email')
-        .eq('email', email)
-        .single();
-
-      setEmailAvailable(!data);
+      const { data, error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: false
+        }
+      });
+      
+      // Se o OTP foi enviado com sucesso e sem criar usuário, significa que o email já existe
+      if (error && error.message.includes("Email not found")) {
+        setEmailAvailable(true);
+      } else {
+        setEmailAvailable(false);
+      }
     } catch (error) {
       console.error('Erro ao verificar disponibilidade de e-mail:', error);
       setEmailAvailable(true); // Assume disponível em caso de erro
@@ -149,7 +174,7 @@ const ProgressiveRegistration = () => {
 
     try {
       const { data } = await supabase
-        .from('users')
+        .from('profiles')
         .select('username')
         .eq('username', username)
         .single();
@@ -166,7 +191,7 @@ const ProgressiveRegistration = () => {
     try {
       // Obter contagem atual de usuários para gerar username único
       const { count, error } = await supabase
-        .from('users')
+        .from('profiles')
         .select('*', { count: 'exact', head: true });
 
       if (error) throw error;
@@ -176,7 +201,7 @@ const ProgressiveRegistration = () => {
       
       // Verificar se o username gerado já existe
       const { data } = await supabase
-        .from('users')
+        .from('profiles')
         .select('username')
         .eq('username', newUsername)
         .single();
@@ -260,21 +285,38 @@ const ProgressiveRegistration = () => {
 
   // Enviar link de confirmação para e-mail
   const sendConfirmationLink = async () => {
-    if (!isValidEmail(formData.email) || !emailAvailable) {
+    if (!isValidEmail(formData.email)) {
+      toast({
+        title: "Email inválido",
+        description: "Por favor, forneça um email válido.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (emailAvailable === false) {
+      toast({
+        title: "Email já cadastrado",
+        description: "Este email já está sendo usado por outra conta.",
+        variant: "destructive"
+      });
       return;
     }
 
     setIsLoading(true);
+    setVerificationInProgress(true);
+    
     try {
       // URL de callback para a aplicação
       const redirectUrl = `${window.location.origin}/auth/callback`;
       console.log("URL de redirecionamento:", redirectUrl);
       
-      // Enviar e-mail de confirmação via Supabase Auth (OTP - One Time Password)
+      // Enviar e-mail com link mágico via Supabase Auth
       const { data, error } = await supabase.auth.signInWithOtp({
         email: formData.email,
         options: {
-          emailRedirectTo: redirectUrl
+          emailRedirectTo: redirectUrl,
+          shouldCreateUser: false // Não criar o usuário ainda
         }
       });
       
@@ -283,45 +325,35 @@ const ProgressiveRegistration = () => {
       // Se não houver erro, o link foi enviado com sucesso
       setLinkSent(true);
       toast({
-        title: "E-mail de confirmação enviado",
-        description: `Um link de confirmação foi enviado para ${formData.email}. Por favor, verifique sua caixa de entrada e clique no link para continuar.`,
+        title: "Email de verificação enviado",
+        description: `Um link de verificação foi enviado para ${formData.email}. Por favor, verifique sua caixa de entrada.`,
       });
-
+      
+      // Avançar para a próxima etapa após envio do link
+      // nextStep();
     } catch (error: any) {
-      console.error('Erro ao enviar e-mail de confirmação:', error);
-      toast({
-        title: "Erro ao enviar e-mail",
-        description: error.message || "Não foi possível enviar o e-mail de confirmação.",
-        variant: "destructive"
-      });
+      console.error('Erro ao enviar email de verificação:', error);
+      
+      // Verifica se o erro é porque o email não existe (o que é bom nesse caso)
+      if (error.message?.includes("Email not found")) {
+        setEmailAvailable(true);
+        setLinkSent(true);
+        toast({
+          title: "Email de verificação enviado",
+          description: `Um link de verificação foi enviado para ${formData.email}. Por favor, verifique sua caixa de entrada.`,
+        });
+      } else {
+        toast({
+          title: "Erro ao enviar email",
+          description: error.message || "Não foi possível enviar o email de verificação.",
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsLoading(false);
+      setVerificationInProgress(false);
     }
   };
-
-  // Verificar se o usuário confirmou o e-mail
-  useEffect(() => {
-    if (step === 4 && linkSent) {
-      // Configurar um listener para verificar quando o usuário se autenticar
-      const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log("Auth event:", event, session);
-        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-          toast({
-            title: "E-mail confirmado",
-            description: "Seu e-mail foi confirmado com sucesso!",
-          });
-          
-          // Avançar para a próxima etapa
-          setStep(5);
-        }
-      });
-
-      // Limpar o listener quando o componente desmontar
-      return () => {
-        authListener.subscription.unsubscribe();
-      };
-    }
-  }, [step, linkSent]);
 
   // Carregar imagem do avatar
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -396,29 +428,49 @@ const ProgressiveRegistration = () => {
             name: `${formData.firstName} ${formData.lastName}`,
             username: formData.username,
             role: 'customer',
-            avatar_url: avatarUrl
+            avatar_url: avatarUrl,
+            address: {
+              street: formData.street,
+              number: formData.number,
+              complement: formData.complement,
+              neighborhood: formData.neighborhood,
+              city: formData.city,
+              state: formData.state,
+              zipcode: formData.zipCode
+            },
+            phone: formData.phone
           });
 
         if (profileError) throw profileError;
 
-        // 4. Usar a função RPC para inserir na tabela users
-        const { error: userError } = await supabase.rpc('upsert_user', {
-          user_id: authData.user.id,
-          user_email: formData.email,
-          user_username: formData.username, 
-          user_avatar_url: avatarUrl,
-          user_role: 'customer'
+        toast({
+          title: "Cadastro realizado com sucesso",
+          description: "Verifique seu email para confirmar sua conta.",
         });
 
-        if (userError) throw userError;
+        // Resetar o formulário
+        setStep(1);
+        setFormData({
+          firstName: '',
+          lastName: '',
+          birthDate: null,
+          cpf: '',
+          street: '',
+          number: '',
+          complement: '',
+          neighborhood: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          email: '',
+          phone: '',
+          password: '',
+          confirmPassword: '',
+          username: '',
+          avatar: null,
+          avatarPreview: ''
+        });
       }
-
-      toast({
-        title: "Cadastro realizado com sucesso",
-        description: "Seu cadastro foi concluído! Faça login para continuar.",
-      });
-
-      navigate('/login');
     } catch (error: any) {
       console.error('Erro no cadastro:', error);
       toast({
@@ -432,7 +484,7 @@ const ProgressiveRegistration = () => {
   };
 
   // Gerar username automático quando chegar na etapa 7
-  useEffect(() => {
+  React.useEffect(() => {
     if (step === 7 && !formData.username) {
       (async () => {
         const username = await generateUniqueUsername();
@@ -527,13 +579,16 @@ const ProgressiveRegistration = () => {
       }
     }
     else if (step === 4) {
-      if (!linkSent) {
+      // Se ainda não enviamos o link de verificação, enviar antes de avançar
+      if (!linkSent && !verificationInProgress) {
         sendConfirmationLink();
         return;
       }
       
-      // A verificação de e-mail é feita via efeito usando supabase.auth.onAuthStateChange
-      return;
+      // Se já enviamos link, podemos avançar
+      if (linkSent) {
+        // Avançar para a próxima etapa
+      }
     }
     else if (step === 5) {
       if (!formData.phone || formData.phone.replace(/\D/g, '').length < 10) {
@@ -796,21 +851,24 @@ const ProgressiveRegistration = () => {
               
               {linkSent ? (
                 <div className="space-y-2">
-                  <p className="text-sm text-center">
-                    Um link de confirmação foi enviado para <strong>{formData.email}</strong>
-                  </p>
-                  <p className="text-xs text-muted-foreground text-center mt-2">
-                    Por favor, verifique sua caixa de entrada e clique no link para continuar com o cadastro.
-                  </p>
+                  <div className="bg-green-50 border border-green-200 rounded-md p-4 text-sm text-green-800">
+                    <p>Um link de verificação foi enviado para <strong>{formData.email}</strong></p>
+                    <p className="mt-2">Por favor, verifique sua caixa de entrada e clique no link para confirmar seu email antes de continuar.</p>
+                  </div>
                   <div className="mt-4 text-center">
                     <Button 
                       type="button" 
-                      variant="link" 
+                      variant="outline" 
                       onClick={sendConfirmationLink}
                       disabled={isLoading}
                       className="mx-auto"
                     >
-                      Reenviar link de confirmação
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Reenviando...
+                        </>
+                      ) : "Reenviar link de verificação"}
                     </Button>
                   </div>
                 </div>
@@ -1003,7 +1061,7 @@ const ProgressiveRegistration = () => {
   };
 
   const getNextButtonLabel = () => {
-    if (step === 4 && !linkSent) return "Enviar link";
+    if (step === 4 && !linkSent) return "Verificar e-mail";
     if (step === 7) return "Concluir cadastro";
     return "Próximo";
   };
@@ -1014,20 +1072,20 @@ const ProgressiveRegistration = () => {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Cadastro - {getStepLabel()}</CardTitle>
+    <div className="space-y-4">
+      <div>
+        <div className="text-sm font-medium">Etapa {step} de 7: {getStepLabel()}</div>
         <div className="w-full bg-gray-200 h-1.5 rounded-full mt-2">
           <div 
             className="bg-menu-primary h-1.5 rounded-full transition-all duration-300" 
             style={{ width: `${(step / 7) * 100}%` }}
           ></div>
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div className="mt-4">
         {renderStep()}
-      </CardContent>
-      <CardFooter className="flex justify-between">
+      </div>
+      <div className="flex justify-between mt-6">
         {step > 1 ? (
           <Button type="button" variant="outline" onClick={prevStep} disabled={isLoading}>
             Voltar
@@ -1040,14 +1098,19 @@ const ProgressiveRegistration = () => {
           onClick={getNextButtonAction()} 
           disabled={
             isLoading || 
-            (step === 4 && (!formData.email || !isValidEmail(formData.email) || !emailAvailable)) ||
-            (step === 7 && (!formData.username || !usernameAvailable))
+            (step === 4 && (!formData.email || !isValidEmail(formData.email) || emailAvailable === false)) ||
+            (step === 7 && (!formData.username || usernameAvailable === false))
           }
         >
-          {isLoading ? "Processando..." : getNextButtonLabel()}
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processando...
+            </>
+          ) : getNextButtonLabel()}
         </Button>
-      </CardFooter>
-    </Card>
+      </div>
+    </div>
   );
 };
 

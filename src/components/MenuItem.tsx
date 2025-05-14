@@ -16,16 +16,36 @@ const MenuItem = ({ item }: MenuItemProps) => {
   const { addToCart } = useCart();
   const [showDetails, setShowDetails] = useState(false);
   
+  // Função para determinar qual imagem usar como thumbnail
+  const getDisplayImage = () => {
+    // Ordem de prioridade: thumbnail > image_url > primeira imagem do array > placeholder
+    if (item.thumbnail) {
+      return item.thumbnail;
+    } else if (item.image_url) {
+      return item.image_url;
+    } else if (item.images && item.images.length > 0) {
+      return item.images[0];
+    } else if (item.gallery && item.gallery.length > 0) {
+      return item.gallery[0]; 
+    }
+    return "/placeholder.svg";
+  };
+  
   const handleAddToCart = () => {
     addToCart({
       id: item.id,
       name: item.name,
       price: item.price,
-      imageUrl: item.image_url,
-      image: item.image_url, // Para compatibilidade
+      imageUrl: getDisplayImage(),
+      image: getDisplayImage(), // Para compatibilidade
       description: item.description,
       category: item.category,
       ingredients: item.ingredients // Adicionando os ingredientes ao carrinho
+    });
+    
+    toast({
+      title: "Item adicionado",
+      description: `${item.name} foi adicionado ao carrinho`,
     });
   };
   
@@ -54,7 +74,7 @@ const MenuItem = ({ item }: MenuItemProps) => {
       <Card className="overflow-hidden">
         <div className="aspect-video relative">
           <img 
-            src={item.image_url || "/placeholder.svg"} 
+            src={getDisplayImage()} 
             alt={item.name}
             className="w-full h-full object-cover"
           />
