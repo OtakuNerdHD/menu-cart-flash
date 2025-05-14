@@ -146,22 +146,35 @@ const ProgressiveRegistration = () => {
     }
 
     try {
-      const { data, error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: false
-        }
-      });
+      // Método correto para verificar se o email já existe
+      const { data, error } = await supabase.auth.admin.getUserByEmail(email);
       
-      // Se o OTP foi enviado com sucesso e sem criar usuário, significa que o email já existe
-      if (error && error.message.includes("Email not found")) {
+      // Se não encontrar o usuário (erro 404), o email está disponível
+      if (error && error.status === 404) {
         setEmailAvailable(true);
-      } else {
-        setEmailAvailable(false);
+        return;
       }
+      
+      // Se encontrar dados ou der outro tipo de erro, consideramos que o email já existe
+      setEmailAvailable(false);
     } catch (error) {
-      console.error('Erro ao verificar disponibilidade de e-mail:', error);
-      setEmailAvailable(true); // Assume disponível em caso de erro
+      console.log("Erro ao verificar email:", error);
+      
+      // Em caso de falha na verificação, vamos tentar um método alternativo
+      try {
+        // Tenta verificar se existe um registro na tabela profiles com este email
+        const { data, count } = await supabase
+          .from('profiles')
+          .select('id', { count: 'exact' })
+          .eq('email', email)
+          .limit(1);
+        
+        setEmailAvailable(count === 0);
+      } catch (secondError) {
+        console.log("Erro ao verificar email (método alternativo):", secondError);
+        // Se falhar novamente, assume disponível para não bloquear o usuário
+        setEmailAvailable(true);
+      }
     }
   };
 
@@ -173,13 +186,13 @@ const ProgressiveRegistration = () => {
     }
 
     try {
-      const { data } = await supabase
+      const { data, count } = await supabase
         .from('profiles')
-        .select('username')
+        .select('username', { count: 'exact' })
         .eq('username', username)
-        .single();
+        .limit(1);
 
-      setUsernameAvailable(!data);
+      setUsernameAvailable(count === 0);
     } catch (error) {
       console.error('Erro ao verificar disponibilidade de username:', error);
       setUsernameAvailable(true); // Assume disponível em caso de erro
@@ -293,15 +306,6 @@ const ProgressiveRegistration = () => {
       });
       return;
     }
-    
-    if (emailAvailable === false) {
-      toast({
-        title: "Email já cadastrado",
-        description: "Este email já está sendo usado por outra conta.",
-        variant: "destructive"
-      });
-      return;
-    }
 
     setIsLoading(true);
     setVerificationInProgress(true);
@@ -311,12 +315,31 @@ const ProgressiveRegistration = () => {
       const redirectUrl = `${window.location.origin}/auth/callback`;
       console.log("URL de redirecionamento:", redirectUrl);
       
+      // Verificar novamente se o email já existe (por segurança)
+      try {
+        const { data, error } = await supabase.auth.admin.getUserByEmail(formData.email);
+        
+        if (!error && data) {
+          setEmailAvailable(false);
+          toast({
+            title: "Email já cadastrado",
+            description: "Este email já está sendo usado por outra conta.",
+            variant: "destructive"
+          });
+          setIsLoading(false);
+          setVerificationInProgress(false);
+          return;
+        }
+      } catch (err) {
+        // Ignorar erro aqui, pois significa que o usuário não existe (o que é o que queremos)
+        console.log("Usuário não encontrado (esperado):", err);
+      }
+      
       // Enviar e-mail com link mágico via Supabase Auth
       const { data, error } = await supabase.auth.signInWithOtp({
         email: formData.email,
         options: {
-          emailRedirectTo: redirectUrl,
-          shouldCreateUser: false // Não criar o usuário ainda
+          emailRedirectTo: redirectUrl
         }
       });
       
@@ -324,31 +347,20 @@ const ProgressiveRegistration = () => {
       
       // Se não houver erro, o link foi enviado com sucesso
       setLinkSent(true);
+      setEmailAvailable(true);  // Confirmamos que o email está disponível
       toast({
         title: "Email de verificação enviado",
         description: `Um link de verificação foi enviado para ${formData.email}. Por favor, verifique sua caixa de entrada.`,
       });
-      
-      // Avançar para a próxima etapa após envio do link
-      // nextStep();
     } catch (error: any) {
       console.error('Erro ao enviar email de verificação:', error);
       
-      // Verifica se o erro é porque o email não existe (o que é bom nesse caso)
-      if (error.message?.includes("Email not found")) {
-        setEmailAvailable(true);
-        setLinkSent(true);
-        toast({
-          title: "Email de verificação enviado",
-          description: `Um link de verificação foi enviado para ${formData.email}. Por favor, verifique sua caixa de entrada.`,
-        });
-      } else {
-        toast({
-          title: "Erro ao enviar email",
-          description: error.message || "Não foi possível enviar o email de verificação.",
-          variant: "destructive"
-        });
-      }
+      // Se o erro não for claro ou não for relacionado ao email já existir
+      toast({
+        title: "Erro ao enviar email",
+        description: error.message || "Não foi possível enviar o email de verificação.",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
       setVerificationInProgress(false);
@@ -521,10 +533,9 @@ const ProgressiveRegistration = () => {
     else if (name === 'email' && value !== formData.email) {
       setFormData(prev => ({ ...prev, [name]: value }));
       setLinkSent(false);
+      setEmailAvailable(null);  // Resetamos o status ao alterar o email
       if (isValidEmail(value)) {
         checkEmailAvailability(value);
-      } else {
-        setEmailAvailable(null);
       }
     }
     else if (name === 'username') {
@@ -579,6 +590,25 @@ const ProgressiveRegistration = () => {
       }
     }
     else if (step === 4) {
+      if (!formData.email || !isValidEmail(formData.email)) {
+        toast({
+          title: "Email inválido",
+          description: "Por favor, informe um email válido.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Se o email não está disponível, não permitir avançar
+      if (emailAvailable === false) {
+        toast({
+          title: "Email já cadastrado",
+          description: "Por favor, use outro endereço de email.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       // Se ainda não enviamos o link de verificação, enviar antes de avançar
       if (!linkSent && !verificationInProgress) {
         sendConfirmationLink();
@@ -872,7 +902,21 @@ const ProgressiveRegistration = () => {
                     </Button>
                   </div>
                 </div>
-              ) : null}
+              ) : (
+                <Button
+                  type="button"
+                  onClick={sendConfirmationLink}
+                  disabled={!isValidEmail(formData.email) || isLoading || emailAvailable === false}
+                  className="w-full"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : "Enviar link de verificação"}
+                </Button>
+              )}
             </div>
           </>
         );
@@ -1098,7 +1142,7 @@ const ProgressiveRegistration = () => {
           onClick={getNextButtonAction()} 
           disabled={
             isLoading || 
-            (step === 4 && (!formData.email || !isValidEmail(formData.email) || emailAvailable === false)) ||
+            (step === 4 && (!formData.email || !isValidEmail(formData.email) || emailAvailable === false || (!linkSent && !verificationInProgress))) ||
             (step === 7 && (!formData.username || usernameAvailable === false))
           }
         >
