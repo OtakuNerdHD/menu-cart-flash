@@ -1,85 +1,57 @@
 
-import { useState, useEffect, useCallback } from "react";
+// Arquivo atualizado para evitar referência circular
+import { type ToastActionElement, ToastProps } from "@/components/ui/toast";
+import { useToast as useToastImpl } from "@radix-ui/react-toast";
+import { toast as originalToast } from "sonner";
 
+// Define a interface do Toast
 export interface Toast {
   id: string;
-  title?: string;
-  description?: string;
-  action?: React.ReactNode;
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  action?: ToastActionElement;
   variant?: "default" | "destructive";
   duration?: number;
 }
 
-interface ToastState {
-  toasts: Toast[];
+// Define o retorno do hook useToast
+export interface UseToastReturn {
+  toast: (props: Omit<ToastProps, "id">) => void;
+  dismiss: (toastId?: string) => void;
 }
 
-// Armazena a última instância do hook para uso global
-let latestToasts: Toast[] = [];
-let latestToast: (props: Omit<Toast, "id">) => string = () => "";
-let latestDismiss: (id?: string) => void = () => {};
+// Hook useToast
+export function useToast(): UseToastReturn {
+  // Função para enviar um toast
+  function toast(props: Omit<ToastProps, "id">) {
+    originalToast(props.title as string, {
+      description: props.description,
+      action: props.action,
+      duration: props.duration,
+      // Mapear outras props conforme necessário
+    });
+  }
 
-export const useToast = () => {
-  const [state, setState] = useState<ToastState>({ toasts: [] });
-
-  const toast = useCallback(
-    (props: Omit<Toast, "id">) => {
-      const id = Math.random().toString(36).substring(2, 9);
-      setState((state) => ({
-        ...state,
-        toasts: [...state.toasts, { id, ...props }],
-      }));
-      return id;
-    },
-    []
-  );
-
-  const dismiss = useCallback((id?: string) => {
-    setState((state) => ({
-      ...state,
-      toasts: state.toasts.filter((toast) => toast.id !== id),
-    }));
-  }, []);
-
-  // Atualiza as referências globais
-  useEffect(() => {
-    latestToasts = state.toasts;
-    latestToast = toast;
-    latestDismiss = dismiss;
-  }, [state.toasts, toast, dismiss]);
+  function dismiss(toastId?: string) {
+    // Implementação da função dismiss
+    if (toastId) {
+      originalToast.dismiss(toastId);
+    } else {
+      originalToast.dismiss();
+    }
+  }
 
   return {
     toast,
     dismiss,
-    toasts: state.toasts,
   };
-};
+}
 
-// Função toast para uso sem hooks
-// Este método pode ser chamado diretamente como toast({ title: "...", ... })
-export const toast = (props: Omit<Toast, "id">): string => {
-  // Se estamos dentro de um componente React que usa useToast, use essa instância
-  if (latestToast) {
-    return latestToast(props);
-  }
-  
-  // Caso contrário, dispara um evento customizado para o sistema de fallback
-  const event = new CustomEvent("toast-show", { detail: props });
-  document.dispatchEvent(event);
-  return "";
+// Exporta uma interface simplificada do toast para uso direto
+export const toast = (props: Omit<ToastProps, "id">) => {
+  originalToast(props.title as string, {
+    description: props.description,
+    action: props.action,
+    duration: props.duration,
+  });
 };
-
-// Adiciona os métodos para manter compatibilidade com o código legado
-toast.show = (props: Omit<Toast, "id">): void => {
-  toast(props);
-};
-
-toast.dismiss = (id?: string): void => {
-  if (latestDismiss) {
-    latestDismiss(id);
-  } else {
-    const event = new CustomEvent("toast-dismiss", { detail: { id } });
-    document.dispatchEvent(event);
-  }
-};
-
