@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -138,7 +137,7 @@ const ProgressiveRegistration = () => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
-  // Checar se o e-mail já existe
+  // Checar se o e-mail já existe - método atualizado
   const checkEmailAvailability = async (email: string) => {
     if (!isValidEmail(email)) {
       setEmailAvailable(null);
@@ -146,35 +145,37 @@ const ProgressiveRegistration = () => {
     }
 
     try {
-      // Método correto para verificar se o email já existe
-      const { data, error } = await supabase.auth.admin.getUserByEmail(email);
+      // Verificar se o email já existe na tabela de usuários do Supabase
+      const { data, error } = await supabase.auth.signInWithOtp({
+        email: email,
+        options: {
+          shouldCreateUser: false,
+        }
+      });
       
-      // Se não encontrar o usuário (erro 404), o email está disponível
-      if (error && error.status === 404) {
+      // Se houver erro de "usuário não encontrado", significa que o email está disponível
+      if (error && error.message.includes('Email not found')) {
         setEmailAvailable(true);
         return;
       }
       
-      // Se encontrar dados ou der outro tipo de erro, consideramos que o email já existe
-      setEmailAvailable(false);
-    } catch (error) {
-      console.log("Erro ao verificar email:", error);
-      
-      // Em caso de falha na verificação, vamos tentar um método alternativo
-      try {
-        // Tenta verificar se existe um registro na tabela profiles com este email
-        const { data, count } = await supabase
-          .from('profiles')
-          .select('id', { count: 'exact' })
-          .eq('email', email)
-          .limit(1);
-        
-        setEmailAvailable(count === 0);
-      } catch (secondError) {
-        console.log("Erro ao verificar email (método alternativo):", secondError);
-        // Se falhar novamente, assume disponível para não bloquear o usuário
-        setEmailAvailable(true);
+      // Se não houver erro, o email já existe
+      if (!error) {
+        setEmailAvailable(false);
+        return;
       }
+
+      // Verificar diretamente na tabela profiles como método alternativo
+      const { count } = await supabase
+        .from('profiles')
+        .select('email', { count: 'exact' })
+        .eq('email', email);
+      
+      setEmailAvailable(count === 0);
+    } catch (error) {
+      console.error("Erro ao verificar email:", error);
+      // Assumimos disponível em caso de erro na API para não bloquear o usuário
+      setEmailAvailable(true);
     }
   };
 
@@ -296,7 +297,7 @@ const ProgressiveRegistration = () => {
     });
   };
 
-  // Enviar link de confirmação para e-mail
+  // Enviar link de confirmação para e-mail - método atualizado
   const sendConfirmationLink = async () => {
     if (!isValidEmail(formData.email)) {
       toast({
@@ -315,24 +316,22 @@ const ProgressiveRegistration = () => {
       const redirectUrl = `${window.location.origin}/auth/callback`;
       console.log("URL de redirecionamento:", redirectUrl);
       
-      // Verificar novamente se o email já existe (por segurança)
-      try {
-        const { data, error } = await supabase.auth.admin.getUserByEmail(formData.email);
-        
-        if (!error && data) {
-          setEmailAvailable(false);
-          toast({
-            title: "Email já cadastrado",
-            description: "Este email já está sendo usado por outra conta.",
-            variant: "destructive"
-          });
-          setIsLoading(false);
-          setVerificationInProgress(false);
-          return;
-        }
-      } catch (err) {
-        // Ignorar erro aqui, pois significa que o usuário não existe (o que é o que queremos)
-        console.log("Usuário não encontrado (esperado):", err);
+      // Verificar diretamente se o email já existe na tabela profiles
+      const { count: profileCount } = await supabase
+        .from('profiles')
+        .select('email', { count: 'exact' })
+        .eq('email', formData.email);
+      
+      if (profileCount && profileCount > 0) {
+        setEmailAvailable(false);
+        toast({
+          title: "Email já cadastrado",
+          description: "Este email já está sendo usado por outra conta.",
+          variant: "destructive"
+        });
+        setIsLoading(false);
+        setVerificationInProgress(false);
+        return;
       }
       
       // Enviar e-mail com link mágico via Supabase Auth
@@ -343,7 +342,15 @@ const ProgressiveRegistration = () => {
         }
       });
       
-      if (error) throw error;
+      if (error) {
+        // Se o erro for de usuário já existente
+        if (error.message.includes('already registered')) {
+          setEmailAvailable(false);
+          throw new Error("Este email já está registrado no sistema.");
+        } else {
+          throw error;
+        }
+      }
       
       // Se não houver erro, o link foi enviado com sucesso
       setLinkSent(true);
@@ -355,12 +362,21 @@ const ProgressiveRegistration = () => {
     } catch (error: any) {
       console.error('Erro ao enviar email de verificação:', error);
       
-      // Se o erro não for claro ou não for relacionado ao email já existir
-      toast({
-        title: "Erro ao enviar email",
-        description: error.message || "Não foi possível enviar o email de verificação.",
-        variant: "destructive"
-      });
+      // Se o erro for sobre email já existente
+      if (error.message && error.message.includes('already registered')) {
+        setEmailAvailable(false);
+        toast({
+          title: "Email já cadastrado",
+          description: "Este email já está sendo usado por outra conta.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Erro ao enviar email",
+          description: error.message || "Não foi possível enviar o email de verificação.",
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsLoading(false);
       setVerificationInProgress(false);

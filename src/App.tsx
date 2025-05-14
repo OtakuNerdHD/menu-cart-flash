@@ -21,6 +21,30 @@ import Cart from "./components/Cart";
 
 const queryClient = new QueryClient();
 
+function AppRoutes() {
+  return (
+    <>
+      <Header />
+      <Routes>
+        <Route path="/" element={<Index />} />
+        <Route path="/order-management" element={<OrderManagement />} />
+        <Route path="/kitchen-management" element={<KitchenManagement />} />
+        <Route path="/order-tracking/:orderId?" element={<OrderTracking />} />
+        <Route path="/product-management" element={<ProductManagement />} />
+        <Route path="/user-management" element={<UserManagement />} />
+        <Route path="/api-management" element={<ApiManagement />} />
+        <Route path="/login" element={<Login />} />
+        {/* Redirect to home if just logged in */}
+        <Route path="/auth/callback" element={<Navigate to="/" replace />} />
+        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      <UserSwitcher />
+      <Cart />
+    </>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -29,23 +53,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <Header />
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/order-management" element={<OrderManagement />} />
-              <Route path="/kitchen-management" element={<KitchenManagement />} />
-              <Route path="/order-tracking/:orderId?" element={<OrderTracking />} />
-              <Route path="/product-management" element={<ProductManagement />} />
-              <Route path="/user-management" element={<UserManagement />} />
-              <Route path="/api-management" element={<ApiManagement />} />
-              <Route path="/login" element={<Login />} />
-              {/* Redirect to home if just logged in */}
-              <Route path="/auth/callback" element={<Navigate to="/" replace />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-            <UserSwitcher />
-            <Cart />
+            <AppRoutes />
           </BrowserRouter>
         </CartProvider>
       </UserSwitcherProvider>
