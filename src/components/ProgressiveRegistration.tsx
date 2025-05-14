@@ -137,7 +137,7 @@ const ProgressiveRegistration = () => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
-  // Checar se o e-mail já existe - método atualizado
+  // Checar se o e-mail já existe - método corrigido
   const checkEmailAvailability = async (email: string) => {
     if (!isValidEmail(email)) {
       setEmailAvailable(null);
@@ -145,36 +145,54 @@ const ProgressiveRegistration = () => {
     }
 
     try {
-      // Verificar se o email já existe na tabela de usuários do Supabase
-      const { data, error } = await supabase.auth.signInWithOtp({
-        email: email,
-        options: {
-          shouldCreateUser: false,
-        }
-      });
+      console.log("Verificando disponibilidade do email:", email);
       
-      // Se houver erro de "usuário não encontrado", significa que o email está disponível
-      if (error && error.message.includes('Email not found')) {
-        setEmailAvailable(true);
-        return;
-      }
-      
-      // Se não houver erro, o email já existe
-      if (!error) {
-        setEmailAvailable(false);
-        return;
-      }
-
-      // Verificar diretamente na tabela profiles como método alternativo
-      const { count } = await supabase
+      // Método 1: Verificar na tabela profiles
+      const { data, count, error } = await supabase
         .from('profiles')
         .select('email', { count: 'exact' })
         .eq('email', email);
       
-      setEmailAvailable(count === 0);
+      if (error) {
+        console.error("Erro ao verificar email em profiles:", error);
+        throw error;
+      }
+      
+      console.log("Resultado da verificação em profiles:", { count, data });
+      
+      // Se encontrou o email na tabela profiles, então não está disponível
+      if (count && count > 0) {
+        setEmailAvailable(false);
+        return;
+      }
+      
+      // Método 2: Verificar na tabela de usuários do auth
+      // Esse método é mais complexo pois não podemos consultar diretamente usuários no Auth
+      // Então tentamos um signup sem criar realmente o usuário
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: email,
+        password: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: {
+            email_check_only: true
+          }
+        }
+      });
+      
+      // Se der erro de "Email já existe", significa que o email não está disponível
+      if (authError && authError.message.includes('already')) {
+        console.log("Email já existe no Auth:", email);
+        setEmailAvailable(false);
+        return;
+      }
+      
+      // Se não houve erro, o email está disponível
+      console.log("Email disponível:", email);
+      setEmailAvailable(true);
     } catch (error) {
-      console.error("Erro ao verificar email:", error);
-      // Assumimos disponível em caso de erro na API para não bloquear o usuário
+      console.error("Erro ao verificar disponibilidade de email:", error);
+      // Em caso de erro, assumimos disponível para não bloquear o usuário
       setEmailAvailable(true);
     }
   };
@@ -297,7 +315,7 @@ const ProgressiveRegistration = () => {
     });
   };
 
-  // Enviar link de confirmação para e-mail - método atualizado
+  // Enviar link de confirmação para e-mail - método corrigido
   const sendConfirmationLink = async () => {
     if (!isValidEmail(formData.email)) {
       toast({
@@ -312,17 +330,23 @@ const ProgressiveRegistration = () => {
     setVerificationInProgress(true);
     
     try {
+      console.log("Enviando link de confirmação para:", formData.email);
+      
       // URL de callback para a aplicação
       const redirectUrl = `${window.location.origin}/auth/callback`;
-      console.log("URL de redirecionamento:", redirectUrl);
       
       // Verificar diretamente se o email já existe na tabela profiles
-      const { count: profileCount } = await supabase
+      const { count: profileCount, error: profileError } = await supabase
         .from('profiles')
         .select('email', { count: 'exact' })
         .eq('email', formData.email);
       
+      if (profileError) {
+        console.error("Erro ao verificar email em profiles:", profileError);
+      }
+      
       if (profileCount && profileCount > 0) {
+        console.log("Email já existe em profiles:", formData.email);
         setEmailAvailable(false);
         toast({
           title: "Email já cadastrado",
@@ -334,8 +358,8 @@ const ProgressiveRegistration = () => {
         return;
       }
       
-      // Enviar e-mail com link mágico via Supabase Auth
-      const { data, error } = await supabase.auth.signInWithOtp({
+      // Enviar email com magic link
+      const { error } = await supabase.auth.signInWithOtp({
         email: formData.email,
         options: {
           emailRedirectTo: redirectUrl
@@ -343,16 +367,29 @@ const ProgressiveRegistration = () => {
       });
       
       if (error) {
-        // Se o erro for de usuário já existente
-        if (error.message.includes('already registered')) {
+        console.error("Erro ao enviar OTP:", error);
+        // Se o erro for porque o email já existe
+        if (error.message.includes('already')) {
           setEmailAvailable(false);
-          throw new Error("Este email já está registrado no sistema.");
+          toast({
+            title: "Email já cadastrado",
+            description: "Este email já está sendo usado por outra conta.",
+            variant: "destructive"
+          });
         } else {
-          throw error;
+          toast({
+            title: "Erro ao enviar email",
+            description: error.message || "Não foi possível enviar o email de verificação.",
+            variant: "destructive"
+          });
         }
+        setIsLoading(false);
+        setVerificationInProgress(false);
+        return;
       }
       
       // Se não houver erro, o link foi enviado com sucesso
+      console.log("Link de verificação enviado para:", formData.email);
       setLinkSent(true);
       setEmailAvailable(true);  // Confirmamos que o email está disponível
       toast({
@@ -361,22 +398,11 @@ const ProgressiveRegistration = () => {
       });
     } catch (error: any) {
       console.error('Erro ao enviar email de verificação:', error);
-      
-      // Se o erro for sobre email já existente
-      if (error.message && error.message.includes('already registered')) {
-        setEmailAvailable(false);
-        toast({
-          title: "Email já cadastrado",
-          description: "Este email já está sendo usado por outra conta.",
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Erro ao enviar email",
-          description: error.message || "Não foi possível enviar o email de verificação.",
-          variant: "destructive"
-        });
-      }
+      toast({
+        title: "Erro ao enviar email",
+        description: error.message || "Não foi possível enviar o email de verificação.",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
       setVerificationInProgress(false);
