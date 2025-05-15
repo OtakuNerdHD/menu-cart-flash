@@ -79,7 +79,38 @@ export function ProgressiveRegistration() {
       setIsEmailChecking(true);
       console.log("Verificando se o e-mail existe:", email);
 
-      // Abordagem mais segura: tentar fazer login com o e-mail
+      // Tentar buscar usuário pelo email diretamente
+      // Método 1: Tentar login com o email para ver se é possível
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password: "teste-verificacao-email-" + Date.now() // Senha aleatória para garantir falha no login
+        });
+        
+        // Se não houver erro específico de "invalid credentials", o email provavelmente existe
+        if (error && !error.message.includes("Invalid login credentials")) {
+          console.log("E-mail provavelmente existe (erro não relacionado a credenciais):", error.message);
+          return true;
+        }
+      } catch (err) {
+        // Apenas registra o erro e continua com outras verificações
+        console.log("Erro ao tentar login de teste:", err);
+      }
+      
+      // Método 2: Tentar verificar através da tabela de perfis
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('email', email)
+        .maybeSingle();
+      
+      if (profileData) {
+        console.log("E-mail encontrado na tabela profiles:", email);
+        return true;
+      }
+      
+      // Método 3: Verificar se consegue usar o email para cadastro
+      // Note que não estamos usando admin.getUserByEmail que não existe
       const { data: signInData, error: signInError } = await supabase.auth.signInWithOtp({
         email,
         options: {
@@ -87,64 +118,26 @@ export function ProgressiveRegistration() {
         }
       });
 
-      // Se não houver erro, o e-mail existe
-      if (!signInError) {
-        console.log("E-mail já existe (verificado via OTP):", email);
-        return true;
-      }
-
-      // Verificar a mensagem específica de erro para determinar se o e-mail existe
+      // Verifica a mensagem de erro específica
       if (signInError) {
-        // Se o erro for "User not found", então o e-mail não existe
+        // "User not found" indica que o email não existe
         if (signInError.message.includes("User not found") || 
             signInError.message.includes("user not found")) {
           console.log("E-mail não existe (confirmado via OTP):", email);
           return false;
         }
         
-        // Se o erro for outro, provavelmente o e-mail existe
-        console.log("E-mail possivelmente existe (baseado no erro de OTP):", signInError.message);
-        
-        // Verificação adicional para confirmar
-        // Substituindo o método que não existe por uma maneira alternativa de verificar
-        const { data: users, error: listError } = await supabase.auth.admin.listUsers({
-          filter: `email.eq.${email}`,
-          page: 1,
-          perPage: 1
-        });
-        
-        if (users && users.users.length > 0) {
-          console.log("E-mail confirmado como existente:", email);
-          return true;
-        }
-      }
-      
-      // Usando a API getUser para verificar se o e-mail existe
-      const { data, error } = await supabase.auth.getUser();
-      
-      if (error) {
-        console.log("Erro ao obter usuário atual:", error.message);
-      } else if (data?.user?.email === email) {
-        console.log("E-mail corresponde ao usuário logado:", email);
+        // Se for outro erro (como "Signups not allowed"), provavelmente o email já existe
+        console.log("E-mail provavelmente existe (baseado no erro de OTP):", signInError.message);
         return true;
       }
       
-      // Última alternativa: verificar na tabela de perfis
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('email', email);
-      
-      if (profileData && profileData.length > 0) {
-        console.log("E-mail encontrado na tabela de perfis:", email);
-        return true;
-      }
-      
+      // Se chegou até aqui e não houve erro nas verificações acima, o email está disponível
       console.log(`E-mail ${email} parece não existir após verificações`);
       return false;
     } catch (err) {
       console.error("Erro ao verificar e-mail:", err);
-      return false;
+      return false; // Em caso de erro, assumir que não existe para permitir o registro
     } finally {
       setIsEmailChecking(false);
     }
@@ -182,35 +175,54 @@ export function ProgressiveRegistration() {
       }
       
       setEmailExists(false);
-      
-      // Tenta enviar o OTP com opção para criar usuário se não existir
-      const { error } = await supabase.auth.signInWithOtp({
+
+      // Vamos criar o usuário diretamente em vez de usar OTP primeiro
+      // Isso resolve o problema "Signups not allowed for OTP"
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
+        password: `temp-password-${Math.random().toString(36).substring(2, 10)}`,
         options: {
-          shouldCreateUser: true, // Permite criar usuário se não existir
+          emailRedirectTo: window.location.origin + '/login?tab=login'
         }
       });
-      
-      if (error) {
-        console.error("Erro ao enviar OTP:", error);
+
+      if (signUpError) {
+        console.error("Erro ao criar usuário:", signUpError);
         toast({
-          title: "Erro ao enviar código",
-          description: error.message || "Não foi possível enviar o código de verificação. Tente novamente.",
+          title: "Erro ao criar conta",
+          description: signUpError.message || "Não foi possível criar sua conta. Tente novamente.",
           variant: "destructive",
         });
         return false;
       }
       
-      console.log("OTP enviado com sucesso para:", email);
+      console.log("Usuário criado com sucesso, enviando código de confirmação");
+      
+      // Após criar usuário, enviamos email de redefinição de senha (que funciona como verificação)
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/login?tab=login',
+      });
+      
+      if (resetError) {
+        console.error("Erro ao enviar email de verificação:", resetError);
+        toast({
+          title: "Erro ao enviar verificação",
+          description: resetError.message || "Não foi possível enviar o email de verificação. Tente novamente.",
+          variant: "destructive",
+        });
+        return false;
+      }
+      
+      console.log("Email de verificação enviado com sucesso para:", email);
       setOtpSent(true);
       setOtpSentTimestamp(currentTime);
       
       return true;
-    } catch (error) {
-      console.error("Erro ao enviar OTP:", error);
+    } catch (error: any) {
+      console.error("Erro ao criar conta:", error);
       toast({
-        title: "Erro ao enviar código",
-        description: "Ocorreu um erro ao enviar o código de verificação. Tente novamente.",
+        title: "Erro ao criar conta",
+        description: error.message || "Ocorreu um erro ao criar sua conta. Tente novamente.",
         variant: "destructive",
       });
       return false;
@@ -243,12 +255,16 @@ export function ProgressiveRegistration() {
         if (otpSent) {
           setFormData({ ...formData, email });
           toast({
-            title: "Código enviado",
-            description: "Verifique sua caixa de entrada e insira o código de verificação.",
+            title: "Conta criada com sucesso",
+            description: "Verifique sua caixa de entrada e clique no link de confirmação para ativar sua conta.",
+            variant: "default"
           });
-          nextStep();
+          // Redirecionar para o login após cadastro bem-sucedido
+          setTimeout(() => {
+            window.location.href = "/login?tab=login";
+          }, 3000);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Erro no processo de verificação de e-mail:", error);
         toast({
           title: "Erro na verificação",
@@ -261,6 +277,8 @@ export function ProgressiveRegistration() {
       return;
     }
 
+    // Etapas abaixo são mantidas apenas para compatibilidade
+    // já que o fluxo agora finaliza na etapa 1 com redirecionamento
     if (step === 2) {
       setIsLoading(true);
       try {
@@ -416,7 +434,7 @@ export function ProgressiveRegistration() {
                   )}
                 />
                 <Button type="submit" className="w-full" disabled={isLoading || isEmailChecking || emailExists}>
-                  {isLoading ? "Verificando..." : (isEmailChecking ? "Verificando email..." : "Enviar código")}
+                  {isLoading ? "Verificando..." : (isEmailChecking ? "Verificando email..." : "Criar conta")}
                 </Button>
               </form>
             </Form>
