@@ -79,34 +79,64 @@ export function ProgressiveRegistration() {
       setIsEmailChecking(true);
       console.log("Verificando se o e-mail existe:", email);
 
-      // Verificação direta para evitar o erro de "column doesn't exist"
-      const { data: users, error } = await supabase.auth.admin.listUsers();
-
-      if (error) {
-        console.error("Erro ao listar usuários:", error);
-        
-        // Abordagem alternativa: Tentar fazer login com o e-mail
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password: "dummy_password_for_check_only" // Não importa se está correta, vamos verificar apenas se o usuário existe
-        });
-
-        // Se não der erro de usuário não encontrado, então o e-mail existe
-        if (signInError && 
-            (!signInError.message.includes("Invalid login") && 
-             !signInError.message.includes("Invalid email"))) {
-          console.log("E-mail já existe (baseado no erro de login):", email);
-          return true;
+      // Abordagem mais segura: tentar fazer login com o e-mail
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: false // Não queremos criar usuário, só verificar
         }
-        
-        return false;
+      });
+
+      // Se não houver erro, o e-mail existe
+      if (!signInError) {
+        console.log("E-mail já existe (verificado via OTP):", email);
+        return true;
       }
 
-      // Verifica se o e-mail já existe na lista de usuários
-      const exists = users.some(user => user.email === email);
-      console.log(`E-mail ${email} existe? ${exists}`);
+      // Verificar a mensagem específica de erro para determinar se o e-mail existe
+      if (signInError) {
+        // Se o erro for "User not found", então o e-mail não existe
+        if (signInError.message.includes("User not found") || 
+            signInError.message.includes("user not found")) {
+          console.log("E-mail não existe (confirmado via OTP):", email);
+          return false;
+        }
+        
+        // Se o erro for outro, provavelmente o e-mail existe
+        console.log("E-mail possivelmente existe (baseado no erro de OTP):", signInError.message);
+        
+        // Verificação adicional para confirmar
+        const { data: userData, error: userError } = await supabase.auth.admin.getUserByEmail(email);
+        
+        if (userData?.user) {
+          console.log("E-mail confirmado como existente:", email);
+          return true;
+        }
+      }
       
-      return exists;
+      // Usando a API getUser para verificar se o e-mail existe
+      const { data, error } = await supabase.auth.getUser();
+      
+      if (error) {
+        console.log("Erro ao obter usuário atual:", error.message);
+      } else if (data?.user?.email === email) {
+        console.log("E-mail corresponde ao usuário logado:", email);
+        return true;
+      }
+      
+      // Última alternativa: verificar na tabela de perfis
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('email', email);
+      
+      if (profileData && profileData.length > 0) {
+        console.log("E-mail encontrado na tabela de perfis:", email);
+        return true;
+      }
+      
+      console.log(`E-mail ${email} parece não existir após verificações`);
+      return false;
     } catch (err) {
       console.error("Erro ao verificar e-mail:", err);
       return false;
