@@ -1,6 +1,5 @@
 
 import { useEffect, useState } from "react";
-import { useToast } from "@/hooks/use-toast";
 import {
   Toast,
   ToastClose,
@@ -11,8 +10,8 @@ import {
 } from "@/components/ui/toast";
 
 export function Toaster() {
-  const { toasts } = useToast();
-  const [customToasts, setCustomToasts] = useState<typeof toasts>([]);
+  // Como estamos usando o Sonner, não precisamos mais do estado de toasts aqui
+  const [customToasts, setCustomToasts] = useState<any[]>([]);
 
   // Event listener para toasts disparados fora do React
   useEffect(() => {
@@ -46,12 +45,9 @@ export function Toaster() {
     };
   }, []);
 
-  // Combina os toasts do hook e os toasts customizados
-  const allToasts = [...toasts, ...customToasts];
-
   return (
     <ToastProvider>
-      {allToasts.map(function ({ id, title, description, action, ...props }) {
+      {customToasts.map(function ({ id, title, description, action, ...props }) {
         return (
           <Toast key={id} {...props}>
             <div className="grid gap-1">

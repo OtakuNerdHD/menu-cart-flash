@@ -1,6 +1,7 @@
+
 // Corrigindo o erro TS2589: Type instantiation is excessively deep and possibly infinite
 import { z } from "zod";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast"; // Usar a versão correta do hook
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,12 +31,16 @@ const newPasswordSchema = z.object({
 export function ProgressiveRegistration() {
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [isEmailChecking, setIsEmailChecking] = useState(false);
+  const [emailExists, setEmailExists] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     code: "",
     password: "",
   });
   const codeInputRef = useRef<HTMLInputElement>(null);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpSentTimestamp, setOtpSentTimestamp] = useState(0);
 
   // Usando a versão correta do useToast para evitar recursão infinita
   const { toast } = useToast();
@@ -65,30 +70,117 @@ export function ProgressiveRegistration() {
   const nextStep = () => setStep(step + 1);
   const prevStep = () => setStep(step - 1);
 
-  async function verifyEmail(email: string): Promise<boolean> {
-    console.log("Verificando email:", email);
+  /**
+   * Verifica se um e-mail já existe no Supabase
+   * Retorna true se o e-mail já existe, false caso contrário
+   */
+  const checkEmailExists = async (email: string): Promise<boolean> => {
     try {
-      // Simplesmente tenta enviar o código e verifica se há erro de duplicação
+      setIsEmailChecking(true);
+      console.log("Verificando se o e-mail existe:", email);
+
+      // Verificação direta para evitar o erro de "column doesn't exist"
+      const { data: users, error } = await supabase.auth.admin.listUsers();
+
+      if (error) {
+        console.error("Erro ao listar usuários:", error);
+        
+        // Abordagem alternativa: Tentar fazer login com o e-mail
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password: "dummy_password_for_check_only" // Não importa se está correta, vamos verificar apenas se o usuário existe
+        });
+
+        // Se não der erro de usuário não encontrado, então o e-mail existe
+        if (signInError && 
+            (!signInError.message.includes("Invalid login") && 
+             !signInError.message.includes("Invalid email"))) {
+          console.log("E-mail já existe (baseado no erro de login):", email);
+          return true;
+        }
+        
+        return false;
+      }
+
+      // Verifica se o e-mail já existe na lista de usuários
+      const exists = users.some(user => user.email === email);
+      console.log(`E-mail ${email} existe? ${exists}`);
+      
+      return exists;
+    } catch (err) {
+      console.error("Erro ao verificar e-mail:", err);
+      return false;
+    } finally {
+      setIsEmailChecking(false);
+    }
+  };
+
+  // Função melhorada para enviar código OTP
+  const sendOTP = async (email: string): Promise<boolean> => {
+    console.log("Enviando OTP para:", email);
+    
+    try {
+      // Verificar se já enviamos um OTP recentemente para evitar spam
+      const currentTime = Date.now();
+      if (otpSent && currentTime - otpSentTimestamp < 60000) { // 1 minuto
+        const remainingTime = Math.ceil((60000 - (currentTime - otpSentTimestamp)) / 1000);
+        toast({
+          title: "Aguarde um momento",
+          description: `Você poderá enviar um novo código em ${remainingTime} segundos`,
+          variant: "destructive"
+        });
+        return false;
+      }
+
+      // Verificar se o e-mail já está registrado
+      const emailAlreadyExists = await checkEmailExists(email);
+      
+      if (emailAlreadyExists) {
+        console.log("E-mail já cadastrado:", email);
+        setEmailExists(true);
+        toast({
+          title: "Email já cadastrado",
+          description: "Este email já está sendo utilizado. Por favor, faça login ou use outro email.",
+          variant: "destructive",
+        });
+        return false;
+      }
+      
+      setEmailExists(false);
+      
+      // Tenta enviar o OTP com opção para criar usuário se não existir
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          shouldCreateUser: false, // Não criar usuário, apenas verificar
+          shouldCreateUser: true, // Permite criar usuário se não existir
         }
       });
       
-      console.log("Resposta da verificação:", error ? error.message : "Sucesso");
-      
-      // Se o erro contém "already registered", o email já existe
-      if (error && error.message && error.message.includes("already registered")) {
-        return true;
+      if (error) {
+        console.error("Erro ao enviar OTP:", error);
+        toast({
+          title: "Erro ao enviar código",
+          description: error.message || "Não foi possível enviar o código de verificação. Tente novamente.",
+          variant: "destructive",
+        });
+        return false;
       }
       
-      return false;
+      console.log("OTP enviado com sucesso para:", email);
+      setOtpSent(true);
+      setOtpSentTimestamp(currentTime);
+      
+      return true;
     } catch (error) {
-      console.error("Erro ao verificar email:", error);
+      console.error("Erro ao enviar OTP:", error);
+      toast({
+        title: "Erro ao enviar código",
+        description: "Ocorreu um erro ao enviar o código de verificação. Tente novamente.",
+        variant: "destructive",
+      });
       return false;
     }
-  }
+  };
 
   const handleSubmit = async (data: any) => {
     console.log("handleSubmit chamado com:", data, "no passo:", step);
@@ -96,28 +188,36 @@ export function ProgressiveRegistration() {
     if (step === 1) {
       setIsLoading(true);
       try {
-        // Verificar se email já existe
-        const emailExists = await verifyEmail(data.email);
-        console.log("Email existe?", emailExists);
+        const email = data.email.toLowerCase().trim();
         
-        if (emailExists) {
+        // Verificar e-mail existente
+        const emailRegistered = await checkEmailExists(email);
+        
+        if (emailRegistered) {
           toast({
             title: "Email já cadastrado",
             description: "Este email já está sendo utilizado. Por favor, faça login ou use outro email.",
             variant: "destructive",
           });
-          setIsLoading(false);
           return;
         }
         
-        // Continua para o próximo passo se o email não existir
-        setFormData({ ...formData, email: data.email });
-        nextStep();
+        // Enviar OTP para o e-mail fornecido
+        const otpSent = await sendOTP(email);
+        
+        if (otpSent) {
+          setFormData({ ...formData, email });
+          toast({
+            title: "Código enviado",
+            description: "Verifique sua caixa de entrada e insira o código de verificação.",
+          });
+          nextStep();
+        }
       } catch (error) {
-        console.error("Erro ao verificar email:", error);
+        console.error("Erro no processo de verificação de e-mail:", error);
         toast({
           title: "Erro na verificação",
-          description: "Não foi possível verificar o email. Por favor, tente novamente.",
+          description: "Ocorreu um erro ao verificar seu e-mail. Por favor, tente novamente.",
           variant: "destructive",
         });
       } finally {
@@ -142,11 +242,14 @@ export function ProgressiveRegistration() {
             description: "O código de verificação está incorreto. Por favor, tente novamente.",
             variant: "destructive",
           });
-          setIsLoading(false);
           return;
         }
 
         setFormData({ ...formData, code: data.code });
+        toast({
+          title: "Código verificado",
+          description: "Seu código foi verificado com sucesso. Defina sua senha para concluir o cadastro.",
+        });
         nextStep();
       } catch (error) {
         console.error("Erro ao verificar código:", error);
@@ -164,6 +267,7 @@ export function ProgressiveRegistration() {
     if (step === 3) {
       setIsLoading(true);
       try {
+        // No passo final, definimos a senha para a conta
         const { data: updateData, error } = await supabase.auth.updateUser({
           password: data.password,
         });
@@ -175,15 +279,38 @@ export function ProgressiveRegistration() {
             description: "Não foi possível definir a nova senha. Por favor, tente novamente.",
             variant: "destructive",
           });
-          setIsLoading(false);
           return;
         }
 
         toast({
-          title: "Senha atualizada",
-          description: "Sua senha foi atualizada com sucesso!",
+          title: "Cadastro concluído",
+          description: "Sua conta foi criada com sucesso! Agora você pode fazer login.",
         });
-        // Redirecionar ou atualizar o estado conforme necessário
+        
+        // Criar perfil do usuário para garantir que temos as informações corretas
+        if (updateData.user) {
+          try {
+            const { error: profileError } = await supabase
+              .from('profiles')
+              .insert([
+                { 
+                  id: updateData.user.id,
+                  email: updateData.user.email,
+                  username: updateData.user.email?.split('@')[0] || 'usuário',
+                  name: updateData.user.email?.split('@')[0] || 'usuário'
+                }
+              ]);
+              
+            if (profileError) {
+              console.error("Erro ao criar perfil:", profileError);
+            }
+          } catch (profileErr) {
+            console.error("Erro ao inserir perfil:", profileErr);
+          }
+        }
+        
+        // Redirecionar para a página de login
+        window.location.href = "/login?tab=login";
       } catch (error) {
         console.error("Erro ao definir nova senha:", error);
         toast({
@@ -198,8 +325,15 @@ export function ProgressiveRegistration() {
     }
   };
 
+  // Efeito para limpar os formulários quando o step muda
+  useEffect(() => {
+    if (step === 2 && codeInputRef.current) {
+      codeInputRef.current.focus();
+    }
+  }, [step]);
+
   return (
-    <div className="container py-12 flex justify-center items-start">
+    <div className="py-6 flex justify-center items-start">
       <Card className="w-full max-w-md">
         <CardContent className="grid gap-4">
           {step === 1 && (
@@ -212,14 +346,42 @@ export function ProgressiveRegistration() {
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input placeholder="seu-email@exemplo.com" {...field} />
+                        <Input 
+                          placeholder="seu-email@exemplo.com" 
+                          {...field} 
+                          autoComplete="email"
+                          onChange={async (e) => {
+                            field.onChange(e);
+                            // Verificação quando o usuário para de digitar por um momento
+                            const email = e.target.value.trim().toLowerCase();
+                            if (email && email.includes('@') && email.includes('.')) {
+                              const delayDebounceFn = setTimeout(async () => {
+                                const exists = await checkEmailExists(email);
+                                setEmailExists(exists);
+                                if (exists) {
+                                  toast({
+                                    title: "Email já cadastrado",
+                                    description: "Este email já está sendo utilizado. Por favor, faça login ou use outro email.",
+                                    variant: "destructive",
+                                  });
+                                }
+                              }, 600);
+                              return () => clearTimeout(delayDebounceFn);
+                            }
+                          }}
+                        />
                       </FormControl>
                       <FormMessage />
+                      {emailExists && (
+                        <p className="text-sm text-red-500 mt-1">
+                          Este email já está cadastrado. Use outro ou faça login.
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "Verificando..." : "Enviar código"}
+                <Button type="submit" className="w-full" disabled={isLoading || isEmailChecking || emailExists}>
+                  {isLoading ? "Verificando..." : (isEmailChecking ? "Verificando email..." : "Enviar código")}
                 </Button>
               </form>
             </Form>
@@ -228,6 +390,10 @@ export function ProgressiveRegistration() {
           {step === 2 && (
             <Form {...codeForm}>
               <form onSubmit={codeForm.handleSubmit(handleSubmit)} className="space-y-4">
+                <div className="text-center mb-4">
+                  <p>Enviamos um código de verificação para:</p>
+                  <p className="font-semibold">{formData.email}</p>
+                </div>
                 <FormField
                   control={codeForm.control}
                   name="code"
@@ -242,6 +408,7 @@ export function ProgressiveRegistration() {
                           pattern="[0-9]{6}"
                           maxLength={6}
                           ref={codeInputRef}
+                          className="text-center text-lg tracking-widest"
                         />
                       </FormControl>
                       <FormMessage />
@@ -251,9 +418,21 @@ export function ProgressiveRegistration() {
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Verificando..." : "Verificar código"}
                 </Button>
-                <Button type="button" variant="outline" className="w-full" onClick={prevStep}>
-                  Voltar
-                </Button>
+                <div className="flex justify-between items-center pt-2">
+                  <Button type="button" variant="ghost" size="sm" onClick={prevStep} className="text-sm">
+                    Voltar
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => sendOTP(formData.email)}
+                    disabled={isLoading || (otpSent && Date.now() - otpSentTimestamp < 60000)}
+                    className="text-sm"
+                  >
+                    Reenviar código
+                  </Button>
+                </div>
               </form>
             </Form>
           )}
@@ -268,7 +447,7 @@ export function ProgressiveRegistration() {
                     <FormItem>
                       <FormLabel>Nova Senha</FormLabel>
                       <FormControl>
-                        <Input type="password" {...field} />
+                        <Input type="password" {...field} autoComplete="new-password" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -281,14 +460,17 @@ export function ProgressiveRegistration() {
                     <FormItem>
                       <FormLabel>Confirmar Nova Senha</FormLabel>
                       <FormControl>
-                        <Input type="password" {...field} />
+                        <Input type="password" {...field} autoComplete="new-password" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "Salvando..." : "Definir nova senha"}
+                  {isLoading ? "Salvando..." : "Concluir cadastro"}
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={prevStep} className="text-sm">
+                  Voltar
                 </Button>
               </form>
             </Form>
@@ -298,3 +480,6 @@ export function ProgressiveRegistration() {
     </div>
   );
 }
+
+// Exporta como componente padrão e nomeado para compatibilidade
+export default ProgressiveRegistration;

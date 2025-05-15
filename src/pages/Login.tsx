@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -11,7 +10,7 @@ import { toast } from '@/hooks/use-toast';
 import { useUserSwitcher } from '@/context/UserSwitcherContext';
 import { supabase } from '@/integrations/supabase/client';
 import { CurrentUser } from '@/types/supabase';
-import ProgressiveRegistration from '@/components/ProgressiveRegistration';
+import { ProgressiveRegistration } from '@/components/ProgressiveRegistration';
 
 interface LoginFormState {
   email: string;
