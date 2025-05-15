@@ -1,8 +1,7 @@
-
 // Corrigindo o erro TS2589: Type instantiation is excessively deep and possibly infinite
 import { z } from "zod";
 import { useState, useRef, useEffect } from "react";
-import { useToast } from "@/hooks/use-toast"; // Usar a versão correta do hook
+import { useToast } from "@/hooks/use-toast"; // Import directly from the hooks folder
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,7 +41,7 @@ export function ProgressiveRegistration() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpSentTimestamp, setOtpSentTimestamp] = useState(0);
 
-  // Usando a versão correta do useToast para evitar recursão infinita
+  // Use the hook directly from the proper location
   const { toast } = useToast();
 
   const emailForm = useForm<z.infer<typeof emailSchema>>({
@@ -79,25 +78,7 @@ export function ProgressiveRegistration() {
       setIsEmailChecking(true);
       console.log("Verificando se o e-mail existe:", email);
 
-      // Tentar buscar usuário pelo email diretamente
-      // Método 1: Tentar login com o email para ver se é possível
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password: "teste-verificacao-email-" + Date.now() // Senha aleatória para garantir falha no login
-        });
-        
-        // Se não houver erro específico de "invalid credentials", o email provavelmente existe
-        if (error && !error.message.includes("Invalid login credentials")) {
-          console.log("E-mail provavelmente existe (erro não relacionado a credenciais):", error.message);
-          return true;
-        }
-      } catch (err) {
-        // Apenas registra o erro e continua com outras verificações
-        console.log("Erro ao tentar login de teste:", err);
-      }
-      
-      // Método 2: Tentar verificar através da tabela de perfis
+      // Método 1: Tentar buscar através da tabela de perfis
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('email')
@@ -108,32 +89,51 @@ export function ProgressiveRegistration() {
         console.log("E-mail encontrado na tabela profiles:", email);
         return true;
       }
-      
-      // Método 3: Verificar se consegue usar o email para cadastro
-      // Note que não estamos usando admin.getUserByEmail que não existe
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: false // Não queremos criar usuário, só verificar
-        }
-      });
 
-      // Verifica a mensagem de erro específica
-      if (signInError) {
-        // "User not found" indica que o email não existe
-        if (signInError.message.includes("User not found") || 
-            signInError.message.includes("user not found")) {
-          console.log("E-mail não existe (confirmado via OTP):", email);
-          return false;
+      // Método 2: Verificar com signInWithOtp (sem criar usuário)
+      try {
+        const { error: otpError } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            shouldCreateUser: false
+          }
+        });
+
+        // Se não der erro ou der erro específico de "User not found", o email não existe
+        if (otpError) {
+          if (otpError.message.includes("User not found") || 
+              otpError.message.includes("user not found")) {
+            console.log("E-mail não existe (confirmado via OTP):", email);
+            return false;
+          }
+          // Outros erros podem indicar que o email existe (como Signups not allowed)
+          if (otpError.message.includes("Signups not allowed")) {
+            console.log("Email já existe (baseado no erro):", otpError.message);
+            return true;
+          }
         }
-        
-        // Se for outro erro (como "Signups not allowed"), provavelmente o email já existe
-        console.log("E-mail provavelmente existe (baseado no erro de OTP):", signInError.message);
-        return true;
+      } catch (err) {
+        console.log("Erro ao verificar com OTP:", err);
       }
-      
-      // Se chegou até aqui e não houve erro nas verificações acima, o email está disponível
-      console.log(`E-mail ${email} parece não existir após verificações`);
+
+      // Método 3: Tenta login com senha aleatória
+      try {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password: `random-password-${Date.now()}`
+        });
+
+        // Se o erro for "Invalid login credentials", o email provavelmente existe
+        if (signInError && signInError.message.includes("Invalid login credentials")) {
+          console.log("E-mail possivelmente existe (tentativa de login falhou com Invalid credentials)");
+          return true;
+        }
+      } catch (err) {
+        console.log("Erro ao tentar login:", err);
+      }
+
+      // Se chegou até aqui e não conseguiu confirmar, assumimos que o email não existe
+      console.log("E-mail não encontrado após todas as verificações:", email);
       return false;
     } catch (err) {
       console.error("Erro ao verificar e-mail:", err);
@@ -143,24 +143,23 @@ export function ProgressiveRegistration() {
     }
   };
 
-  // Função melhorada para enviar código OTP
-  const sendOTP = async (email: string): Promise<boolean> => {
-    console.log("Enviando OTP para:", email);
+  // Função para registro direto (sem OTP)
+  const registerUser = async (email: string): Promise<boolean> => {
+    console.log("Registrando usuário com email:", email);
     
     try {
-      // Verificar se já enviamos um OTP recentemente para evitar spam
       const currentTime = Date.now();
-      if (otpSent && currentTime - otpSentTimestamp < 60000) { // 1 minuto
+      if (otpSent && currentTime - otpSentTimestamp < 60000) {
         const remainingTime = Math.ceil((60000 - (currentTime - otpSentTimestamp)) / 1000);
         toast({
           title: "Aguarde um momento",
-          description: `Você poderá enviar um novo código em ${remainingTime} segundos`,
+          description: `Você poderá enviar um novo cadastro em ${remainingTime} segundos`,
           variant: "destructive"
         });
         return false;
       }
 
-      // Verificar se o e-mail já está registrado
+      // Verificar novamente se o email já existe
       const emailAlreadyExists = await checkEmailExists(email);
       
       if (emailAlreadyExists) {
@@ -176,11 +175,11 @@ export function ProgressiveRegistration() {
       
       setEmailExists(false);
 
-      // Vamos criar o usuário diretamente em vez de usar OTP primeiro
-      // Isso resolve o problema "Signups not allowed for OTP"
+      // Vamos criar o usuário diretamente (signUp em vez de signInWithOtp)
+      const tempPassword = `temp-password-${Math.random().toString(36).substring(2, 15)}`;
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
-        password: `temp-password-${Math.random().toString(36).substring(2, 10)}`,
+        password: tempPassword,
         options: {
           emailRedirectTo: window.location.origin + '/login?tab=login'
         }
@@ -196,9 +195,9 @@ export function ProgressiveRegistration() {
         return false;
       }
       
-      console.log("Usuário criado com sucesso, enviando código de confirmação");
+      console.log("Usuário criado com sucesso, enviando email de redefinição de senha");
       
-      // Após criar usuário, enviamos email de redefinição de senha (que funciona como verificação)
+      // Após criar usuário, enviamos email de redefinição de senha
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin + '/login?tab=login',
       });
@@ -249,10 +248,10 @@ export function ProgressiveRegistration() {
           return;
         }
         
-        // Enviar OTP para o e-mail fornecido
-        const otpSent = await sendOTP(email);
+        // Registrar usuário diretamente (sem OTP)
+        const registered = await registerUser(email);
         
-        if (otpSent) {
+        if (registered) {
           setFormData({ ...formData, email });
           toast({
             title: "Conta criada com sucesso",
@@ -403,9 +402,8 @@ export function ProgressiveRegistration() {
                           placeholder="seu-email@exemplo.com" 
                           {...field} 
                           autoComplete="email"
-                          onChange={async (e) => {
+                          onChange={(e) => {
                             field.onChange(e);
-                            // Verificação quando o usuário para de digitar por um momento
                             const email = e.target.value.trim().toLowerCase();
                             if (email && email.includes('@') && email.includes('.')) {
                               const delayDebounceFn = setTimeout(async () => {
