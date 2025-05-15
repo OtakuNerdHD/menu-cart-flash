@@ -1,3 +1,4 @@
+
 // Corrigindo o erro TS2589: Type instantiation is excessively deep and possibly infinite
 import { z } from "zod";
 import { useState, useRef, useEffect } from "react";
@@ -78,52 +79,54 @@ export function ProgressiveRegistration() {
       setIsEmailChecking(true);
       console.log("Verificando se o e-mail existe:", email);
 
-      // Método 1: Tentar buscar através da tabela de perfis
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('email', email)
-        .maybeSingle();
-      
-      if (profileData) {
-        console.log("E-mail encontrado na tabela profiles:", email);
-        return true;
+      // Verificar através da tentativa de registro sem criar o usuário
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: false
+        }
+      });
+
+      // Se o e-mail já existe, podemos receber diferentes erros
+      if (error) {
+        if (error.message.includes("User not found") || 
+            error.message.includes("user not found")) {
+          // User not found significa que o email não existe
+          console.log("E-mail não existe (confirmado via OTP):", email);
+          return false;
+        }
+        
+        if (error.message.includes("Signups not allowed")) {
+          // Signups not allowed para OTP geralmente significa que o email já existe
+          console.log("Email já existe (baseado no erro):", error.message);
+          return true;
+        }
       }
 
-      // Método 2: Verificar com signInWithOtp (sem criar usuário)
+      // Método adicional: consulte a tabela profiles
       try {
-        const { error: otpError } = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            shouldCreateUser: false
-          }
-        });
-
-        // Se não der erro ou der erro específico de "User not found", o email não existe
-        if (otpError) {
-          if (otpError.message.includes("User not found") || 
-              otpError.message.includes("user not found")) {
-            console.log("E-mail não existe (confirmado via OTP):", email);
-            return false;
-          }
-          // Outros erros podem indicar que o email existe (como Signups not allowed)
-          if (otpError.message.includes("Signups not allowed")) {
-            console.log("Email já existe (baseado no erro):", otpError.message);
-            return true;
-          }
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('email', email)
+          .maybeSingle();
+        
+        if (profileData) {
+          console.log("E-mail encontrado na tabela profiles:", email);
+          return true;
         }
       } catch (err) {
-        console.log("Erro ao verificar com OTP:", err);
+        console.log("Erro ao verificar tabela profiles:", err);
       }
 
-      // Método 3: Tenta login com senha aleatória
+      // Se chegamos até aqui sem uma confirmação clara, tentamos um login com senha aleatória
       try {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password: `random-password-${Date.now()}`
         });
 
-        // Se o erro for "Invalid login credentials", o email provavelmente existe
+        // Se o erro for "Invalid login credentials", o e-mail provavelmente existe
         if (signInError && signInError.message.includes("Invalid login credentials")) {
           console.log("E-mail possivelmente existe (tentativa de login falhou com Invalid credentials)");
           return true;
@@ -477,7 +480,7 @@ export function ProgressiveRegistration() {
                     type="button" 
                     variant="ghost" 
                     size="sm" 
-                    onClick={() => sendOTP(formData.email)}
+                    onClick={() => registerUser(formData.email)}
                     disabled={isLoading || (otpSent && Date.now() - otpSentTimestamp < 60000)}
                     className="text-sm"
                   >
