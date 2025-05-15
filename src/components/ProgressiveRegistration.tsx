@@ -79,60 +79,56 @@ export function ProgressiveRegistration() {
       setIsEmailChecking(true);
       console.log("Verificando se o e-mail existe:", email);
 
-      // Verificar através da tentativa de registro sem criar o usuário
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: false
-        }
-      });
-
-      // Se o e-mail já existe, podemos receber diferentes erros
-      if (error) {
-        if (error.message.includes("User not found") || 
-            error.message.includes("user not found")) {
-          // User not found significa que o email não existe
-          console.log("E-mail não existe (confirmado via OTP):", email);
-          return false;
-        }
-        
-        if (error.message.includes("Signups not allowed")) {
-          // Signups not allowed para OTP geralmente significa que o email já existe
-          console.log("Email já existe (baseado no erro):", error.message);
-          return true;
-        }
+      // Primeiro método: Verificar na tabela profiles
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('email', email)
+        .maybeSingle();
+      
+      if (profileData) {
+        console.log("E-mail encontrado na tabela profiles:", email);
+        return true;
       }
 
-      // Método adicional: consulte a tabela profiles
-      try {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('email', email)
-          .maybeSingle();
-        
-        if (profileData) {
-          console.log("E-mail encontrado na tabela profiles:", email);
-          return true;
-        }
-      } catch (err) {
-        console.log("Erro ao verificar tabela profiles:", err);
-      }
-
-      // Se chegamos até aqui sem uma confirmação clara, tentamos um login com senha aleatória
+      // Segundo método: Tentar login com credenciais inválidas
       try {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password: `random-password-${Date.now()}`
         });
 
-        // Se o erro for "Invalid login credentials", o e-mail provavelmente existe
         if (signInError && signInError.message.includes("Invalid login credentials")) {
           console.log("E-mail possivelmente existe (tentativa de login falhou com Invalid credentials)");
           return true;
         }
       } catch (err) {
         console.log("Erro ao tentar login:", err);
+      }
+
+      // Terceiro método: Tentar OTP sem criar usuário
+      try {
+        const { error: otpError } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            shouldCreateUser: false
+          }
+        });
+
+        if (otpError) {
+          if (otpError.message.includes("User not found") || 
+              otpError.message.includes("user not found")) {
+            console.log("E-mail não existe (confirmado via OTP):", email);
+            return false;
+          }
+          
+          if (otpError.message.includes("Signups not allowed")) {
+            console.log("Email já existe (baseado no erro):", otpError.message);
+            return true;
+          }
+        }
+      } catch (err) {
+        console.log("Erro ao verificar com OTP:", err);
       }
 
       // Se chegou até aqui e não conseguiu confirmar, assumimos que o email não existe
