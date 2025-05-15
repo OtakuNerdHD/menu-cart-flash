@@ -106,9 +106,14 @@ export function ProgressiveRegistration() {
         console.log("E-mail possivelmente existe (baseado no erro de OTP):", signInError.message);
         
         // Verificação adicional para confirmar
-        const { data: userData, error: userError } = await supabase.auth.admin.getUserByEmail(email);
+        // Substituindo o método que não existe por uma maneira alternativa de verificar
+        const { data: users, error: listError } = await supabase.auth.admin.listUsers({
+          filter: `email.eq.${email}`,
+          page: 1,
+          perPage: 1
+        });
         
-        if (userData?.user) {
+        if (users && users.users.length > 0) {
           console.log("E-mail confirmado como existente:", email);
           return true;
         }
