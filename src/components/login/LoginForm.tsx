@@ -39,7 +39,7 @@ export const LoginForm = ({ onSetActiveTab }: LoginFormProps) => {
     setIsLoading(true);
     
     try {
-      // Tentativa de login com Supabase
+      // Login with Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
         email: loginForm.email,
         password: loginForm.password
@@ -47,26 +47,17 @@ export const LoginForm = ({ onSetActiveTab }: LoginFormProps) => {
       
       if (error) throw error;
       
-      // Buscar dados adicionais do usuário
+      // Get user profile data from profiles table
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', data.user.id)
         .single();
         
-      // Criar usuário para o contexto da aplicação
+      // Create user for the application context
       const user: CurrentUser = {
         id: data.user.id,
-        role: profileData?.role as 
-          | "admin" 
-          | "restaurant_owner" 
-          | "waiter" 
-          | "chef" 
-          | "manager" 
-          | "delivery_person" 
-          | "customer" 
-          | "visitor" 
-          || 'customer',
+        role: profileData?.role || 'customer', // Default to customer if no role found
         name: profileData?.name || data.user.email?.split('@')[0] || 'Usuário',
         email: data.user.email || '',
         avatar_url: profileData?.avatar_url || null

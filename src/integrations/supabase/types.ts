@@ -69,13 +69,6 @@ export type Database = {
             referencedRelation: "orders"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "messages_sender_id_fkey"
-            columns: ["sender_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
         ]
       }
       order_items: {
@@ -87,6 +80,7 @@ export type Database = {
           price: number
           product_id: number
           quantity: number
+          team_id: string | null
         }
         Insert: {
           id?: number
@@ -96,6 +90,7 @@ export type Database = {
           price: number
           product_id: number
           quantity: number
+          team_id?: string | null
         }
         Update: {
           id?: number
@@ -105,6 +100,7 @@ export type Database = {
           price?: number
           product_id?: number
           quantity?: number
+          team_id?: string | null
         }
         Relationships: []
       }
@@ -182,7 +178,9 @@ export type Database = {
           status: string
           table_id: number | null
           table_name: string | null
+          team_id: string | null
           total: number
+          total_amount: number | null
           updated_at: string | null
           user_id: number | null
         }
@@ -203,7 +201,9 @@ export type Database = {
           status?: string
           table_id?: number | null
           table_name?: string | null
+          team_id?: string | null
           total: number
+          total_amount?: number | null
           updated_at?: string | null
           user_id?: number | null
         }
@@ -224,7 +224,9 @@ export type Database = {
           status?: string
           table_id?: number | null
           table_name?: string | null
+          team_id?: string | null
           total?: number
+          total_amount?: number | null
           updated_at?: string | null
           user_id?: number | null
         }
@@ -282,15 +284,7 @@ export type Database = {
           profile_id?: string
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "payment_methods_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       product_images: {
         Row: {
@@ -327,18 +321,21 @@ export type Database = {
           name: string
           price: number
           product_id: number
+          team_id: string | null
         }
         Insert: {
           id?: number
           name: string
           price: number
           product_id: number
+          team_id?: string | null
         }
         Update: {
           id?: number
           name?: string
           price?: number
           product_id?: number
+          team_id?: string | null
         }
         Relationships: []
       }
@@ -358,6 +355,7 @@ export type Database = {
           nutritional_info: Json | null
           price: number | null
           restaurant_id: number | null
+          team_id: string | null
           thumbnail: string | null
           updated_at: string | null
         }
@@ -376,6 +374,7 @@ export type Database = {
           nutritional_info?: Json | null
           price?: number | null
           restaurant_id?: number | null
+          team_id?: string | null
           thumbnail?: string | null
           updated_at?: string | null
         }
@@ -394,6 +393,7 @@ export type Database = {
           nutritional_info?: Json | null
           price?: number | null
           restaurant_id?: number | null
+          team_id?: string | null
           thumbnail?: string | null
           updated_at?: string | null
         }
@@ -443,46 +443,35 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
-          coverage_area: unknown | null
           created_at: string | null
+          email: string
+          full_name: string | null
           id: string
-          name: string | null
-          phone: string | null
-          restaurant_id: number | null
           role: string | null
-          username: string | null
+          status: string | null
+          updated_at: string | null
         }
         Insert: {
           avatar_url?: string | null
-          coverage_area?: unknown | null
           created_at?: string | null
-          id: string
-          name?: string | null
-          phone?: string | null
-          restaurant_id?: number | null
+          email: string
+          full_name?: string | null
+          id?: string
           role?: string | null
-          username?: string | null
+          status?: string | null
+          updated_at?: string | null
         }
         Update: {
           avatar_url?: string | null
-          coverage_area?: unknown | null
           created_at?: string | null
+          email?: string
+          full_name?: string | null
           id?: string
-          name?: string | null
-          phone?: string | null
-          restaurant_id?: number | null
           role?: string | null
-          username?: string | null
+          status?: string | null
+          updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_restaurant_id_fkey"
-            columns: ["restaurant_id"]
-            isOneToOne: false
-            referencedRelation: "restaurants"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       restaurants: {
         Row: {
@@ -496,6 +485,7 @@ export type Database = {
           name: string
           opening_hours: Json | null
           owner_id: string | null
+          team_id: string | null
         }
         Insert: {
           address?: string | null
@@ -508,6 +498,7 @@ export type Database = {
           name: string
           opening_hours?: Json | null
           owner_id?: string | null
+          team_id?: string | null
         }
         Update: {
           address?: string | null
@@ -520,16 +511,9 @@ export type Database = {
           name?: string
           opening_hours?: Json | null
           owner_id?: string | null
+          team_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "restaurants_owner_id_fkey"
-            columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       spatial_ref_sys: {
         Row: {
@@ -612,27 +596,75 @@ export type Database = {
       tables: {
         Row: {
           assigned_user_id: string | null
+          capacity: number | null
           created_at: string | null
           id: number
           name: string
+          qr_code: string | null
           server_id: number | null
           status: string
+          team_id: string | null
         }
         Insert: {
           assigned_user_id?: string | null
+          capacity?: number | null
           created_at?: string | null
           id?: number
           name: string
+          qr_code?: string | null
           server_id?: number | null
           status?: string
+          team_id?: string | null
         }
         Update: {
           assigned_user_id?: string | null
+          capacity?: number | null
           created_at?: string | null
           id?: number
           name?: string
+          qr_code?: string | null
           server_id?: number | null
           status?: string
+          team_id?: string | null
+        }
+        Relationships: []
+      }
+      teams: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          domain: string | null
+          id: string
+          is_active: boolean | null
+          logo_url: string | null
+          name: string
+          settings: Json | null
+          slug: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          domain?: string | null
+          id?: string
+          is_active?: boolean | null
+          logo_url?: string | null
+          name: string
+          settings?: Json | null
+          slug: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          domain?: string | null
+          id?: string
+          is_active?: boolean | null
+          logo_url?: string | null
+          name?: string
+          settings?: Json | null
+          slug?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -976,11 +1008,14 @@ export type Database = {
         Args: { p_table_id: number; p_user_id: string }
         Returns: {
           assigned_user_id: string | null
+          capacity: number | null
           created_at: string | null
           id: number
           name: string
+          qr_code: string | null
           server_id: number | null
           status: string
+          team_id: string | null
         }
       }
       box: {
@@ -1031,11 +1066,14 @@ export type Database = {
         Args: { table_name: string }
         Returns: {
           assigned_user_id: string | null
+          capacity: number | null
           created_at: string | null
           id: number
           name: string
+          qr_code: string | null
           server_id: number | null
           status: string
+          team_id: string | null
         }[]
       }
       delete_user_safely: {
@@ -1518,6 +1556,18 @@ export type Database = {
       postgis_wagyu_version: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      set_app_config: {
+        Args: { config_name: string; config_value: string }
+        Returns: undefined
+      }
+      set_config: {
+        Args: { parameter: string; value: string }
+        Returns: undefined
+      }
+      set_current_team_id: {
+        Args: { team_id: string }
+        Returns: undefined
       }
       spheroid_in: {
         Args: { "": unknown }
@@ -2596,11 +2646,14 @@ export type Database = {
         Args: { p_table_id: number }
         Returns: {
           assigned_user_id: string | null
+          capacity: number | null
           created_at: string | null
           id: number
           name: string
+          qr_code: string | null
           server_id: number | null
           status: string
+          team_id: string | null
         }
       }
       unlockrows: {
