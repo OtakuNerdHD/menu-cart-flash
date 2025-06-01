@@ -5,10 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, Mail, Lock, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
-import { useUserSwitcher } from '@/context/UserSwitcherContext';
-import { CurrentUser } from '@/types/supabase';
+import { useAuth } from '@/context/AuthContext';
 
 interface LoginFormProps {
   onSetActiveTab: (tab: string) => void;
@@ -21,7 +19,7 @@ interface LoginFormState {
 
 export const LoginForm = ({ onSetActiveTab }: LoginFormProps) => {
   const navigate = useNavigate();
-  const { setCurrentUser } = useUserSwitcher();
+  const { signIn, signInWithGoogle } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loginForm, setLoginForm] = useState<LoginFormState>({
@@ -39,36 +37,21 @@ export const LoginForm = ({ onSetActiveTab }: LoginFormProps) => {
     setIsLoading(true);
     
     try {
-      // Login with Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: loginForm.email,
-        password: loginForm.password
-      });
+      const { error } = await signIn(loginForm.email, loginForm.password);
       
-      if (error) throw error;
-      
-      // Get user profile data from profiles table
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
-        
-      // Create user for the application context
-      const user: CurrentUser = {
-        id: data.user.id,
-        role: profileData?.role || 'customer', // Default to customer if no role found
-        name: profileData?.name || data.user.email?.split('@')[0] || 'Usuário',
-        email: data.user.email || '',
-        avatar_url: profileData?.avatar_url || null
-      };
-      
-      setCurrentUser(user);
-      toast({
-        title: "Login realizado com sucesso",
-        description: "Bem-vindo ao sistema!",
-      });
-      navigate('/');
+      if (error) {
+        toast({
+          title: "Erro ao fazer login",
+          description: error.message || "Verifique suas credenciais e tente novamente.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Login realizado com sucesso",
+          description: "Bem-vindo ao sistema!",
+        });
+        navigate('/');
+      }
     } catch (error: any) {
       console.error('Erro ao fazer login:', error);
       toast({
@@ -85,23 +68,21 @@ export const LoginForm = ({ onSetActiveTab }: LoginFormProps) => {
     setIsLoading(true);
     
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin + '/auth/callback',
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'select_account'
-          }
-        }
-      });
+      const { error } = await signInWithGoogle();
       
-      if (error) throw error;
-      
-      toast({
-        title: "Autenticando com Google",
-        description: "Você será redirecionado...",
-      });
+      if (error) {
+        toast({
+          title: "Erro ao autenticar com Google",
+          description: error.message || "Não foi possível fazer login com o Google. Tente novamente.",
+          variant: "destructive"
+        });
+        setIsLoading(false);
+      } else {
+        toast({
+          title: "Autenticando com Google",
+          description: "Você será redirecionado...",
+        });
+      }
     } catch (error: any) {
       console.error('Erro ao fazer login com Google:', error);
       toast({

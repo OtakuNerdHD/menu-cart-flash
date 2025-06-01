@@ -99,7 +99,7 @@ const AppRouter = () => {
           </>
         )}
       </Routes>
-      <UserSwitcher />
+      {/* UserSwitcher temporariamente desabilitado */}
       <Cart />
     </>
   );
@@ -128,7 +128,6 @@ const App = () => (
                 <CartProvider>
                   <UserSwitcherProvider>
                     <AppRouter />
-                    <UserSwitcher />
                   </UserSwitcherProvider>
                 </CartProvider>
               </TeamProvider>
