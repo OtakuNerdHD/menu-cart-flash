@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { useTeam } from '@/context/TeamContext';
 import { useMemo } from 'react';
@@ -83,23 +84,6 @@ export const useSupabaseWithTeam = () => {
         return data;
       },
 
-      // Buscar categorias do team atual
-      getCategories: async () => {
-        const { data, error } = await supabase
-          .from('categories')
-          .select(`
-            *,
-            restaurants!inner(
-              id,
-              name,
-              team_id
-            )
-          `)
-          .eq('restaurants.team_id', teamId);
-        if (error) throw error;
-        return data;
-      },
-
       // Buscar mesas do team atual
       getTables: async (restaurant_id?: number) => {
         let query = supabase
@@ -170,8 +154,7 @@ export const useSupabaseWithTeam = () => {
         return supabase
           .from('products')
           .update(updates)
-          .eq('id', productId)
-          .eq('restaurants.team_id', teamId);
+          .eq('id', productId);
       },
 
       // Deletar produto (com verificação de team)
@@ -179,8 +162,7 @@ export const useSupabaseWithTeam = () => {
         return supabase
           .from('products')
           .delete()
-          .eq('id', productId)
-          .eq('restaurants.team_id', teamId);
+          .eq('id', productId);
       },
 
       // Acesso direto ao cliente Supabase para consultas customizadas

@@ -10,6 +10,7 @@ import OrderDetailsDialog from '@/components/OrderDetailsDialog';
 import { toast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
+import { supabase } from '@/integrations/supabase/client';
 
 // Dados de exemplo - futuramente virão da API
 const mockOrders = [
@@ -93,29 +94,35 @@ const OrderManagement = () => {
         return;
       }
       
-      // Mapear os pedidos com seus itens completos
-      const processedOrders = ordersData.map(order => {
-        // Os itens já vêm incluídos pela consulta com join
-        const orderItems = order.order_items?.map((item: any) => ({
-          name: item.name || 'Produto Desconhecido',
-          quantity: item.quantity,
-          price: item.price || 0,
-          notes: item.notes || undefined,
-          image: item.image_url || undefined,
-          product_id: item.product_id
-        })) || [];
+      // Verificar se ordersData é um array antes de usar map
+      if (Array.isArray(ordersData)) {
+        // Mapear os pedidos com seus itens completos
+        const processedOrders = ordersData.map(order => {
+          // Os itens já vêm incluídos pela consulta com join
+          const orderItems = order.order_items?.map((item: any) => ({
+            name: item.name || 'Produto Desconhecido',
+            quantity: item.quantity,
+            price: item.price || 0,
+            notes: item.notes || undefined,
+            image: item.image_url || undefined,
+            product_id: item.product_id
+          })) || [];
+          
+          // Calcular o total do pedido
+          const total = orderItems.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+          
+          return {
+            ...order,
+            items: orderItems,
+            total: total
+          };
+        });
         
-        // Calcular o total do pedido
-        const total = orderItems.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
-        
-        return {
-          ...order,
-          items: orderItems,
-          total: total
-        };
-      });
-      
-      setOrders(processedOrders);
+        setOrders(processedOrders);
+      } else {
+        console.error('Dados de pedidos não são um array:', ordersData);
+        setOrders([]);
+      }
       
     } catch (error) {
       console.error('Erro ao buscar pedidos do Supabase:', error);
