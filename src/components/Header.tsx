@@ -6,6 +6,8 @@ import { useCart } from '@/context/CartContext';
 import { Sheet, SheetTrigger, SheetContent } from '@/components/ui/sheet';
 import { Link } from 'react-router-dom';
 import { useUserSwitcher } from '@/context/UserSwitcherContext';
+import { useMultiTenant } from '@/context/MultiTenantContext';
+import TenantIndicator from '@/components/TenantIndicator';
 
 const Header = () => {
   const { totalItems, toggleCart } = useCart();
@@ -63,6 +65,9 @@ const Header = () => {
                       <Link to="/api-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
                         Gerenciamento de APIs
                       </Link>
+                      <Link to="/dashboard-saas" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                        Dashboard SAAS
+                      </Link>
                     </>
                   )}
                 </nav>
@@ -74,12 +79,14 @@ const Header = () => {
           </a>
         </div>
         
-        <Button 
-          onClick={toggleCart}
-          variant="ghost" 
-          className="relative p-2"
-          aria-label="Shopping cart"
-        >
+        <div className="flex items-center gap-4">
+          <TenantIndicator />
+          <Button 
+            onClick={toggleCart}
+            variant="ghost" 
+            className="relative p-2"
+            aria-label="Shopping cart"
+          >
           <ShoppingCart className="h-6 w-6" />
           {totalItems > 0 && (
             <span className="absolute -top-1 -right-1 bg-menu-primary text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
@@ -87,6 +94,7 @@ const Header = () => {
             </span>
           )}
         </Button>
+        </div>
       </div>
     </header>
   );

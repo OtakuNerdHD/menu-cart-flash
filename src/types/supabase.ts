@@ -8,6 +8,7 @@ export interface Profile {
   name?: string | null;
   phone?: string | null;
   role?: 'admin' | 'restaurant_owner' | 'manager' | 'waiter' | 'chef' | 'delivery_person' | 'customer';
+  team_id?: string | null; // Campo opcional para usuários que pertencem a um team específico
   created_at?: string;
   avatar_url?: string | null;
   address?: {
@@ -39,6 +40,7 @@ export interface Restaurant {
   phone?: string | null;
   categories?: string[];
   owner_id?: string;
+  team_id: string; // Campo obrigatório para isolamento multi-tenant
   created_at?: string;
   updated_at?: string;
 }
@@ -48,6 +50,7 @@ export interface Category {
   id: number;
   name: string;
   restaurant_id: number;
+  team_id: string; // Campo para isolamento multi-tenant
   created_at?: string;
 }
 
@@ -59,7 +62,8 @@ export interface Product {
   price: number;
   image_url?: string | null;
   restaurant_id: number;
-  category?: string | null;
+  team_id: string; // Campo para isolamento multi-tenant
+  category?: string | null; // Adicionando a propriedade category que está faltando
   category_id?: number | null;
   available: boolean;
   featured?: boolean;
@@ -67,13 +71,7 @@ export interface Product {
   preparation_time?: number | null;
   created_at?: string;
   updated_at?: string;
-  rating?: number;
-  review_count?: number;
   images?: string[];
-  gallery?: string[];
-  ingredients?: string; // Adicionando o campo de ingredientes como string
-  note_hint?: string;
-  thumbnail?: string;
 }
 
 // Tipo para opções de produtos
@@ -83,6 +81,7 @@ export interface ProductOption {
   name: string;
   price: number;
   available: boolean;
+  team_id: string; // Campo para isolamento multi-tenant
   created_at?: string;
   updated_at?: string;
 }
@@ -95,6 +94,7 @@ export interface Table {
   capacity: number;
   status: 'available' | 'occupied' | 'reserved' | 'cleaning';
   qr_code?: string | null;
+  team_id: string; // Campo para isolamento multi-tenant
   created_at?: string;
   updated_at?: string;
 }
@@ -104,6 +104,7 @@ export interface Order {
   id: number;
   restaurant_id: number;
   user_id?: string | null;
+  team_id: string; // Campo para isolamento multi-tenant
   table_id?: number | null;
   status: 'pending' | 'preparing' | 'ready' | 'delivered' | 'completed' | 'cancelled';
   order_type: 'in_store' | 'delivery' | 'pickup';
@@ -139,6 +140,7 @@ export interface OrderItem {
   }[] | null;
   notes?: string | null;
   status: 'pending' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
+  team_id: string; // Campo para isolamento multi-tenant
   created_at?: string;
   updated_at?: string;
 }
@@ -198,5 +200,4 @@ export interface MenuItem {
   category?: string;
   quantity?: number;
   notes?: string;
-  ingredients?: string; // Adicionando o campo de ingredientes para o MenuItem
 }
