@@ -39,23 +39,32 @@ interface Team {
   updated_at: string;
 }
 
-interface Product {
+interface SupabaseProduct {
   id: number;
   name: string;
-  description: string;
+  description?: string;
   price: number;
-  category: string;
+  category?: string;
   available: boolean;
   team_id: string;
   restaurant_id: number;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
+  featured?: boolean;
+  gallery?: string[];
+  ingredients?: string;
+  note_hint?: string;
+  rating?: number;
+  review_count?: number;
+  image_url?: string;
+  images?: string[];
+  nutritional_info?: any;
 }
 
 const DashboardSAAS = () => {
   const { getTeams, createTeam, updateTeam, deleteTeam, getProducts, isAdminMode } = useSupabaseWithMultiTenant();
   const [teams, setTeams] = useState<Team[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<SupabaseProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -102,7 +111,29 @@ const DashboardSAAS = () => {
   const fetchProducts = async () => {
     try {
       const data = await getProducts();
-      setProducts(data as Product[] || []);
+      // Mapear os dados para garantir que todos os campos necessários estejam presentes
+      const mappedProducts: SupabaseProduct[] = (data || []).map((product: any) => ({
+        id: product.id,
+        name: product.name || '',
+        description: product.description || '',
+        price: product.price || 0,
+        category: product.category || '',
+        available: product.available !== false,
+        team_id: product.team_id || '',
+        restaurant_id: product.restaurant_id || 0,
+        created_at: product.created_at || new Date().toISOString(),
+        updated_at: product.updated_at || new Date().toISOString(),
+        featured: product.featured || false,
+        gallery: product.gallery || [],
+        ingredients: product.ingredients || '',
+        note_hint: product.note_hint || '',
+        rating: product.rating || 0,
+        review_count: product.review_count || 0,
+        image_url: product.image_url || '',
+        images: product.images || [],
+        nutritional_info: product.nutritional_info || null
+      }));
+      setProducts(mappedProducts);
     } catch (error: any) {
       console.error('Erro ao buscar produtos:', error);
       toast({

@@ -93,18 +93,21 @@ const ProductManagement = () => {
       }
       
       if (data && data.length > 0) {
-        // Adicionar restaurant_id padrão como 1 se não existir
-        const productsWithRestaurantId = data.map((product: Product) => ({
+        // Mapear dados do Supabase para o tipo Product com todos os campos necessários
+        const productsWithAllFields = data.map((product: any): Product => ({
           ...product,
           restaurant_id: product.restaurant_id || 1,
-          team_id: product.team_id || 'default_team_id', // Adicionar team_id padrão se não existir
-          // Assegura que sempre haja um array de imagens: usa images ou fallback para image_url
+          team_id: product.team_id || 'default_team_id',
+          created_at: product.created_at || new Date().toISOString(),
+          rating: product.rating || 0,
+          review_count: product.review_count || 0,
+          // Assegura que sempre haja um array de imagens
           images: Array.isArray(product.images) && product.images.length > 0
             ? product.images
             : (product.image_url ? [product.image_url] : ['/placeholder.svg'])
-        })) as Product[];
+        }));
         
-        setProducts(productsWithRestaurantId);
+        setProducts(productsWithAllFields);
       }
     } catch (error) {
       console.error('Erro ao processar dados do Supabase:', error);
