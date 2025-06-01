@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,12 +16,16 @@ import ImageUpload from '@/components/ImageUpload';
 import { useAuth } from '@/context/AuthContext';
 
 // Interface para perfil do Supabase
-interface Profile {
+interface SupabaseProfile {
   id: string;
   email?: string | null;
   full_name?: string | null;
   role?: 'admin' | 'restaurant_owner' | 'manager' | 'waiter' | 'chef' | 'delivery_person' | 'customer' | 'visitor' | null;
   avatar_url?: string | null;
+  created_at: string;
+  updated_at: string;
+  is_admin: boolean;
+  status: string;
 }
 
 // Definindo o tipo AppUser para corresponder à estrutura usada no componente
@@ -49,6 +54,7 @@ const extraUsers: AppUser[] = [
 
 const UserManagement = () => {
   const { currentUser } = useUserSwitcher();
+  const { currentUser: authUser } = useAuth();
   const [users, setUsers] = useState<AppUser[]>(mockUsers); // Tipar o estado users
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [extraUsersAdded, setExtraUsersAdded] = useState(false);
@@ -65,7 +71,8 @@ const UserManagement = () => {
     password: ''
   });
   
-  const isAdminOrOwner = currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner';
+  // Verificar se é admin baseado no usuário logado
+  const isAdminOrOwner = authUser?.role === 'admin' || currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner';
 
   useEffect(() => {
     // Carregar usuários do localStorage se existirem
@@ -94,12 +101,12 @@ const UserManagement = () => {
       }
       
       if (data && data.length > 0) {
-        const supabaseUsers: AppUser[] = data.map((user: Profile) => ({
+        const supabaseUsers: AppUser[] = data.map((user: SupabaseProfile) => ({
           id: user.id,
           full_name: user.full_name || user.email || 'Nome não disponível',
           email: user.email || 'Email não disponível',
           role: (user.role as AppUser['role']) || 'customer',
-          status: 'active' as const,
+          status: (user.status === 'active' || user.status === 'inactive') ? user.status as 'active' | 'inactive' : 'active',
           photo_url: user.avatar_url || ''
         }));
         
@@ -191,7 +198,7 @@ const UserManagement = () => {
           role: currentUser2Edit.role,
           avatar_url: currentUser2Edit.photo_url
         })
-        .eq('id', currentUser2Edit.id);
+        .eq('id', currentUser2Edit.id.toString());
         
       if (error) {
         console.error('Erro ao atualizar usuário no Supabase:', error);
@@ -377,7 +384,7 @@ const UserManagement = () => {
           // Se você quiser persistir o status, adicione um campo 'status' na tabela profiles
           // status: newStatus
         })
-        .eq('id', userId)
+        .eq('id', userId.toString())
         .then(({ error }) => {
           if (error) {
             console.error('Erro ao atualizar status no Supabase:', error);
@@ -405,7 +412,7 @@ const UserManagement = () => {
       const { error } = await supabase
         .from('profiles')
         .delete()
-        .eq('id', userId);
+        .eq('id', userId.toString());
 
       if (error) {
         console.error('Erro ao excluir perfil do Supabase:', error);

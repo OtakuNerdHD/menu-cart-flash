@@ -85,7 +85,7 @@ export const useSupabaseWithTeam = () => {
       },
 
       // Buscar mesas do team atual
-      getTables: async (restaurant_id?: number) => {
+      getTables: async (restaurant_id?: string) => {
         let query = supabase
           .from('tables')
           .select(`

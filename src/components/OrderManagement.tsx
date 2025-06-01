@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useMultiTenant } from '@/context/MultiTenantContext';
@@ -82,7 +81,7 @@ const OrderManagement = () => {
       if (Array.isArray(data)) {
         const mappedOrders: Order[] = data.map(order => ({
           id: order.id,
-          user_id: order.user_id,
+          user_id: order.user_id?.toString() || '',
           restaurant_id: order.restaurant_id,
           table_id: order.table_id,
           status: order.status || 'pending',
