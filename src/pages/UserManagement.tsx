@@ -20,7 +20,7 @@ interface SupabaseProfile {
   id: string;
   email?: string | null;
   full_name?: string | null;
-  role?: 'admin' | 'restaurant_owner' | 'manager' | 'waiter' | 'chef' | 'delivery_person' | 'customer' | 'visitor' | null;
+  role?: string | null;
   avatar_url?: string | null;
   created_at: string;
   updated_at: string;
@@ -101,12 +101,12 @@ const UserManagement = () => {
       }
       
       if (data && data.length > 0) {
-        const supabaseUsers: AppUser[] = data.map((user: SupabaseProfile) => ({
+        const supabaseUsers: AppUser[] = data.map((user: any) => ({
           id: user.id,
           full_name: user.full_name || user.email || 'Nome não disponível',
           email: user.email || 'Email não disponível',
-          role: (user.role as AppUser['role']) || 'customer',
-          status: (user.status === 'active' || user.status === 'inactive') ? user.status as 'active' | 'inactive' : 'active',
+          role: (['admin', 'restaurant_owner', 'manager', 'waiter', 'chef', 'delivery_person', 'customer', 'visitor'].includes(user.role) ? user.role : 'customer') as AppUser['role'],
+          status: (['active', 'inactive'].includes(user.status) ? user.status : 'active') as 'active' | 'inactive',
           photo_url: user.avatar_url || ''
         }));
         

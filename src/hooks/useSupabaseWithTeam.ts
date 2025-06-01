@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { useTeam } from '@/context/TeamContext';
 import { useMemo } from 'react';
@@ -99,7 +98,7 @@ export const useSupabaseWithTeam = () => {
           .eq('team_id', teamId);
 
         if (restaurant_id) {
-          query = query.eq('restaurant_id', restaurant_id);
+          query = query.eq('restaurant_id', parseInt(restaurant_id));
         }
 
         const { data, error } = await query;
