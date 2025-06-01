@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useMultiTenant } from '@/context/MultiTenantContext';
@@ -79,7 +80,7 @@ const OrderManagement = () => {
 
       // Verificar se data é um array antes de usar map
       if (Array.isArray(data)) {
-        const mappedOrders: Order[] = data.map(order => ({
+        const mappedOrders: Order[] = data.map((order: any) => ({
           id: order.id,
           user_id: order.user_id?.toString() || '',
           restaurant_id: order.restaurant_id,

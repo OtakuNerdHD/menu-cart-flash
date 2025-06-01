@@ -72,6 +72,12 @@ export interface Product {
   created_at?: string;
   updated_at?: string;
   images?: string[];
+  // Campos opcionais para compatibilidade com dados do Supabase
+  gallery?: string[];
+  ingredients?: string;
+  note_hint?: string;
+  rating?: number;
+  review_count?: number;
 }
 
 // Tipo para opções de produtos
