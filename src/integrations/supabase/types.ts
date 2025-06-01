@@ -69,6 +69,13 @@ export type Database = {
             referencedRelation: "orders"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       order_items: {
@@ -104,131 +111,54 @@ export type Database = {
         }
         Relationships: []
       }
-      order_tracking: {
-        Row: {
-          created_at: string | null
-          current_location: Json | null
-          destination_location: Json
-          driver_name: string | null
-          driver_photo: string | null
-          estimation_minutes: number | null
-          expires_at: string | null
-          id: string
-          order_id: number | null
-          snapshot: Json | null
-          snapshot_created: boolean | null
-          status: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          current_location?: Json | null
-          destination_location: Json
-          driver_name?: string | null
-          driver_photo?: string | null
-          estimation_minutes?: number | null
-          expires_at?: string | null
-          id?: string
-          order_id?: number | null
-          snapshot?: Json | null
-          snapshot_created?: boolean | null
-          status?: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          current_location?: Json | null
-          destination_location?: Json
-          driver_name?: string | null
-          driver_photo?: string | null
-          estimation_minutes?: number | null
-          expires_at?: string | null
-          id?: string
-          order_id?: number | null
-          snapshot?: Json | null
-          snapshot_created?: boolean | null
-          status?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "order_tracking_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       orders: {
         Row: {
           address: Json | null
-          assigned_to: string | null
           created_at: string | null
-          created_by: string | null
           delivery_person_id: number | null
           delivery_type: string
           id: number
-          items_json: Json | null
-          kitchen_status: string | null
-          order_number: number | null
-          order_type: string | null
           payment_method: string | null
           restaurant_id: number | null
           status: string
-          table_id: number | null
           table_name: string | null
-          team_id: string | null
           total: number
-          total_amount: number | null
           updated_at: string | null
           user_id: number | null
+          team_id: string | null
+          total_amount: number | null
         }
         Insert: {
           address?: Json | null
-          assigned_to?: string | null
           created_at?: string | null
-          created_by?: string | null
           delivery_person_id?: number | null
           delivery_type: string
           id?: number
-          items_json?: Json | null
-          kitchen_status?: string | null
-          order_number?: number | null
-          order_type?: string | null
           payment_method?: string | null
           restaurant_id?: number | null
           status?: string
-          table_id?: number | null
           table_name?: string | null
-          team_id?: string | null
           total: number
-          total_amount?: number | null
           updated_at?: string | null
           user_id?: number | null
+          team_id?: string | null
+          total_amount?: number | null
         }
         Update: {
           address?: Json | null
-          assigned_to?: string | null
           created_at?: string | null
-          created_by?: string | null
           delivery_person_id?: number | null
           delivery_type?: string
           id?: number
-          items_json?: Json | null
-          kitchen_status?: string | null
-          order_number?: number | null
-          order_type?: string | null
           payment_method?: string | null
           restaurant_id?: number | null
           status?: string
-          table_id?: number | null
           table_name?: string | null
-          team_id?: string | null
           total?: number
-          total_amount?: number | null
           updated_at?: string | null
           user_id?: number | null
+          team_id?: string | null
+          total_amount?: number | null
         }
         Relationships: [
           {
@@ -236,81 +166,6 @@ export type Database = {
             columns: ["restaurant_id"]
             isOneToOne: false
             referencedRelation: "restaurants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "orders_table_id_fkey"
-            columns: ["table_id"]
-            isOneToOne: false
-            referencedRelation: "tables"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      payment_methods: {
-        Row: {
-          card_brand: string | null
-          card_last_four: string | null
-          created_at: string | null
-          expiry_date: string | null
-          id: string
-          is_default: boolean | null
-          method_type: string
-          nickname: string
-          profile_id: string
-          updated_at: string | null
-        }
-        Insert: {
-          card_brand?: string | null
-          card_last_four?: string | null
-          created_at?: string | null
-          expiry_date?: string | null
-          id?: string
-          is_default?: boolean | null
-          method_type: string
-          nickname: string
-          profile_id: string
-          updated_at?: string | null
-        }
-        Update: {
-          card_brand?: string | null
-          card_last_four?: string | null
-          created_at?: string | null
-          expiry_date?: string | null
-          id?: string
-          is_default?: boolean | null
-          method_type?: string
-          nickname?: string
-          profile_id?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      product_images: {
-        Row: {
-          created_at: string | null
-          id: string
-          image_url: string
-          product_id: number | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          image_url: string
-          product_id?: number | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          image_url?: string
-          product_id?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_images_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -341,135 +196,85 @@ export type Database = {
       }
       products: {
         Row: {
-          available: boolean
-          category: string | null
-          description: string | null
-          featured: boolean
-          gallery: string[] | null
+          available: boolean | null
+          category: string
+          created_at: string | null
+          description: string
+          featured: boolean | null
           id: number
           image_url: string | null
-          images: string[] | null
-          ingredients: string | null
-          name: string | null
-          note_hint: string | null
+          name: string
           nutritional_info: Json | null
-          price: number | null
-          restaurant_id: number | null
-          team_id: string | null
-          thumbnail: string | null
+          price: number
+          rating: number | null
+          review_count: number | null
           updated_at: string | null
+          team_id: string | null
+          restaurant_id: number | null
         }
         Insert: {
-          available?: boolean
-          category?: string | null
-          description?: string | null
-          featured?: boolean
-          gallery?: string[] | null
+          available?: boolean | null
+          category: string
+          created_at?: string | null
+          description: string
+          featured?: boolean | null
           id?: number
           image_url?: string | null
-          images?: string[] | null
-          ingredients?: string | null
-          name?: string | null
-          note_hint?: string | null
+          name: string
           nutritional_info?: Json | null
-          price?: number | null
-          restaurant_id?: number | null
-          team_id?: string | null
-          thumbnail?: string | null
+          price: number
+          rating?: number | null
+          review_count?: number | null
           updated_at?: string | null
+          team_id?: string | null
+          restaurant_id?: number | null
         }
         Update: {
-          available?: boolean
-          category?: string | null
-          description?: string | null
-          featured?: boolean
-          gallery?: string[] | null
+          available?: boolean | null
+          category?: string
+          created_at?: string | null
+          description?: string
+          featured?: boolean | null
           id?: number
           image_url?: string | null
-          images?: string[] | null
-          ingredients?: string | null
-          name?: string | null
-          note_hint?: string | null
+          name?: string
           nutritional_info?: Json | null
-          price?: number | null
-          restaurant_id?: number | null
-          team_id?: string | null
-          thumbnail?: string | null
+          price?: number
+          rating?: number | null
+          review_count?: number | null
           updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "products_restaurant_id_fkey"
-            columns: ["restaurant_id"]
-            isOneToOne: false
-            referencedRelation: "restaurants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      produtos: {
-        Row: {
-          categoria: string
-          created_at: string | null
-          descricao: string | null
-          destaque: boolean | null
-          id: string
-          imagem: string | null
-          nome: string
-          preco: number
-        }
-        Insert: {
-          categoria: string
-          created_at?: string | null
-          descricao?: string | null
-          destaque?: boolean | null
-          id?: string
-          imagem?: string | null
-          nome: string
-          preco: number
-        }
-        Update: {
-          categoria?: string
-          created_at?: string | null
-          descricao?: string | null
-          destaque?: boolean | null
-          id?: string
-          imagem?: string | null
-          nome?: string
-          preco?: number
+          team_id?: string | null
+          restaurant_id?: number | null
         }
         Relationships: []
       }
       profiles: {
         Row: {
           avatar_url: string | null
+          coverage_area: unknown | null
           created_at: string | null
-          email: string
-          full_name: string | null
           id: string
+          name: string | null
+          phone: string | null
           role: string | null
-          status: string | null
-          updated_at: string | null
         }
         Insert: {
           avatar_url?: string | null
+          coverage_area?: unknown | null
           created_at?: string | null
-          email: string
-          full_name?: string | null
-          id?: string
+          id: string
+          name?: string | null
+          phone?: string | null
           role?: string | null
-          status?: string | null
-          updated_at?: string | null
         }
         Update: {
           avatar_url?: string | null
+          coverage_area?: unknown | null
           created_at?: string | null
-          email?: string
-          full_name?: string | null
           id?: string
+          name?: string | null
+          phone?: string | null
           role?: string | null
-          status?: string | null
-          updated_at?: string | null
         }
         Relationships: []
       }
@@ -513,7 +318,15 @@ export type Database = {
           owner_id?: string | null
           team_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "restaurants_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       spatial_ref_sys: {
         Row: {
@@ -539,195 +352,82 @@ export type Database = {
         }
         Relationships: []
       }
-      store_settings: {
-        Row: {
-          address: string | null
-          allow_delivery: boolean | null
-          allow_instore_payment: boolean | null
-          city: string | null
-          created_at: string | null
-          delivery_fee_per_km: number | null
-          delivery_radius: number | null
-          id: number
-          latitude: number | null
-          longitude: number | null
-          payment_provider: string | null
-          state: string | null
-          store_name: string | null
-          updated_at: string | null
-          zipcode: string | null
-        }
-        Insert: {
-          address?: string | null
-          allow_delivery?: boolean | null
-          allow_instore_payment?: boolean | null
-          city?: string | null
-          created_at?: string | null
-          delivery_fee_per_km?: number | null
-          delivery_radius?: number | null
-          id?: number
-          latitude?: number | null
-          longitude?: number | null
-          payment_provider?: string | null
-          state?: string | null
-          store_name?: string | null
-          updated_at?: string | null
-          zipcode?: string | null
-        }
-        Update: {
-          address?: string | null
-          allow_delivery?: boolean | null
-          allow_instore_payment?: boolean | null
-          city?: string | null
-          created_at?: string | null
-          delivery_fee_per_km?: number | null
-          delivery_radius?: number | null
-          id?: number
-          latitude?: number | null
-          longitude?: number | null
-          payment_provider?: string | null
-          state?: string | null
-          store_name?: string | null
-          updated_at?: string | null
-          zipcode?: string | null
-        }
-        Relationships: []
-      }
       tables: {
         Row: {
-          assigned_user_id: string | null
-          capacity: number | null
           created_at: string | null
           id: number
           name: string
-          qr_code: string | null
           server_id: number | null
           status: string
           team_id: string | null
+          restaurant_id: number | null
+          capacity: number | null
+          qr_code: string | null
         }
         Insert: {
-          assigned_user_id?: string | null
-          capacity?: number | null
           created_at?: string | null
           id?: number
           name: string
-          qr_code?: string | null
           server_id?: number | null
           status?: string
           team_id?: string | null
+          restaurant_id?: number | null
+          capacity?: number | null
+          qr_code?: string | null
         }
         Update: {
-          assigned_user_id?: string | null
-          capacity?: number | null
           created_at?: string | null
           id?: number
           name?: string
-          qr_code?: string | null
           server_id?: number | null
           status?: string
           team_id?: string | null
+          restaurant_id?: number | null
+          capacity?: number | null
+          qr_code?: string | null
         }
         Relationships: []
       }
       teams: {
         Row: {
-          created_at: string | null
-          description: string | null
-          domain: string | null
           id: string
-          is_active: boolean | null
-          logo_url: string | null
           name: string
+          slug: string
+          created_at: string
+          updated_at: string
+          owner_id: string | null
           settings: Json | null
-          slug: string
-          updated_at: string | null
         }
         Insert: {
-          created_at?: string | null
-          description?: string | null
-          domain?: string | null
           id?: string
-          is_active?: boolean | null
-          logo_url?: string | null
           name: string
-          settings?: Json | null
           slug: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          domain?: string | null
-          id?: string
-          is_active?: boolean | null
-          logo_url?: string | null
-          name?: string
+          created_at?: string
+          updated_at?: string
+          owner_id?: string | null
           settings?: Json | null
+        }
+        Update: {
+          id?: string
+          name?: string
           slug?: string
-          updated_at?: string | null
+          created_at?: string
+          updated_at?: string
+          owner_id?: string | null
+          settings?: Json | null
         }
-        Relationships: []
-      }
-      user_addresses: {
-        Row: {
-          cep: string
-          city: string
-          complement: string | null
-          created_at: string | null
-          id: string
-          neighborhood: string
-          number: string
-          state: string
-          street: string
-        }
-        Insert: {
-          cep: string
-          city: string
-          complement?: string | null
-          created_at?: string | null
-          id?: string
-          neighborhood: string
-          number: string
-          state: string
-          street: string
-        }
-        Update: {
-          cep?: string
-          city?: string
-          complement?: string | null
-          created_at?: string | null
-          id?: string
-          neighborhood?: string
-          number?: string
-          state?: string
-          street?: string
-        }
-        Relationships: []
-      }
-      user_switcher_sessions: {
-        Row: {
-          session_id: string
-          updated_at: string | null
-          user_data: Json
-        }
-        Insert: {
-          session_id: string
-          updated_at?: string | null
-          user_data: Json
-        }
-        Update: {
-          session_id?: string
-          updated_at?: string | null
-          user_data?: Json
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "teams_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       users: {
         Row: {
-          address: string | null
-          birth_date: string | null
-          city: string | null
-          cpf: string | null
           created_at: string | null
           email: string
           first_name: string
@@ -737,16 +437,10 @@ export type Database = {
           phone: string | null
           photo_url: string | null
           role: string
-          state: string | null
           updated_at: string | null
           username: string
-          zip_code: string | null
         }
         Insert: {
-          address?: string | null
-          birth_date?: string | null
-          city?: string | null
-          cpf?: string | null
           created_at?: string | null
           email: string
           first_name: string
@@ -756,16 +450,10 @@ export type Database = {
           phone?: string | null
           photo_url?: string | null
           role?: string
-          state?: string | null
           updated_at?: string | null
           username: string
-          zip_code?: string | null
         }
         Update: {
-          address?: string | null
-          birth_date?: string | null
-          city?: string | null
-          cpf?: string | null
           created_at?: string | null
           email?: string
           first_name?: string
@@ -775,37 +463,8 @@ export type Database = {
           phone?: string | null
           photo_url?: string | null
           role?: string
-          state?: string | null
           updated_at?: string | null
           username?: string
-          zip_code?: string | null
-        }
-        Relationships: []
-      }
-      verification_codes: {
-        Row: {
-          code: string
-          created_at: string | null
-          expires_at: string
-          id: string
-          is_used: boolean | null
-          phone: string
-        }
-        Insert: {
-          code: string
-          created_at?: string | null
-          expires_at: string
-          id?: string
-          is_used?: boolean | null
-          phone: string
-        }
-        Update: {
-          code?: string
-          created_at?: string | null
-          expires_at?: string
-          id?: string
-          is_used?: boolean | null
-          phone?: string
         }
         Relationships: []
       }
@@ -859,6 +518,10 @@ export type Database = {
         Args: { oldname: string; newname: string; version: string }
         Returns: undefined
       }
+      set_app_config: {
+        Args: { config_name: string; config_value: string }
+        Returns: undefined
+      }
       _postgis_index_extent: {
         Args: { tbl: unknown; col: string }
         Returns: unknown
@@ -893,14 +556,14 @@ export type Database = {
       }
       _st_coveredby: {
         Args:
-          | { geog1: unknown; geog2: unknown }
           | { geom1: unknown; geom2: unknown }
+          | { geog1: unknown; geog2: unknown }
         Returns: boolean
       }
       _st_covers: {
         Args:
-          | { geog1: unknown; geog2: unknown }
           | { geom1: unknown; geom2: unknown }
+          | { geog1: unknown; geog2: unknown }
         Returns: boolean
       }
       _st_crosses: {
@@ -1004,20 +667,6 @@ export type Database = {
             }
         Returns: string
       }
-      assign_table_to_user: {
-        Args: { p_table_id: number; p_user_id: string }
-        Returns: {
-          assigned_user_id: string | null
-          capacity: number | null
-          created_at: string | null
-          id: number
-          name: string
-          qr_code: string | null
-          server_id: number | null
-          status: string
-          team_id: string | null
-        }
-      }
       box: {
         Args: { "": unknown } | { "": unknown }
         Returns: unknown
@@ -1060,24 +709,6 @@ export type Database = {
       }
       bytea: {
         Args: { "": unknown } | { "": unknown }
-        Returns: string
-      }
-      create_table: {
-        Args: { table_name: string }
-        Returns: {
-          assigned_user_id: string | null
-          capacity: number | null
-          created_at: string | null
-          id: number
-          name: string
-          qr_code: string | null
-          server_id: number | null
-          status: string
-          team_id: string | null
-        }[]
-      }
-      delete_user_safely: {
-        Args: { user_uuid: string }
         Returns: string
       }
       disablelongtransactions: {
@@ -1149,13 +780,13 @@ export type Database = {
       }
       geometry: {
         Args:
+          | { "": unknown }
+          | { "": unknown }
+          | { "": unknown }
+          | { "": unknown }
+          | { "": unknown }
           | { "": string }
           | { "": string }
-          | { "": unknown }
-          | { "": unknown }
-          | { "": unknown }
-          | { "": unknown }
-          | { "": unknown }
           | { "": unknown }
         Returns: unknown
       }
@@ -1335,10 +966,6 @@ export type Database = {
         Args: { "": string }
         Returns: unknown
       }
-      get_jwt_claims: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
       get_proj4_from_srid: {
         Args: { "": number }
         Returns: string
@@ -1425,8 +1052,8 @@ export type Database = {
       }
       populate_geometry_columns: {
         Args:
-          | { tbl_oid: unknown; use_typmod?: boolean }
           | { use_typmod?: boolean }
+          | { tbl_oid: unknown; use_typmod?: boolean }
         Returns: string
       }
       postgis_addbbox: {
@@ -1557,18 +1184,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
-      set_app_config: {
-        Args: { config_name: string; config_value: string }
-        Returns: undefined
-      }
-      set_config: {
-        Args: { parameter: string; value: string }
-        Returns: undefined
-      }
-      set_current_team_id: {
-        Args: { team_id: string }
-        Returns: undefined
-      }
       spheroid_in: {
         Args: { "": unknown }
         Returns: unknown
@@ -1619,15 +1234,15 @@ export type Database = {
       }
       st_angle: {
         Args:
-          | { line1: unknown; line2: unknown }
           | { pt1: unknown; pt2: unknown; pt3: unknown; pt4?: unknown }
+          | { line1: unknown; line2: unknown }
         Returns: number
       }
       st_area: {
         Args:
-          | { "": string }
           | { "": unknown }
           | { geog: unknown; use_spheroid?: boolean }
+          | { "": string }
         Returns: number
       }
       st_area2d: {
@@ -1647,13 +1262,11 @@ export type Database = {
         Returns: string
       }
       st_asewkt: {
-        Args: { "": string } | { "": unknown } | { "": unknown }
+        Args: { "": unknown } | { "": unknown } | { "": string }
         Returns: string
       }
       st_asgeojson: {
         Args:
-          | { "": string }
-          | { geog: unknown; maxdecimaldigits?: number; options?: number }
           | { geom: unknown; maxdecimaldigits?: number; options?: number }
           | {
               r: Record<string, unknown>
@@ -1661,27 +1274,13 @@ export type Database = {
               maxdecimaldigits?: number
               pretty_bool?: boolean
             }
+          | { geog: unknown; maxdecimaldigits?: number; options?: number }
+          | { "": string }
         Returns: string
       }
       st_asgml: {
         Args:
-          | { "": string }
-          | {
-              geog: unknown
-              maxdecimaldigits?: number
-              options?: number
-              nprefix?: string
-              id?: string
-            }
           | { geom: unknown; maxdecimaldigits?: number; options?: number }
-          | {
-              version: number
-              geog: unknown
-              maxdecimaldigits?: number
-              options?: number
-              nprefix?: string
-              id?: string
-            }
           | {
               version: number
               geom: unknown
@@ -1690,6 +1289,22 @@ export type Database = {
               nprefix?: string
               id?: string
             }
+          | {
+              version: number
+              geog: unknown
+              maxdecimaldigits?: number
+              options?: number
+              nprefix?: string
+              id?: string
+            }
+          | {
+              geog: unknown
+              maxdecimaldigits?: number
+              options?: number
+              nprefix?: string
+              id?: string
+            }
+          | { "": string }
         Returns: string
       }
       st_ashexewkb: {
@@ -1698,9 +1313,9 @@ export type Database = {
       }
       st_askml: {
         Args:
-          | { "": string }
-          | { geog: unknown; maxdecimaldigits?: number; nprefix?: string }
           | { geom: unknown; maxdecimaldigits?: number; nprefix?: string }
+          | { geog: unknown; maxdecimaldigits?: number; nprefix?: string }
+          | { "": string }
         Returns: string
       }
       st_aslatlontext: {
@@ -1723,20 +1338,19 @@ export type Database = {
       }
       st_assvg: {
         Args:
-          | { "": string }
-          | { geog: unknown; rel?: number; maxdecimaldigits?: number }
           | { geom: unknown; rel?: number; maxdecimaldigits?: number }
+          | { geog: unknown; rel?: number; maxdecimaldigits?: number }
+          | { "": string }
         Returns: string
       }
       st_astext: {
-        Args: { "": string } | { "": unknown } | { "": unknown }
+        Args: { "": unknown } | { "": unknown } | { "": string }
         Returns: string
       }
       st_astwkb: {
         Args:
           | {
-              geom: unknown[]
-              ids: number[]
+              geom: unknown
               prec?: number
               prec_z?: number
               prec_m?: number
@@ -1744,7 +1358,8 @@ export type Database = {
               with_boxes?: boolean
             }
           | {
-              geom: unknown
+              geom: unknown[]
+              ids: number[]
               prec?: number
               prec_z?: number
               prec_m?: number
@@ -1759,8 +1374,8 @@ export type Database = {
       }
       st_azimuth: {
         Args:
-          | { geog1: unknown; geog2: unknown }
           | { geom1: unknown; geom2: unknown }
+          | { geog1: unknown; geog2: unknown }
         Returns: number
       }
       st_boundary: {
@@ -1782,7 +1397,7 @@ export type Database = {
         Returns: unknown
       }
       st_centroid: {
-        Args: { "": string } | { "": unknown }
+        Args: { "": unknown } | { "": string }
         Returns: unknown
       }
       st_cleangeometry: {
@@ -1802,7 +1417,7 @@ export type Database = {
         Returns: unknown[]
       }
       st_collect: {
-        Args: { "": unknown[] } | { geom1: unknown; geom2: unknown }
+        Args: { geom1: unknown; geom2: unknown } | { "": unknown[] }
         Returns: unknown
       }
       st_collectionextract: {
@@ -1839,14 +1454,14 @@ export type Database = {
       }
       st_coveredby: {
         Args:
-          | { geog1: unknown; geog2: unknown }
           | { geom1: unknown; geom2: unknown }
+          | { geog1: unknown; geog2: unknown }
         Returns: boolean
       }
       st_covers: {
         Args:
-          | { geog1: unknown; geog2: unknown }
           | { geom1: unknown; geom2: unknown }
+          | { geog1: unknown; geog2: unknown }
         Returns: boolean
       }
       st_crosses: {
@@ -1875,8 +1490,8 @@ export type Database = {
       }
       st_distance: {
         Args:
-          | { geog1: unknown; geog2: unknown; use_spheroid?: boolean }
           | { geom1: unknown; geom2: unknown }
+          | { geog1: unknown; geog2: unknown; use_spheroid?: boolean }
         Returns: number
       }
       st_distancesphere: {
@@ -2005,8 +1620,8 @@ export type Database = {
       }
       st_geohash: {
         Args:
-          | { geog: unknown; maxchars?: number }
           | { geom: unknown; maxchars?: number }
+          | { geog: unknown; maxchars?: number }
         Returns: string
       }
       st_geomcollfromtext: {
@@ -2043,7 +1658,7 @@ export type Database = {
         Returns: unknown
       }
       st_geomfromgeojson: {
-        Args: { "": Json } | { "": Json } | { "": string }
+        Args: { "": string } | { "": Json } | { "": Json }
         Returns: unknown
       }
       st_geomfromgml: {
@@ -2100,8 +1715,8 @@ export type Database = {
       }
       st_intersects: {
         Args:
-          | { geog1: unknown; geog2: unknown }
           | { geom1: unknown; geom2: unknown }
+          | { geog1: unknown; geog2: unknown }
         Returns: boolean
       }
       st_isclosed: {
@@ -2150,9 +1765,9 @@ export type Database = {
       }
       st_length: {
         Args:
-          | { "": string }
           | { "": unknown }
           | { geog: unknown; use_spheroid?: boolean }
+          | { "": string }
         Returns: number
       }
       st_length2d: {
@@ -2483,7 +2098,7 @@ export type Database = {
         Returns: unknown
       }
       st_setsrid: {
-        Args: { geog: unknown; srid: number } | { geom: unknown; srid: number }
+        Args: { geom: unknown; srid: number } | { geog: unknown; srid: number }
         Returns: unknown
       }
       st_sharedpaths: {
@@ -2515,7 +2130,7 @@ export type Database = {
         Returns: Record<string, unknown>[]
       }
       st_srid: {
-        Args: { geog: unknown } | { geom: unknown }
+        Args: { geom: unknown } | { geog: unknown }
         Returns: number
       }
       st_startpoint: {
@@ -2558,9 +2173,9 @@ export type Database = {
       }
       st_transform: {
         Args:
+          | { geom: unknown; to_proj: string }
           | { geom: unknown; from_proj: string; to_proj: string }
           | { geom: unknown; from_proj: string; to_srid: number }
-          | { geom: unknown; to_proj: string }
         Returns: unknown
       }
       st_triangulatepolygon: {
@@ -2569,9 +2184,9 @@ export type Database = {
       }
       st_union: {
         Args:
-          | { "": unknown[] }
           | { geom1: unknown; geom2: unknown }
           | { geom1: unknown; geom2: unknown; gridsize: number }
+          | { "": unknown[] }
         Returns: unknown
       }
       st_voronoilines: {
@@ -2642,20 +2257,6 @@ export type Database = {
         Args: { "": unknown }
         Returns: string
       }
-      unassign_table: {
-        Args: { p_table_id: number }
-        Returns: {
-          assigned_user_id: string | null
-          capacity: number | null
-          created_at: string | null
-          id: number
-          name: string
-          qr_code: string | null
-          server_id: number | null
-          status: string
-          team_id: string | null
-        }
-      }
       unlockrows: {
         Args: { "": string }
         Returns: number
@@ -2669,16 +2270,6 @@ export type Database = {
           new_srid_in: number
         }
         Returns: string
-      }
-      upsert_user: {
-        Args: {
-          user_id: string
-          user_email: string
-          user_username: string
-          user_avatar_url?: string
-          user_role?: string
-        }
-        Returns: Json
       }
     }
     Enums: {

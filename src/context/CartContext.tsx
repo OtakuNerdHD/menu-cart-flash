@@ -1,5 +1,5 @@
 
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { MenuItem } from '@/types/supabase';
 import { useToast } from "@/components/ui/use-toast";
 
@@ -12,13 +12,14 @@ interface CartContextType {
   cartItems: CartItem[];
   cartOpen: boolean;
   toggleCart: () => void;
-  addToCart: (item: MenuItem) => void;
-  removeFromCart: (id: number) => void;
-  updateQuantity: (id: number, quantity: number) => void;
+  addToCart: (item: MenuItem & { notes?: string }) => void;
+  removeFromCart: (id: number, notes?: string) => void;
+  updateQuantity: (id: number, quantity: number, notes?: string) => void;
   clearCart: () => void;
   totalItems: number;
   subtotal: number;
   closeCart: () => void; // Adicionando método para fechar o carrinho
+  getCartTotal: () => number; // Adicionando método para calcular total do carrinho
 }
 
 export const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -28,6 +29,26 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartOpen, setCartOpen] = useState(false);
   const { toast } = useToast();
 
+  // Verificar se há itens no carrinho salvos no localStorage
+  useEffect(() => {
+    const savedCart = localStorage.getItem('cart');
+    if (savedCart) {
+      try {
+        const parsedCart = JSON.parse(savedCart);
+        if (Array.isArray(parsedCart)) {
+          setCartItems(parsedCart);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar carrinho do localStorage:', error);
+      }
+    }
+  }, []);
+
+  // Salvar carrinho no localStorage quando mudar
+  useEffect(() => {
+    localStorage.setItem('cart', JSON.stringify(cartItems));
+  }, [cartItems]);
+
   const toggleCart = () => {
     setCartOpen(!cartOpen);
   };
@@ -36,18 +57,24 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     setCartOpen(false);
   };
 
-  const addToCart = (item: MenuItem) => {
+  const addToCart = (item: MenuItem & { notes?: string }) => {
     setCartItems(prevItems => {
-      const existingItem = prevItems.find(cartItem => cartItem.id === item.id);
+      const existingItem = prevItems.find(cartItem => 
+        cartItem.id === item.id && cartItem.notes === item.notes
+      );
       
       if (existingItem) {
         return prevItems.map(cartItem => 
-          cartItem.id === item.id 
-            ? { ...cartItem, quantity: cartItem.quantity + 1 } 
+          cartItem.id === item.id && cartItem.notes === item.notes
+            ? { ...cartItem, quantity: cartItem.quantity + (item.quantity || 1) } 
             : cartItem
         );
       } else {
-        return [...prevItems, { ...item, quantity: 1 }];
+        return [...prevItems, { 
+          ...item, 
+          quantity: item.quantity || 1,
+          notes: item.notes 
+        }];
       }
     });
 
@@ -55,12 +82,12 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       title: "Item adicionado",
       description: `${item.name} foi adicionado ao carrinho`,
     });
-    
-    // Removendo a abertura automática do carrinho
   };
 
-  const removeFromCart = (id: number) => {
-    setCartItems(prevItems => prevItems.filter(item => item.id !== id));
+  const removeFromCart = (id: number, notes?: string) => {
+    setCartItems(prevItems => prevItems.filter(item => 
+      !(item.id === id && item.notes === notes)
+    ));
     
     toast({
       title: "Item removido",
@@ -68,15 +95,15 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
-  const updateQuantity = (id: number, quantity: number) => {
-    if (quantity < 1) {
-      removeFromCart(id);
+  const updateQuantity = (id: number, quantity: number, notes?: string) => {
+    if (quantity <= 0) {
+      removeFromCart(id, notes);
       return;
     }
     
     setCartItems(prevItems => 
       prevItems.map(item => 
-        item.id === id ? { ...item, quantity } : item
+        item.id === id && item.notes === notes ? { ...item, quantity } : item
       )
     );
   };
@@ -96,6 +123,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     0
   );
 
+  const getCartTotal = () => {
+    return cartItems.reduce(
+      (total, item) => total + item.price * item.quantity, 
+      0
+    );
+  };
+
   return (
     <CartContext.Provider
       value={{
@@ -109,6 +143,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         totalItems,
         subtotal,
         closeCart, // Expondo o método para fechar o carrinho
+        getCartTotal, // Expondo o método para calcular total do carrinho
       }}
     >
       {children}

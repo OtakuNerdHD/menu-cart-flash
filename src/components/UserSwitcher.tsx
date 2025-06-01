@@ -4,9 +4,10 @@ import { useUserSwitcher } from '@/context/UserSwitcherContext';
 import { Button } from '@/components/ui/button';
 import { 
   User, ChevronUp, ChevronDown, Shield, Utensils, 
-  UtensilsCrossed, Truck, UserCircle2, UserRound, X 
+  UtensilsCrossed, Truck, UserCircle2, UserRound, X, LogOut
 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/context/AuthContext';
 
 const UserSwitcher = () => {
   const { 
@@ -14,9 +15,11 @@ const UserSwitcher = () => {
     switchUser, 
     isUserSwitcherOpen, 
     toggleUserSwitcher, 
-    closeUserSwitcher 
+    closeUserSwitcher,
+    logout
   } = useUserSwitcher();
   
+  const { user: authUser } = useAuth();
   const isMobile = useIsMobile();
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x: -1, y: -1 });
@@ -182,7 +185,10 @@ const UserSwitcher = () => {
                 className={`w-full justify-start mb-1 ${
                   currentUser?.role === role ? "bg-gray-100" : ""
                 }`}
-                onClick={() => switchUser(role as any)}
+                onClick={() => {
+                  console.log('Switching to role:', role);
+                  switchUser(role as any);
+                }}
               >
                 <div className="flex items-center">
                   <div className={`h-7 w-7 rounded-full flex items-center justify-center mr-2 ${roleColors[role as keyof typeof roleColors]}`}>
@@ -192,6 +198,25 @@ const UserSwitcher = () => {
                 </div>
               </Button>
             ))}
+            
+            {/* Botão de Logout - Visível apenas para usuários logados */}
+            {(authUser || currentUser?.email === 'joabychaves10@gmail.com') && (
+              <>
+                <div className="my-2 border-t border-gray-200"></div>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start mb-1 text-red-500 hover:text-red-600 hover:bg-red-50"
+                  onClick={logout}
+                >
+                  <div className="flex items-center">
+                    <div className="h-7 w-7 rounded-full flex items-center justify-center mr-2 bg-red-100">
+                      <LogOut className="h-4 w-4 text-red-500" />
+                    </div>
+                    <span>Sair</span>
+                  </div>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       )}

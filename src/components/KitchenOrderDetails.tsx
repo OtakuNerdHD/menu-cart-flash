@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { 
   Dialog, 
@@ -18,12 +17,13 @@ interface OrderItem {
   quantity: number;
   price: number;
   notes?: string;
-  image_url?: string;
+  image?: string;
 }
 
 interface OrderProps {
   id: number;
-  table: string;
+  table?: string;
+  table_name?: string;
   status: string;
   items: OrderItem[];
   total: number;
@@ -57,7 +57,7 @@ const KitchenOrderDetails: React.FC<KitchenOrderDetailsProps> = ({
 }) => {
   const [currentStatus, setCurrentStatus] = useState(order.status);
   
-  // Item placeholders para quando não há imagem
+  // Item placeholders - em produção isso viria de um banco de imagens
   const itemPlaceholders = [
     "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9",
     "https://images.unsplash.com/photo-1568901346375-23c9450c58cd",
@@ -166,7 +166,12 @@ const KitchenOrderDetails: React.FC<KitchenOrderDetailsProps> = ({
               <Badge className={getStatusColor(currentStatus)}>
                 {getStatusText(currentStatus)}
               </Badge>
-              <DialogTitle className="text-2xl">Pedido #{order.id}</DialogTitle>
+              <DialogTitle className="text-2xl flex items-center gap-2">
+                {order.isDelivery ? 'Pedido Delivery' : (order.table_name || order.table || 'Mesa')}
+                {order.isDelivery && (
+                  <Badge className="bg-indigo-100 text-indigo-800">Delivery</Badge>
+                )}
+              </DialogTitle>
             </div>
             <span className="text-sm text-gray-500">
               {formatTime(order.createdAt)}
@@ -187,13 +192,9 @@ const KitchenOrderDetails: React.FC<KitchenOrderDetailsProps> = ({
                 <div key={index} className="flex gap-3">
                   <div className="w-16 h-16 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
                     <img
-                      src={item.image_url || itemPlaceholders[index % itemPlaceholders.length]}
+                      src={item.image || itemPlaceholders[index % itemPlaceholders.length]}
                       alt={item.name}
                       className="w-full h-full object-cover"
-                      onError={(e) => {
-                        // Fallback para imagem padrão se a imagem não carregar
-                        (e.target as HTMLImageElement).src = itemPlaceholders[index % itemPlaceholders.length];
-                      }}
                     />
                   </div>
 
@@ -208,7 +209,7 @@ const KitchenOrderDetails: React.FC<KitchenOrderDetailsProps> = ({
                       <span className="font-medium">R$ {(item.price * item.quantity).toFixed(2)}</span>
                     </div>
                     {item.notes && (
-                      <p className="text-sm text-red-500 mt-1">{item.notes}</p>
+                      <p className="text-sm text-red-500 italic mt-1">{item.notes}</p>
                     )}
                   </div>
                 </div>
@@ -248,7 +249,7 @@ const KitchenOrderDetails: React.FC<KitchenOrderDetailsProps> = ({
               ) : (
                 <>
                   <Badge className="bg-blue-100 text-blue-800 px-2 py-1">Cliente local</Badge>
-                  <h2 className="text-xl font-semibold">{order.table}</h2>
+                  <h2 className="text-xl font-semibold">{order.table_name || order.table || 'Mesa'}</h2>
                 </>
               )}
             </div>
@@ -275,7 +276,7 @@ const KitchenOrderDetails: React.FC<KitchenOrderDetailsProps> = ({
               </div>
             ) : (
               <div className="bg-gray-50 p-4 rounded-md">
-                <p>Cliente em loja - {order.table}</p>
+                <p>Cliente em loja: {order.table_name || order.table || 'Mesa'}</p>
                 <p className="text-sm text-gray-500 mt-2">
                   Pedido para consumo no local.
                 </p>
@@ -327,6 +328,12 @@ const KitchenOrderDetails: React.FC<KitchenOrderDetailsProps> = ({
               </Button>
             </div>
           </div>
+        </div>
+        
+        {/* Mostrar ID do pedido */}
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <ClipboardList className="h-4 w-4" />
+          <span>Pedido #{order.id}</span>
         </div>
       </DialogContent>
     </Dialog>

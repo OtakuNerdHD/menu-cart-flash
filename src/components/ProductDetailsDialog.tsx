@@ -20,19 +20,12 @@ interface ProductDetailsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-// Lista fictícia de imagens para o carrossel
+// Lista real de imagens para o carrossel
 const getProductImages = (product: Product) => {
-  // Aqui você poderia buscar as imagens do produto do banco de dados
-  // Por enquanto, vamos usar a imagem principal e placeholders
-  const mainImage = product.image_url || '/placeholder.svg';
-  
-  return [
-    mainImage,
-    '/placeholder.svg',
-    '/placeholder.svg',
-    '/placeholder.svg',
-    '/placeholder.svg'
-  ];
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    return product.images;
+  }
+  return [product.image_url || '/placeholder.svg'];
 };
 
 const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, open, onOpenChange }) => {
@@ -78,28 +71,7 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
   };
   
   const images = getProductImages(product);
-  
-  // Obter a lista de ingredientes do produto
-  let ingredientsList: string[] = [];
-  
-  if (product.ingredients) {
-    // Se o produto já tem ingredientes como string, transformamos em um array
-    ingredientsList = typeof product.ingredients === 'string'
-      ? product.ingredients.split(',').map(item => item.trim()) 
-      : Array.isArray(product.ingredients)
-        ? product.ingredients
-        : [];
-  } else if (product.nutritional_info?.ingredients) {
-    // Caso ainda esteja usando o formato antigo, pegamos dos dados nutricionais
-    ingredientsList = Array.isArray(product.nutritional_info.ingredients)
-      ? product.nutritional_info.ingredients
-      : [];
-  }
-  
-  // Se não tiver ingredientes, mostrar mensagem padrão
-  if (ingredientsList.length === 0) {
-    ingredientsList = ['Sem informações de ingredientes'];
-  }
+  const ingredients = product.nutritional_info?.ingredients || ['Sem informações de ingredientes'];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -141,7 +113,7 @@ const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, op
           <div className="mb-2">
             <h3 className="font-medium text-base mb-1">Ingredientes</h3>
             <ul className="list-disc pl-4">
-              {ingredientsList.map((ingredient, index) => (
+              {ingredients.map((ingredient, index) => (
                 <li key={index} className="text-gray-700 text-xs">{ingredient}</li>
               ))}
             </ul>
