@@ -447,6 +447,7 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          is_admin: boolean | null
           role: string | null
           status: string | null
           updated_at: string | null
@@ -457,6 +458,7 @@ export type Database = {
           email: string
           full_name?: string | null
           id?: string
+          is_admin?: boolean | null
           role?: string | null
           status?: string | null
           updated_at?: string | null
@@ -467,6 +469,7 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          is_admin?: boolean | null
           role?: string | null
           status?: string | null
           updated_at?: string | null

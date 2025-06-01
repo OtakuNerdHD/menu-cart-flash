@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -82,7 +81,6 @@ const Login = () => {
           title: "Login realizado com sucesso",
           description: "Bem-vindo ao sistema!",
         });
-        // O redirecionamento será feito pelo useEffect quando o user for carregado
       }
     } catch (error: any) {
       console.error('Erro ao fazer login:', error);
@@ -100,7 +98,6 @@ const Login = () => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Validações
     if (registerForm.password !== registerForm.confirmPassword) {
       toast({
         title: "Senhas não coincidem",
@@ -161,7 +158,6 @@ const Login = () => {
           title: "Autenticando com Google",
           description: "Você será redirecionado...",
         });
-        // O redirecionamento será feito automaticamente pelo Supabase
       }
     } catch (error: any) {
       console.error('Erro ao fazer login com Google:', error);

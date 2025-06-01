@@ -1,385 +1,334 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Button } from '@/components/ui/button';
-import { Clock, User, Utensils, RefreshCw } from 'lucide-react';
-import { useUserSwitcher } from '@/context/UserSwitcherContext';
-import { Dialog } from '@/components/ui/dialog';
-import OrderDetailsDialog from '@/components/OrderDetailsDialog';
-import { toast } from '@/hooks/use-toast';
-import { useNavigate } from 'react-router-dom';
-import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
-import { supabase } from '@/integrations/supabase/client';
 
-// Dados de exemplo - futuramente virão da API
-const mockOrders = [
-  // Removidos os pedidos mockados para evitar que apareçam automaticamente após limpar todos os pedidos
-];
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useMultiTenant } from '@/context/MultiTenantContext';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Clock, CheckCircle, AlertCircle, Package } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+
+interface Order {
+  id: number;
+  user_id: string;
+  restaurant_id: number;
+  table_id?: number;
+  status: string;
+  total_amount: number;
+  payment_status: string;
+  created_at: string;
+  order_items: OrderItem[];
+}
 
 interface OrderItem {
-  name: string;
-  quantity: number;
-  price: number;
-  notes?: string;
-  image?: string;
-  product_id: number;
-}
-
-interface OrderProps {
   id: number;
-  table: string;
-  table_name?: string;
-  status: string;
-  items: OrderItem[];
-  total: number;
-  createdAt: string;
-  assignedTo: string | null;
+  order_id: number;
+  product_id: number;
+  quantity: number;
+  unit_price: number;
+  notes?: string;
 }
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'pending':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'preparing':
-      return 'bg-blue-100 text-blue-800';
-    case 'ready':
-      return 'bg-green-100 text-green-800';
-    case 'delivered':
-      return 'bg-gray-100 text-gray-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
-};
-
-const getStatusText = (status: string) => {
-  switch (status) {
-    case 'pending':
-      return 'Pendente';
-    case 'preparing':
-      return 'Em preparo';
-    case 'ready':
-      return 'Pronto';
-    case 'delivered':
-      return 'Entregue';
-    default:
-      return 'Desconhecido';
-  }
-};
 
 const OrderManagement = () => {
-  const { currentUser } = useUserSwitcher();
-  const { getOrders } = useSupabaseWithMultiTenant();
-  const [orders, setOrders] = useState(mockOrders);
-  const [selectedOrder, setSelectedOrder] = useState<typeof mockOrders[0] | null>(null);
-  const [showDetails, setShowDetails] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const navigate = useNavigate();
-  
-  const isStaff = ['admin', 'restaurant_owner', 'waiter', 'chef'].includes(currentUser?.role || '');
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const { currentTeam, isAdminMode } = useMultiTenant();
 
-  // Carregar pedidos do Supabase ao iniciar
-  useEffect(() => {
-    fetchOrdersFromSupabase();
-  }, []);
-
-  const fetchOrdersFromSupabase = async () => {
+  const fetchOrders = async () => {
     try {
-      // Usar o hook multi-tenant para buscar pedidos
-      const ordersData = await getOrders();
-      
-      // Se não houver pedidos, inicializar com array vazio
-      if (!ordersData || ordersData.length === 0) {
-        setOrders([]);
+      setLoading(true);
+
+      let query = supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items(*)
+        `)
+        .order('created_at', { ascending: false });
+
+      // Aplicar filtro de team se não for modo admin
+      if (!isAdminMode && currentTeam) {
+        query = query.eq('team_id', currentTeam.id);
+      }
+
+      // Aplicar filtro de status se selecionado
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Erro ao buscar pedidos:', error);
+        toast({
+          title: "Erro ao carregar pedidos",
+          description: "Não foi possível carregar os pedidos. Tente novamente.",
+          variant: "destructive"
+        });
         return;
       }
-      
-      // Verificar se ordersData é um array antes de usar map
-      if (Array.isArray(ordersData)) {
-        // Mapear os pedidos com seus itens completos
-        const processedOrders = ordersData.map(order => {
-          // Os itens já vêm incluídos pela consulta com join
-          const orderItems = order.order_items?.map((item: any) => ({
-            name: item.name || 'Produto Desconhecido',
-            quantity: item.quantity,
-            price: item.price || 0,
-            notes: item.notes || undefined,
-            image: item.image_url || undefined,
-            product_id: item.product_id
-          })) || [];
-          
-          // Calcular o total do pedido
-          const total = orderItems.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
-          
-          return {
-            ...order,
-            items: orderItems,
-            total: total
-          };
-        });
-        
-        setOrders(processedOrders);
+
+      // Verificar se data é um array antes de usar map
+      if (Array.isArray(data)) {
+        setOrders(data || []);
       } else {
-        console.error('Dados de pedidos não são um array:', ordersData);
+        console.error('Dados retornados não são um array:', data);
         setOrders([]);
       }
-      
     } catch (error) {
-      console.error('Erro ao buscar pedidos do Supabase:', error);
+      console.error('Erro ao buscar pedidos:', error);
       toast({
-        title: 'Erro ao carregar pedidos',
-        description: error instanceof Error ? error.message : String(error),
-        variant: 'destructive'
+        title: "Erro ao carregar pedidos",
+        description: "Erro inesperado ao carregar pedidos.",
+        variant: "destructive"
       });
-    }
-  };
-  
-  // Função de fallback para carregar pedidos do localStorage
-  const loadOrders = () => {
-    const storedOrders = localStorage.getItem('tableOrders');
-    if (storedOrders) {
-      try {
-        const parsedOrders = JSON.parse(storedOrders);
-        // Substitui completamente os pedidos em vez de combinar com os predefinidos
-        setOrders(parsedOrders);
-      } catch (error) {
-        console.error('Erro ao carregar pedidos:', error);
-      }
-    } else {
-      // Se não houver pedidos no localStorage, inicializa com array vazio
       setOrders([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    // Buscar dados atualizados do Supabase
-    fetchOrdersFromSupabase().then(() => {
-      toast({
-        title: "Atualizado",
-        description: "Lista de pedidos atualizada com sucesso",
-      });
-      setIsRefreshing(false);
-    }).catch(() => {
-      setIsRefreshing(false);
-    });
-  };
-
-  const handleDeleteAll = async () => {
+  const updateOrderStatus = async (orderId: number, newStatus: string) => {
     try {
-      await supabase.from('order_items').delete().gt('id', 0);
-      await supabase.from('orders').delete().gt('id', 0);
-      localStorage.removeItem('tableOrders');
-      setOrders([]);
+      let query = supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId);
+
+      // Aplicar filtro de team se não for modo admin
+      if (!isAdminMode && currentTeam) {
+        query = query.eq('team_id', currentTeam.id);
+      }
+
+      const { error } = await query;
+
+      if (error) {
+        console.error('Erro ao atualizar status:', error);
+        toast({
+          title: "Erro ao atualizar pedido",
+          description: "Não foi possível atualizar o status do pedido.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Atualizar o estado local
+      setOrders(prevOrders =>
+        prevOrders.map(order =>
+          order.id === orderId ? { ...order, status: newStatus } : order
+        )
+      );
+
       toast({
-        title: "Todos os pedidos apagados",
-        description: "Todos os pedidos foram removidos com sucesso",
+        title: "Status atualizado",
+        description: `Pedido #${orderId} foi atualizado para ${getStatusLabel(newStatus)}.`,
       });
     } catch (error) {
-      console.error("Erro ao apagar pedidos:", error);
+      console.error('Erro ao atualizar status:', error);
       toast({
-        title: "Erro ao apagar pedidos",
-        description: error instanceof Error ? error.message : "Falha ao limpar pedidos",
-        variant: "destructive",
+        title: "Erro ao atualizar pedido",
+        description: "Erro inesperado ao atualizar o pedido.",
+        variant: "destructive"
       });
     }
   };
 
-  // Se não for funcionário, mostrar mensagem de acesso negado
-  if (!isStaff) {
+  const getStatusLabel = (status: string) => {
+    const statusLabels: Record<string, string> = {
+      pending: 'Pendente',
+      preparing: 'Preparando',
+      ready: 'Pronto',
+      delivered: 'Entregue',
+      cancelled: 'Cancelado'
+    };
+    return statusLabels[status] || status;
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Clock className="h-4 w-4" />;
+      case 'preparing':
+        return <Package className="h-4 w-4" />;
+      case 'ready':
+        return <CheckCircle className="h-4 w-4" />;
+      case 'delivered':
+        return <CheckCircle className="h-4 w-4" />;
+      case 'cancelled':
+        return <AlertCircle className="h-4 w-4" />;
+      default:
+        return <Clock className="h-4 w-4" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'preparing':
+        return 'bg-blue-100 text-blue-800';
+      case 'ready':
+        return 'bg-green-100 text-green-800';
+      case 'delivered':
+        return 'bg-green-100 text-green-800';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, [statusFilter, currentTeam, isAdminMode]);
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 pt-16">
-        <div className="container mx-auto px-4 py-8">
-          <Card className="w-full max-w-md mx-auto">
-            <CardHeader>
-              <CardTitle>Acesso restrito</CardTitle>
-              <CardDescription>
-                Você não tem permissão para acessar esta página
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-500">
-                Esta página é destinada apenas para funcionários do restaurante.
-              </p>
-              <Button className="mt-4" onClick={() => navigate('/')}>
-                Voltar para o início
-              </Button>
-            </CardContent>
-          </Card>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-lg">Carregando pedidos...</p>
         </div>
       </div>
     );
   }
-  
-  const handleAssignTable = (orderId: number) => {
-    if (!currentUser) return;
-    
-    setOrders(prevOrders => 
-      prevOrders.map(order => 
-        order.id === orderId 
-          ? { ...order, assignedTo: currentUser.name } 
-          : order
-      )
-    );
-    
-    toast({
-      title: "Mesa assumida com sucesso",
-      description: `Você é o responsável por ${orders.find(o => o.id === orderId)?.table_name || orders.find(o => o.id === orderId)?.table}`,
-    });
-  };
-  
-  const handleOpenDetails = (order: typeof orders[0]) => {
-    setSelectedOrder(order);
-    setShowDetails(true);
-  };
-  
-  const handleKitchenManagement = () => {
-    navigate('/kitchen-management');
-  };
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold">Gerenciamento de Pedidos / Mesas</h1>
-            <Button 
-              size="icon"
-              variant="outline"
-              onClick={handleRefresh}
-              className="rounded-full h-8 w-8"
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            {['admin', 'restaurant_owner'].includes(currentUser?.role || '') && (
-              <Button variant="destructive" onClick={handleDeleteAll}>
-                Apagar todos os pedidos
-              </Button>
-            )}
-            {['admin', 'restaurant_owner', 'chef'].includes(currentUser?.role || '') && (
-              <Button onClick={handleKitchenManagement}>
-                Acessar Cozinha
-              </Button>
-            )}
-          </div>
-        </div>
+    <div className="container mx-auto px-4 py-8 pt-20">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-3xl font-bold">Gerenciamento de Pedidos</h1>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {orders.map(order => (
-            <Card key={order.id} className="overflow-hidden">
-              <div className={`h-2 ${order.status === 'pending' ? 'bg-yellow-500' : order.status === 'preparing' ? 'bg-blue-500' : 'bg-green-500'}`}></div>
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-start">
-                  <CardTitle>{order.table_name || order.table}</CardTitle>
-                  <Badge className={getStatusColor(order.status)}>
-                    {getStatusText(order.status)}
-                  </Badge>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filtrar por status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os status</SelectItem>
+            <SelectItem value="pending">Pendente</SelectItem>
+            <SelectItem value="preparing">Preparando</SelectItem>
+            <SelectItem value="ready">Pronto</SelectItem>
+            <SelectItem value="delivered">Entregue</SelectItem>
+            <SelectItem value="cancelled">Cancelado</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {orders.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Package className="h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Nenhum pedido encontrado
+            </h3>
+            <p className="text-gray-500 text-center">
+              {statusFilter === 'all' 
+                ? 'Não há pedidos para exibir no momento.'
+                : `Não há pedidos com status "${getStatusLabel(statusFilter)}".`
+              }
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-6">
+          {orders.map((order) => (
+            <Card key={order.id}>
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      Pedido #{order.id}
+                      <Badge className={getStatusColor(order.status)}>
+                        {getStatusIcon(order.status)}
+                        {getStatusLabel(order.status)}
+                      </Badge>
+                    </CardTitle>
+                    <p className="text-sm text-gray-600">
+                      {new Date(order.created_at).toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold">
+                      R$ {order.total_amount.toFixed(2)}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Mesa: {order.table_id || 'N/A'}
+                    </p>
+                  </div>
                 </div>
-                <CardDescription className="flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  {new Date(order.createdAt).toLocaleTimeString('pt-BR', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
-                </CardDescription>
-                {order.assignedTo ? (
-                  <div className="mt-1 text-sm flex items-center gap-1 text-gray-600">
-                    <User className="w-4 h-4" />
-                    <span>Atendido por: {order.assignedTo}</span>
-                  </div>
-                ) : (
-                  <div className="mt-1 text-sm flex items-center gap-1 text-yellow-600">
-                    <User className="w-4 h-4" />
-                    <span>Atendimento pendente</span>
-                  </div>
-                )}
               </CardHeader>
               
               <CardContent>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div>
-                    <h4 className="text-sm font-medium text-gray-500 mb-2">Itens</h4>
-                    <ul className="space-y-2">
-                      {order.items.map((item, index) => (
-                        <li key={index} className="flex flex-col text-sm">
-                          <div className="flex justify-between">
-                            <span>{item.quantity}x {item.name}</span>
-                            <span>R$ {(item.price * item.quantity).toFixed(2)}</span>
+                    <h4 className="font-semibold mb-2">Itens do pedido:</h4>
+                    <div className="space-y-2">
+                      {order.order_items?.map((item) => (
+                        <div key={item.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
+                          <div>
+                            <span className="font-medium">
+                              {item.quantity}x Produto #{item.product_id}
+                            </span>
+                            {item.notes && (
+                              <p className="text-sm text-gray-600">
+                                Observações: {item.notes}
+                              </p>
+                            )}
                           </div>
-                          {item.notes && (
-                            <p className="text-sm text-red-500 italic mt-1">{item.notes}</p>
-                          )}
-                        </li>
+                          <span className="font-medium">
+                            R$ {(item.unit_price * item.quantity).toFixed(2)}
+                          </span>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
-                  
-                  <Separator />
-                  
-                  <div className="flex justify-between font-medium">
-                    <span>Total</span>
-                    <span>R$ {order.total.toFixed(2)}</span>
-                  </div>
-                  
-                  <div className="pt-3 space-y-2">
-                    {currentUser?.role === 'waiter' && (
-                      <>
-                        <Button 
-                          className="w-full" 
-                          variant={order.status === 'ready' ? 'default' : 'outline'}
-                          onClick={() => order.assignedTo ? handleOpenDetails(order) : handleAssignTable(order.id)}
-                        >
-                          {!order.assignedTo ? 'Assumir mesa' : order.status === 'ready' ? 'Entregar pedido' : 'Verificar status'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full"
-                          onClick={() => handleOpenDetails(order)}
-                        >
-                          Ver detalhes
-                        </Button>
-                      </>
+
+                  <div className="flex flex-wrap gap-2">
+                    {order.status === 'pending' && (
+                      <Button
+                        size="sm"
+                        onClick={() => updateOrderStatus(order.id, 'preparing')}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        Iniciar Preparo
+                      </Button>
                     )}
                     
-                    {currentUser?.role === 'chef' && (
-                      <div className="space-y-2">
-                        <Button 
-                          className="w-full" 
-                          variant={order.status === 'pending' ? 'default' : 'outline'}
-                          onClick={handleKitchenManagement}
-                        >
-                          {order.status === 'pending' ? 'Iniciar preparo' : 
-                           order.status === 'preparing' ? 'Marcar como pronto' : 'Ver detalhes'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full"
-                          onClick={() => handleOpenDetails(order)}
-                        >
-                          Ver detalhes
-                        </Button>
-                      </div>
+                    {order.status === 'preparing' && (
+                      <Button
+                        size="sm"
+                        onClick={() => updateOrderStatus(order.id, 'ready')}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        Marcar como Pronto
+                      </Button>
                     )}
                     
-                    {(currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner') && (
-                      <div className="space-y-2">
-                        <Button 
-                          className="w-full"
-                          onClick={() => !order.assignedTo ? handleAssignTable(order.id) : handleOpenDetails(order)}
-                        >
-                          {!order.assignedTo ? 'Assumir mesa' : 'Alterar status'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full"
-                          onClick={() => handleOpenDetails(order)}
-                        >
-                          Ver detalhes
-                        </Button>
-                      </div>
+                    {order.status === 'ready' && (
+                      <Button
+                        size="sm"
+                        onClick={() => updateOrderStatus(order.id, 'delivered')}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        Marcar como Entregue
+                      </Button>
+                    )}
+                    
+                    {!['delivered', 'cancelled'].includes(order.status) && (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                      >
+                        Cancelar Pedido
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -387,15 +336,6 @@ const OrderManagement = () => {
             </Card>
           ))}
         </div>
-      </div>
-
-      {selectedOrder && (
-        <OrderDetailsDialog 
-          order={selectedOrder}
-          open={showDetails}
-          onOpenChange={setShowDetails}
-          currentUserRole={currentUser?.role || ''}
-        />
       )}
     </div>
   );

@@ -1,924 +1,461 @@
+
 import React, { useState, useEffect } from 'react';
-import { useTeam } from '@/context/TeamContext';
-import { useSupabaseWithTeam } from '@/hooks/useSupabaseWithTeam';
-import { useMultiTenant } from '@/context/MultiTenantContext';
-import { useSubdomain } from '@/hooks/useSubdomain';
 import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
-import { supabase } from '@/integrations/supabase/client';
-import TeamSelector from '@/components/TeamSelector';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { 
-  Users, 
-  Store, 
-  ShoppingCart, 
-  TrendingUp, 
-  Settings,
-  Eye,
-  Edit,
-  Trash2,
-  Plus
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from '@/components/ui/dialog';
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle, 
+  AlertDialogTrigger 
+} from '@/components/ui/alert-dialog';
+import { Plus, Edit, Trash2, Building, Users, ShoppingBag } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
-interface TeamStats {
-  totalRestaurants: number;
-  totalProducts: number;
-  totalOrders: number;
-  totalRevenue: number;
-}
-
-interface Restaurant {
-  id: number; // Alterado de string para number
+interface Team {
+  id: string;
   name: string;
+  slug: string;
   description?: string;
-  team_id: string;
+  settings?: any;
   created_at: string;
-  updated_at?: string; // Tornando opcional
+  updated_at: string;
 }
 
 interface Product {
-  id: number; // Alterado de string para number
+  id: number;
   name: string;
-  description?: string;
+  description: string;
   price: number;
-  image_url?: string;
+  category: string;
   available: boolean;
-  category?: string;
-  restaurant_id: number; // Alterado de string para number
+  team_id: string;
+  restaurant_id: number;
   created_at: string;
-  updated_at?: string; // Tornando opcional
-}
-
-interface Order {
-  id: number; // Alterado de string para number
-  total_amount: number;
-  status: string;
-  created_at: string;
-  updated_at?: string; // Tornando opcional
-  user_id?: number; // Alterado de string para number ou null
-  restaurant_id: number; // Alterado de string para number
+  updated_at: string;
 }
 
 const DashboardSAAS = () => {
-  const { teamId, isReady } = useTeam();
-  const { teamSupabase } = useSupabaseWithTeam();
-  const { isAdminMode, isLoading: multiTenantLoading } = useMultiTenant();
-  const { isAdminMode: isSubdomainAdmin, isLoading: subdomainLoading } = useSubdomain();
-  const { createTeam } = useSupabaseWithMultiTenant();
-  const { toast } = useToast();
-  const [stats, setStats] = useState<TeamStats>({
-    totalRestaurants: 0,
-    totalProducts: 0,
-    totalOrders: 0,
-    totalRevenue: 0
-  });
-  const [loading, setLoading] = useState(true);
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const { getTeams, createTeam, updateTeam, deleteTeam, getProducts, isAdminMode } = useSupabaseWithMultiTenant();
+  const [teams, setTeams] = useState<Team[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isNewRestaurantModalOpen, setIsNewRestaurantModalOpen] = useState(false);
-  const [newRestaurantForm, setNewRestaurantForm] = useState({
+  const [loading, setLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
     name: '',
     slug: '',
-    email: '',
-    phone: '',
-    password: '',
-    generatePassword: false,
-    plan: 'inicial'
+    description: ''
   });
 
-  // Verificar se está em modo admin geral (local ou app.delliapp.com.br)
-  const isGeneralAdmin = React.useMemo(() => {
-    const hostname = window.location.hostname;
-    // Modo admin local (desenvolvimento)
-    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
-    // Modo admin geral (produção - app.delliapp.com.br)
-    const isAppDomain = hostname === 'app.delliapp.com.br';
-    
-    return isLocal || isAppDomain || isSubdomainAdmin;
-  }, [isSubdomainAdmin]);
+  // Verificar se está no modo admin
+  if (!isAdminMode) {
+    return (
+      <div className="container mx-auto px-4 py-8 pt-20">
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Acesso Negado
+            </h3>
+            <p className="text-gray-500 text-center">
+              Esta página é exclusiva para administradores gerais.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    if (!multiTenantLoading && !subdomainLoading && (isGeneralAdmin || (isReady && teamId && teamSupabase))) {
-      loadDashboardData();
-    }
-  }, [isReady, teamId, teamSupabase, multiTenantLoading, subdomainLoading, isGeneralAdmin]);
-
-  const loadDashboardData = async () => {
+  const fetchTeams = async () => {
     try {
-      setLoading(true);
-      
-      let restaurantsData: Restaurant[] = [];
-      let productsData: Product[] = [];
-      let ordersData: Order[] = [];
-
-      if (isGeneralAdmin) {
-        // Modo admin geral - carregar todos os dados sem filtro de team
-        try {
-          const { supabase } = await import('@/integrations/supabase/client');
-          console.log('Carregando dados em modo admin geral (app.delliapp.com.br ou localhost)...');
-          
-          const [restaurantsResult, productsResult, ordersResult] = await Promise.all([
-            supabase.from('restaurants').select('*'),
-            supabase.from('products').select('*'),
-            supabase.from('orders').select('*')
-          ]);
-
-          console.log('Resultados obtidos:', { 
-            restaurants: restaurantsResult, 
-            products: productsResult, 
-            orders: ordersResult 
-          });
-
-          if (restaurantsResult.error) {
-            console.error('Erro ao carregar restaurantes:', restaurantsResult.error);
-          }
-          
-          if (productsResult.error) {
-            console.error('Erro ao carregar produtos:', productsResult.error);
-          }
-          
-          if (ordersResult.error) {
-            console.error('Erro ao carregar pedidos:', ordersResult.error);
-          }
-
-          restaurantsData = restaurantsResult.data || [];
-          productsData = productsResult.data || [];
-          ordersData = ordersResult.data || [];
-          
-          // Se não houver dados no modo admin geral, criar dados fictícios para teste
-          if (restaurantsData.length === 0 && productsData.length === 0 && ordersData.length === 0) {
-            console.log('Nenhum dado encontrado no modo admin geral, criando dados fictícios para teste...');
-            
-            // Dados fictícios para teste
-            restaurantsData = [
-              { 
-                id: 1, 
-                name: 'Restaurante Teste 1', 
-                description: 'Descrição do restaurante teste 1', 
-                team_id: '1',
-                created_at: new Date().toISOString()
-              },
-              { 
-                id: 2, 
-                name: 'Restaurante Teste 2', 
-                description: 'Descrição do restaurante teste 2', 
-                team_id: '1',
-                created_at: new Date().toISOString()
-              }
-            ];
-            
-            productsData = [
-              { 
-                id: 1, 
-                name: 'Produto Teste 1', 
-                description: 'Descrição do produto teste 1', 
-                price: 19.90, 
-                available: true, 
-                category: 'Categoria 1',
-                restaurant_id: 1,
-                created_at: new Date().toISOString()
-              },
-              { 
-                id: 2, 
-                name: 'Produto Teste 2', 
-                description: 'Descrição do produto teste 2', 
-                price: 29.90, 
-                available: true, 
-                category: 'Categoria 2',
-                restaurant_id: 1,
-                created_at: new Date().toISOString()
-              }
-            ];
-            
-            ordersData = [
-              { 
-                id: 1, 
-                total_amount: 19.90, 
-                status: 'concluído', 
-                created_at: new Date().toISOString(),
-                restaurant_id: 1
-              },
-              { 
-                id: 2, 
-                total_amount: 29.90, 
-                status: 'em andamento', 
-                created_at: new Date().toISOString(),
-                restaurant_id: 1
-              }
-            ];
-          }
-        } catch (error) {
-          console.error('Erro ao carregar dados do Supabase:', error);
-          toast({
-            title: 'Erro ao carregar dados',
-            description: 'Ocorreu um erro ao carregar os dados. Carregando dados fictícios para teste.',
-            variant: 'destructive'
-          });
-          
-          // Dados fictícios em caso de erro
-          restaurantsData = [
-            { 
-              id: 1, 
-              name: 'Restaurante Teste (Fallback)', 
-              description: 'Descrição do restaurante teste', 
-              team_id: '1',
-              created_at: new Date().toISOString()
-            }
-          ];
-          
-          productsData = [
-            { 
-              id: 1, 
-              name: 'Produto Teste (Fallback)', 
-              description: 'Descrição do produto teste', 
-              price: 19.90, 
-              available: true, 
-              category: 'Categoria 1',
-              restaurant_id: 1,
-              created_at: new Date().toISOString()
-            }
-          ];
-          
-          ordersData = [
-            { 
-              id: 1, 
-              total_amount: 19.90, 
-              status: 'concluído', 
-              created_at: new Date().toISOString(),
-              restaurant_id: 1
-            }
-          ];
-        }
-      } else if (teamSupabase) {
-        // Modo team normal - usar o hook com filtro
-        const [restaurantsResult, productsResult, ordersResult] = await Promise.all([
-          teamSupabase.getRestaurants(),
-          teamSupabase.getProducts(),
-          teamSupabase.getOrders()
-        ]);
-
-        restaurantsData = restaurantsResult || [];
-        productsData = productsResult || [];
-        ordersData = ordersResult || [];
-      }
-
-      setRestaurants(restaurantsData);
-      setProducts(productsData);
-      setOrders(ordersData);
-
-      // Calcular estatísticas
-      const totalRevenue = ordersData.reduce((sum, order) => sum + (order.total_amount || 0), 0);
-      
-      setStats({
-        totalRestaurants: restaurantsData.length,
-        totalProducts: productsData.length,
-        totalOrders: ordersData.length,
-        totalRevenue
-      });
-
-      console.log('Dashboard carregado com sucesso:', {
-        restaurants: restaurantsData.length,
-        products: productsData.length,
-        orders: ordersData.length,
-        revenue: totalRevenue
-      });
-    } catch (error) {
-      console.error('Erro ao carregar dashboard:', error);
+      const data = await getTeams();
+      setTeams(data || []);
+    } catch (error: any) {
+      console.error('Erro ao buscar teams:', error);
       toast({
-        title: 'Erro ao carregar dashboard',
-        description: 'Ocorreu um erro ao carregar os dados do dashboard.',
-        variant: 'destructive'
+        title: "Erro ao carregar clientes",
+        description: error.message || "Não foi possível carregar a lista de clientes.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const data = await getProducts();
+      setProducts(data as Product[] || []);
+    } catch (error: any) {
+      console.error('Erro ao buscar produtos:', error);
+      toast({
+        title: "Erro ao carregar produtos",
+        description: error.message || "Não foi possível carregar os produtos.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleCreateTeam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsCreating(true);
+
+    try {
+      const newTeam = await createTeam(formData);
+      
+      toast({
+        title: "Cliente criado com sucesso",
+        description: `O cliente "${formData.name}" foi criado.`,
+      });
+
+      // Limpar formulário e fechar dialog
+      setFormData({ name: '', slug: '', description: '' });
+      setIsDialogOpen(false);
+      
+      // Recarregar lista de teams
+      await fetchTeams();
+    } catch (error: any) {
+      console.error('Erro ao criar team:', error);
+      toast({
+        title: "Erro ao criar cliente",
+        description: error.message || "Não foi possível criar o cliente. Tente novamente.",
+        variant: "destructive"
       });
     } finally {
-      setLoading(false);
+      setIsCreating(false);
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
+  const handleEditTeam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTeam) return;
+
+    setIsEditing(true);
+
+    try {
+      await updateTeam(editingTeam.id, formData);
+      
+      toast({
+        title: "Cliente atualizado com sucesso",
+        description: `O cliente "${formData.name}" foi atualizado.`,
+      });
+
+      // Limpar formulário e fechar dialog
+      setFormData({ name: '', slug: '', description: '' });
+      setEditingTeam(null);
+      setIsDialogOpen(false);
+      
+      // Recarregar lista de teams
+      await fetchTeams();
+    } catch (error: any) {
+      console.error('Erro ao atualizar team:', error);
+      toast({
+        title: "Erro ao atualizar cliente",
+        description: error.message || "Não foi possível atualizar o cliente. Tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsEditing(false);
+    }
   };
 
-  // Função para gerar slug automaticamente
+  const handleDeleteTeam = async (teamId: string, teamName: string) => {
+    try {
+      await deleteTeam(teamId);
+      
+      toast({
+        title: "Cliente removido com sucesso",
+        description: `O cliente "${teamName}" foi removido.`,
+      });
+      
+      // Recarregar lista de teams
+      await fetchTeams();
+    } catch (error: any) {
+      console.error('Erro ao deletar team:', error);
+      toast({
+        title: "Erro ao remover cliente",
+        description: error.message || "Não foi possível remover o cliente. Tente novamente.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const openEditDialog = (team: Team) => {
+    setEditingTeam(team);
+    setFormData({
+      name: team.name,
+      slug: team.slug,
+      description: team.description || ''
+    });
+    setIsDialogOpen(true);
+  };
+
+  const openCreateDialog = () => {
+    setEditingTeam(null);
+    setFormData({ name: '', slug: '', description: '' });
+    setIsDialogOpen(true);
+  };
+
   const generateSlug = (name: string) => {
     return name
       .toLowerCase()
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-      .replace(/[^a-z0-9\s-]/g, '') // Remove caracteres especiais
-      .replace(/\s+/g, '-') // Substitui espaços por hífens
-      .replace(/-+/g, '-') // Remove hífens duplicados
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
       .trim();
   };
 
-  // Função para gerar senha temporária
-  const generateTempPassword = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let password = '';
-    for (let i = 0; i < 8; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const name = e.target.value;
+    setFormData(prev => ({
+      ...prev,
+      name,
+      slug: generateSlug(name)
+    }));
   };
 
-  // Função para lidar com mudanças no formulário
-  const handleFormChange = (field: string, value: string | boolean) => {
-    setNewRestaurantForm(prev => {
-      const updated = { ...prev, [field]: value };
-      
-      // Auto-gerar slug quando o nome muda
-      if (field === 'name' && typeof value === 'string') {
-        updated.slug = generateSlug(value);
-      }
-      
-      // Gerar senha temporária se a opção estiver marcada
-      if (field === 'generatePassword' && value === true) {
-        updated.password = generateTempPassword();
-      }
-      
-      return updated;
-    });
-  };
-
-  // Função para validar o formulário
-  const validateForm = () => {
-    const { name, slug, email, phone, password, generatePassword } = newRestaurantForm;
-    
-    if (!name.trim()) {
-      toast({ title: 'Erro', description: 'Nome do restaurante é obrigatório', variant: 'destructive' });
-      return false;
-    }
-    
-    if (!slug.trim()) {
-      toast({ title: 'Erro', description: 'Slug é obrigatório', variant: 'destructive' });
-      return false;
-    }
-    
-    if (!email.trim() || !email.includes('@')) {
-      toast({ title: 'Erro', description: 'Email válido é obrigatório', variant: 'destructive' });
-      return false;
-    }
-    
-    if (!phone.trim()) {
-      toast({ title: 'Erro', description: 'Telefone é obrigatório', variant: 'destructive' });
-      return false;
-    }
-    
-    if (!generatePassword && !password.trim()) {
-      toast({ title: 'Erro', description: 'Senha é obrigatória ou marque para gerar automaticamente', variant: 'destructive' });
-      return false;
-    }
-    
-    return true;
-  };
-
-  // Função para criar novo restaurante
-  const handleCreateRestaurant = async () => {
-    if (!validateForm()) return;
-    
-    try {
+  useEffect(() => {
+    const loadData = async () => {
       setLoading(true);
-      
-      // Usar o hook multi-tenant que já tem as configurações RLS corretas
-      const teamData = {
-        name: newRestaurantForm.name,
-        slug: newRestaurantForm.slug,
-        settings: {
-          plan: newRestaurantForm.plan,
-          contact: {
-            email: newRestaurantForm.email,
-            phone: newRestaurantForm.phone
-          }
-        }
-      };
-      
-      console.log('Criando restaurante com dados:', teamData);
-      const team = await createTeam(teamData);
-      
-      if (!team) {
-        toast({ 
-          title: 'Erro', 
-          description: 'Erro ao criar estabelecimento', 
-          variant: 'destructive' 
-        });
-        setLoading(false);
-        return;
-      }
-      
-      // Criar usuário no auth (se necessário)
-      // Nota: Em produção, você pode querer usar a API Admin do Supabase
-      // Por enquanto, vamos apenas salvar as informações do responsável
-      
-      toast({ 
-        title: 'Sucesso!', 
-        description: `Estabelecimento "${newRestaurantForm.name}" criado com sucesso!\nAcesso: https://${newRestaurantForm.slug}.delliapp.com.br` 
-      });
-      
-      // Resetar formulário e fechar modal
-      setNewRestaurantForm({
-        name: '',
-        slug: '',
-        email: '',
-        phone: '',
-        password: '',
-        generatePassword: false,
-        plan: 'inicial'
-      });
-      setIsNewRestaurantModalOpen(false);
-      
-      // Recarregar dados
-      loadDashboardData();
-      
-    } catch (error) {
-      console.error('Erro ao criar restaurante:', error);
-      toast({ 
-        title: 'Erro', 
-        description: 'Erro inesperado ao criar estabelecimento', 
-        variant: 'destructive' 
-      });
-    } finally {
+      await Promise.all([fetchTeams(), fetchProducts()]);
       setLoading(false);
-    }
-  };
+    };
 
-  if (multiTenantLoading || subdomainLoading || (!isGeneralAdmin && !isReady)) {
+    loadData();
+  }, []);
+
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p>Carregando...</p>
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-lg">Carregando dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Dashboard SAAS</h1>
-              <p className="text-gray-600">Gerencie seus clientes e teams</p>
-            </div>
-            <TeamSelector className="" />
-          </div>
-          
-          {isGeneralAdmin ? (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <Settings className="h-5 w-5 text-green-600" />
-                <span className="font-medium text-green-900">Modo:</span>
-                <Badge variant="secondary" className="bg-green-100 text-green-800">Admin Geral (Local)</Badge>
-                <span className="text-sm text-green-700 ml-2">Acesso total a todos os dados</span>
+    <div className="container mx-auto px-4 py-8 pt-20">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Dashboard SAAS</h1>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={openCreateDialog} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Novo Cliente
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {editingTeam ? 'Editar Cliente' : 'Criar Novo Cliente'}
+              </DialogTitle>
+              <DialogDescription>
+                {editingTeam 
+                  ? 'Atualize as informações do cliente.'
+                  : 'Preencha as informações para criar um novo cliente (restaurante).'
+                }
+              </DialogDescription>
+            </DialogHeader>
+            
+            <form onSubmit={editingTeam ? handleEditTeam : handleCreateTeam} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome do Restaurante</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={handleNameChange}
+                  placeholder="Ex: Restaurante do João"
+                  required
+                />
               </div>
-            </div>
-          ) : teamId && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-blue-600" />
-                <span className="font-medium text-blue-900">Team Ativo:</span>
-                <Badge variant="secondary">{teamId}</Badge>
+              
+              <div className="space-y-2">
+                <Label htmlFor="slug">Slug (Subdomínio)</Label>
+                <Input
+                  id="slug"
+                  value={formData.slug}
+                  onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
+                  placeholder="Ex: restaurante-joao"
+                  required
+                />
+                <p className="text-sm text-gray-500">
+                  Este será o subdomínio: {formData.slug}.delliapp.com.br
+                </p>
               </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="description">Descrição (Opcional)</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Descrição do restaurante..."
+                  rows={3}
+                />
+              </div>
+              
+              <div className="flex justify-end gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsDialogOpen(false)}
+                  disabled={isCreating || isEditing}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={isCreating || isEditing}
+                >
+                  {editingTeam 
+                    ? (isEditing ? 'Atualizando...' : 'Atualizar Cliente')
+                    : (isCreating ? 'Criando...' : 'Criar Cliente')
+                  }
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Estatísticas */}
+      <div className="grid gap-6 md:grid-cols-3 mb-8">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total de Clientes</CardTitle>
+            <Building className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{teams.length}</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total de Produtos</CardTitle>
+            <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{products.length}</div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Clientes Ativos</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{teams.length}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Lista de Teams */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Clientes Cadastrados</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {teams.length === 0 ? (
+            <div className="text-center py-8">
+              <Building className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Nenhum cliente cadastrado
+              </h3>
+              <p className="text-gray-500 mb-4">
+                Comece criando seu primeiro cliente (restaurante).
+              </p>
+              <Button onClick={openCreateDialog} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Criar Primeiro Cliente
+              </Button>
             </div>
-          )}
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Restaurantes</CardTitle>
-              <Store className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalRestaurants}</div>
-              <p className="text-xs text-muted-foreground">Total de estabelecimentos</p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Produtos</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalProducts}</div>
-              <p className="text-xs text-muted-foreground">Itens no cardápio</p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pedidos</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalOrders}</div>
-              <p className="text-xs text-muted-foreground">Total de pedidos</p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Receita</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(stats.totalRevenue)}</div>
-              <p className="text-xs text-muted-foreground">Receita total</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Tabs Content */}
-        <Tabs defaultValue="restaurants" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="restaurants">Restaurantes</TabsTrigger>
-            <TabsTrigger value="products">Produtos</TabsTrigger>
-            <TabsTrigger value="orders">Pedidos</TabsTrigger>
-            <TabsTrigger value="settings">Configurações</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="restaurants">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Restaurantes do Team</CardTitle>
-                    <CardDescription>Gerencie os restaurantes deste team</CardDescription>
-                  </div>
-                  <Dialog open={isNewRestaurantModalOpen} onOpenChange={setIsNewRestaurantModalOpen}>
-                    <DialogTrigger asChild>
-                      <Button>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Novo Restaurante
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[600px]">
-                      <DialogHeader>
-                        <DialogTitle>Cadastrar Novo Estabelecimento</DialogTitle>
-                        <DialogDescription>
-                          Crie um novo cliente/tenant do SaaS. O estabelecimento terá acesso através do subdomínio gerado.
-                        </DialogDescription>
-                      </DialogHeader>
-                      
-                      <div className="grid gap-4 py-4">
-                        {/* Nome do Restaurante */}
-                        <div className="grid gap-2">
-                          <Label htmlFor="name">Nome do Restaurante *</Label>
-                          <Input
-                            id="name"
-                            value={newRestaurantForm.name}
-                            onChange={(e) => handleFormChange('name', e.target.value)}
-                            placeholder="Ex: Padaria do João"
-                          />
-                        </div>
-                        
-                        {/* Slug */}
-                        <div className="grid gap-2">
-                          <Label htmlFor="slug">Slug (Subdomínio) *</Label>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              id="slug"
-                              value={newRestaurantForm.slug}
-                              onChange={(e) => handleFormChange('slug', e.target.value)}
-                              placeholder="padaria-joao"
-                            />
-                            <span className="text-sm text-gray-500">.delliapp.com.br</span>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            URL de acesso: https://{newRestaurantForm.slug || 'seu-slug'}.delliapp.com.br
-                          </p>
-                        </div>
-                        
-                        {/* Email e Telefone */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="grid gap-2">
-                            <Label htmlFor="email">Email do Responsável *</Label>
-                            <Input
-                              id="email"
-                              type="email"
-                              value={newRestaurantForm.email}
-                              onChange={(e) => handleFormChange('email', e.target.value)}
-                              placeholder="joao@padaria.com"
-                            />
-                          </div>
-                          
-                          <div className="grid gap-2">
-                            <Label htmlFor="phone">Telefone *</Label>
-                            <Input
-                              id="phone"
-                              value={newRestaurantForm.phone}
-                              onChange={(e) => handleFormChange('phone', e.target.value)}
-                              placeholder="(11) 99999-9999"
-                            />
-                          </div>
-                        </div>
-                        
-                        {/* Senha */}
-                        <div className="grid gap-2">
-                          <Label htmlFor="password">Senha</Label>
-                          <div className="space-y-2">
-                            <div className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                id="generatePassword"
-                                checked={newRestaurantForm.generatePassword}
-                                onChange={(e) => handleFormChange('generatePassword', e.target.checked)}
-                                className="rounded"
-                              />
-                              <Label htmlFor="generatePassword" className="text-sm">
-                                Gerar senha temporária automaticamente
-                              </Label>
-                            </div>
-                            
-                            {!newRestaurantForm.generatePassword && (
-                              <Input
-                                id="password"
-                                type="password"
-                                value={newRestaurantForm.password}
-                                onChange={(e) => handleFormChange('password', e.target.value)}
-                                placeholder="Digite uma senha"
-                              />
-                            )}
-                            
-                            {newRestaurantForm.generatePassword && newRestaurantForm.password && (
-                              <div className="p-2 bg-gray-50 rounded border">
-                                <p className="text-sm text-gray-600">Senha gerada:</p>
-                                <p className="font-mono text-sm">{newRestaurantForm.password}</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* Plano */}
-                        <div className="grid gap-2">
-                          <Label htmlFor="plan">Plano *</Label>
-                          <Select value={newRestaurantForm.plan} onValueChange={(value) => handleFormChange('plan', value)}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione um plano" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="inicial">Plano Inicial</SelectItem>
-                              <SelectItem value="delivery-standard">Plano Delivery Standard</SelectItem>
-                              <SelectItem value="seu-app">Plano Seu APP</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          
-                          {/* Descrição do plano */}
-                          <div className="text-xs text-gray-500 mt-1">
-                            {newRestaurantForm.plan === 'inicial' && (
-                              <p>Funcionalidades básicas (em definição)</p>
-                            )}
-                            {newRestaurantForm.plan === 'delivery-standard' && (
-                              <p>Funcionalidades de delivery (em definição)</p>
-                            )}
-                            {newRestaurantForm.plan === 'seu-app' && (
-                              <p>Acesso completo ao sistema (exceto dashboard SaaS)</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="outline" 
-                          onClick={() => setIsNewRestaurantModalOpen(false)}
-                          disabled={loading}
-                        >
-                          Cancelar
-                        </Button>
-                        <Button 
-                          onClick={handleCreateRestaurant}
-                          disabled={loading}
-                        >
-                          {loading ? 'Criando...' : 'Criar Estabelecimento'}
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p>Carregando restaurantes...</p>
-                  </div>
-                ) : restaurants.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Store className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">Nenhum restaurante encontrado</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {restaurants.map((restaurant) => (
-                      <div key={restaurant.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <h3 className="font-medium">{restaurant.name}</h3>
-                          <p className="text-sm text-gray-500">{restaurant.description}</p>
-                          <Badge variant="outline" className="mt-1">
-                            Team: {restaurant.team_id}
-                          </Badge>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="products">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Produtos do Team</CardTitle>
-                    <CardDescription>Gerencie os produtos deste team</CardDescription>
-                  </div>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Novo Produto
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p>Carregando produtos...</p>
-                  </div>
-                ) : products.length === 0 ? (
-                  <div className="text-center py-8">
-                    <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">Nenhum produto encontrado</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {products.slice(0, 6).map((product) => (
-                      <div key={product.id} className="border rounded-lg p-4">
-                        <div className="aspect-square bg-gray-100 rounded-lg mb-3 flex items-center justify-center">
-                          {product.image_url ? (
-                            <img 
-                              src={product.image_url} 
-                              alt={product.name}
-                              className="w-full h-full object-cover rounded-lg"
-                            />
-                          ) : (
-                            <ShoppingCart className="h-8 w-8 text-gray-400" />
-                          )}
-                        </div>
-                        <h3 className="font-medium mb-1">{product.name}</h3>
-                        <p className="text-sm text-gray-500 mb-2">{product.description}</p>
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-green-600">
-                            {formatCurrency(product.price)}
-                          </span>
-                          <Badge variant={product.available ? "default" : "secondary"}>
-                            {product.available ? "Disponível" : "Indisponível"}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {products.length > 6 && (
-                  <div className="text-center mt-4">
-                    <Button variant="outline">
-                      Ver todos os {products.length} produtos
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="orders">
-            <Card>
-              <CardHeader>
-                <CardTitle>Pedidos Recentes</CardTitle>
-                <CardDescription>Últimos pedidos do team</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p>Carregando pedidos...</p>
-                  </div>
-                ) : orders.length === 0 ? (
-                  <div className="text-center py-8">
-                    <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">Nenhum pedido encontrado</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {orders.slice(0, 10).map((order) => (
-                      <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <h3 className="font-medium">Pedido #{order.id.toString().slice(0, 8)}</h3>
-                          <p className="text-sm text-gray-500">
-                            {new Date(order.created_at).toLocaleDateString('pt-BR')}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold">{formatCurrency(order.total_amount || 0)}</p>
-                          <Badge variant={order.status === 'completed' ? 'default' : 'secondary'}>
-                            {order.status || 'Pendente'}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="settings">
-            <Card>
-              <CardHeader>
-                <CardTitle>{isGeneralAdmin ? 'Configurações do Sistema' : 'Configurações do Team'}</CardTitle>
-                <CardDescription>
-                  {isGeneralAdmin ? 'Gerencie as configurações globais do sistema' : 'Gerencie as configurações deste team'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="font-medium mb-2">
-                        {isGeneralAdmin ? 'Informações do Sistema' : 'Informações do Team'}
-                      </h3>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      {isGeneralAdmin ? (
-                        <>
-                          <p><strong>Modo:</strong> Admin Geral (Ambiente Local)</p>
-                          <p><strong>Hostname:</strong> {window.location.hostname}</p>
-                          <p><strong>Total de Restaurantes:</strong> {stats.totalRestaurants}</p>
-                          <p><strong>Total de Produtos:</strong> {stats.totalProducts}</p>
-                          <p><strong>Total de Pedidos:</strong> {stats.totalOrders}</p>
-                          <p><strong>Receita Total:</strong> {formatCurrency(stats.totalRevenue)}</p>
-                        </>
-                      ) : (
-                        <>
-                          <p><strong>ID do Team:</strong> {teamId}</p>
-                          <p><strong>Total de Restaurantes:</strong> {stats.totalRestaurants}</p>
-                          <p><strong>Total de Produtos:</strong> {stats.totalProducts}</p>
-                          <p><strong>Total de Pedidos:</strong> {stats.totalOrders}</p>
-                        </>
-                      )}
+          ) : (
+            <div className="space-y-4">
+              {teams.map((team) => (
+                <div 
+                  key={team.id} 
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold">{team.name}</h3>
+                      <Badge variant="secondary">{team.slug}</Badge>
+                    </div>
+                    {team.description && (
+                      <p className="text-sm text-gray-600 mb-2">{team.description}</p>
+                    )}
+                    <div className="text-xs text-gray-500">
+                      Criado em: {new Date(team.created_at).toLocaleDateString('pt-BR')}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      URL: https://{team.slug}.delliapp.com.br
                     </div>
                   </div>
                   
-                  <div>
-                    <h3 className="text-lg font-medium mb-2">Ações</h3>
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={loadDashboardData}>
-                        <Settings className="h-4 w-4 mr-2" />
-                        Recarregar Dados
-                      </Button>
-                      <Button variant="outline">
-                        <Settings className="h-4 w-4 mr-2" />
-                        Configurações Avançadas
-                      </Button>
-                      {isGeneralAdmin && (
-                        <Button variant="outline" className="bg-green-50 hover:bg-green-100">
-                          <Users className="h-4 w-4 mr-2" />
-                          Gerenciar Teams
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openEditDialog(team)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button size="sm" variant="destructive">
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-                      )}
-                    </div>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Remover Cliente</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Tem certeza que deseja remover o cliente "{team.name}"? 
+                            Esta ação não pode ser desfeita e todos os dados associados serão perdidos.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={() => handleDeleteTeam(team.id, team.name)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Remover
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
