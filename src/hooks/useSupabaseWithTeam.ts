@@ -59,7 +59,7 @@ export const useSupabaseWithTeam = () => {
               team_id
             )
           `)
-          .eq('restaurants.team_id', teamId);
+          .eq('team_id', teamId);
 
         if (filters?.status) {
           query = query.eq('status', filters.status);
@@ -96,7 +96,7 @@ export const useSupabaseWithTeam = () => {
               team_id
             )
           `)
-          .eq('restaurants.team_id', teamId);
+          .eq('team_id', teamId);
 
         if (restaurant_id) {
           query = query.eq('restaurant_id', restaurant_id);
@@ -124,7 +124,8 @@ export const useSupabaseWithTeam = () => {
           .from('products')
           .insert({
             ...productData,
-            restaurant_id: restaurants[0].id
+            restaurant_id: restaurants[0].id,
+            team_id: teamId
           });
       },
 
@@ -145,7 +146,8 @@ export const useSupabaseWithTeam = () => {
           .from('orders')
           .insert({
             ...orderData,
-            restaurant_id: restaurants[0].id
+            restaurant_id: restaurants[0].id,
+            team_id: teamId
           });
       },
 
@@ -154,7 +156,8 @@ export const useSupabaseWithTeam = () => {
         return supabase
           .from('products')
           .update(updates)
-          .eq('id', productId);
+          .eq('id', productId)
+          .eq('team_id', teamId);
       },
 
       // Deletar produto (com verificação de team)
@@ -162,7 +165,8 @@ export const useSupabaseWithTeam = () => {
         return supabase
           .from('products')
           .delete()
-          .eq('id', productId);
+          .eq('id', productId)
+          .eq('team_id', teamId);
       },
 
       // Acesso direto ao cliente Supabase para consultas customizadas

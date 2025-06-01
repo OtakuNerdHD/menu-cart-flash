@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,7 +13,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ImageUpload from '@/components/ImageUpload';
 import { useAuth } from '@/context/AuthContext';
-import { Profile } from '@/context/AuthContext';
+
+// Interface para perfil do Supabase
+interface Profile {
+  id: string;
+  email?: string | null;
+  full_name?: string | null;
+  role?: 'admin' | 'restaurant_owner' | 'manager' | 'waiter' | 'chef' | 'delivery_person' | 'customer' | 'visitor' | null;
+  avatar_url?: string | null;
+}
 
 // Definindo o tipo AppUser para corresponder à estrutura usada no componente
 interface AppUser {
@@ -89,10 +96,10 @@ const UserManagement = () => {
       if (data && data.length > 0) {
         const supabaseUsers: AppUser[] = data.map((user: Profile) => ({
           id: user.id,
-          full_name: user.name || user.email || 'Nome não disponível', // Ajustado para user.name de Profile
+          full_name: user.full_name || user.email || 'Nome não disponível',
           email: user.email || 'Email não disponível',
-          role: user.role || 'customer', // Adicionado fallback para role
-          status: 'active', // Definir um status padrão, já que Profile não tem status
+          role: (user.role as AppUser['role']) || 'customer',
+          status: 'active' as const,
           photo_url: user.avatar_url || ''
         }));
         
@@ -133,40 +140,40 @@ const UserManagement = () => {
     }, 800);
   };
   
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     if (isEditUserOpen) {
-      setCurrentUser2Edit(prev => ({ ...prev, [name]: value }));
+      setCurrentUser2Edit((prev: any) => ({ ...prev, [name]: value }));
     } else {
       setNewUser(prev => ({ ...prev, [name]: value }));
     }
   };
   
-  const handleRoleChange = (value) => {
+  const handleRoleChange = (value: string) => {
     if (isEditUserOpen) {
-      setCurrentUser2Edit(prev => ({ ...prev, role: value }));
+      setCurrentUser2Edit((prev: any) => ({ ...prev, role: value }));
     } else {
-      setNewUser(prev => ({ ...prev, role: value }));
+      setNewUser(prev => ({ ...prev, role: value as AppUser['role'] }));
     }
   };
   
-  const handleStatusChange = (value) => {
+  const handleStatusChange = (value: string) => {
     if (isEditUserOpen) {
-      setCurrentUser2Edit(prev => ({ ...prev, status: value }));
+      setCurrentUser2Edit((prev: any) => ({ ...prev, status: value }));
     } else {
-      setNewUser(prev => ({ ...prev, status: value }));
+      setNewUser(prev => ({ ...prev, status: value as AppUser['status'] }));
     }
   };
   
   const handleImageUpload = (url: string) => {
     if (isEditUserOpen) {
-      setCurrentUser2Edit(prev => ({ ...prev, photo_url: url }));
+      setCurrentUser2Edit((prev: any) => ({ ...prev, photo_url: url }));
     } else {
       setNewUser(prev => ({ ...prev, photo_url: url }));
     }
   };
   
-  const handleEditUser = (user) => {
+  const handleEditUser = (user: AppUser) => {
     setCurrentUser2Edit(user);
     setIsEditUserOpen(true);
   };
@@ -179,7 +186,7 @@ const UserManagement = () => {
       const { error } = await supabase
         .from('profiles')
         .update({
-          name: currentUser2Edit.full_name, // Ajustado para full_name
+          full_name: currentUser2Edit.full_name,
           email: currentUser2Edit.email,
           role: currentUser2Edit.role,
           avatar_url: currentUser2Edit.photo_url
@@ -192,7 +199,7 @@ const UserManagement = () => {
       } else {
         toast({
           title: "Usuário atualizado com sucesso",
-          description: `${currentUser2Edit.name} foi atualizado.`
+          description: `${currentUser2Edit.full_name} foi atualizado.`
         });
         
         fetchUsersFromSupabase();
@@ -309,8 +316,8 @@ const UserManagement = () => {
     }
     
     // Fallback para localStorage se o Supabase falhar
-    const newId = Math.max(...users.map(u => u.id), 0) + 1;
-    const userToAdd = {
+    const newId = Math.max(...users.map(u => typeof u.id === 'number' ? u.id : 0), 0) + 1;
+    const userToAdd: AppUser = {
       id: newId,
       full_name: newUser.full_name,
       email: newUser.email,
@@ -340,10 +347,10 @@ const UserManagement = () => {
     });
   };
   
-  const toggleUserStatus = (userId) => {
+  const toggleUserStatus = (userId: string | number) => {
     const updatedUsers = users.map(user => {
       if (user.id === userId) {
-        const newStatus = user.status === 'active' ? 'inactive' : 'active';
+        const newStatus: AppUser['status'] = user.status === 'active' ? 'inactive' : 'active';
         return { ...user, status: newStatus };
       }
       return user;
@@ -381,7 +388,7 @@ const UserManagement = () => {
     }
   };
 
-  const handleDeleteUser = async (userId) => {
+  const handleDeleteUser = async (userId: string | number) => {
     const user = users.find(u => u.id === userId);
     if (!user) return;
 
@@ -413,7 +420,6 @@ const UserManagement = () => {
       // Atualizar a lista de usuários
       await fetchUsersFromSupabase();
       return;
-      // Removida a chave extra que estava aqui antes do catch
     } catch (error) {
       console.error('Erro ao processar exclusão de usuário:', error);
     }

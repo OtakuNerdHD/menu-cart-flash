@@ -17,14 +17,15 @@ import { toast } from '@/hooks/use-toast';
 
 interface Order {
   id: number;
-  user_id: string;
-  restaurant_id: number;
+  user_id?: string;
+  restaurant_id?: number;
   table_id?: number;
   status: string;
-  total_amount: number;
-  payment_status: string;
+  total_amount?: number;
+  total?: number;
+  payment_status?: string;
   created_at: string;
-  order_items: OrderItem[];
+  order_items?: OrderItem[];
 }
 
 interface OrderItem {
@@ -32,7 +33,8 @@ interface OrderItem {
   order_id: number;
   product_id: number;
   quantity: number;
-  unit_price: number;
+  unit_price?: number;
+  price?: number;
   notes?: string;
 }
 
@@ -78,7 +80,18 @@ const OrderManagement = () => {
 
       // Verificar se data é um array antes de usar map
       if (Array.isArray(data)) {
-        setOrders(data || []);
+        const mappedOrders: Order[] = data.map(order => ({
+          id: order.id,
+          user_id: order.user_id,
+          restaurant_id: order.restaurant_id,
+          table_id: order.table_id,
+          status: order.status || 'pending',
+          total_amount: order.total_amount || order.total || 0,
+          payment_status: order.payment_status || 'pending',
+          created_at: order.created_at,
+          order_items: Array.isArray(order.order_items) ? order.order_items : []
+        }));
+        setOrders(mappedOrders);
       } else {
         console.error('Dados retornados não são um array:', data);
         setOrders([]);
@@ -256,7 +269,7 @@ const OrderManagement = () => {
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold">
-                      R$ {order.total_amount.toFixed(2)}
+                      R$ {(order.total_amount || 0).toFixed(2)}
                     </p>
                     <p className="text-sm text-gray-600">
                       Mesa: {order.table_id || 'N/A'}
@@ -283,7 +296,7 @@ const OrderManagement = () => {
                             )}
                           </div>
                           <span className="font-medium">
-                            R$ {(item.unit_price * item.quantity).toFixed(2)}
+                            R$ {((item.unit_price || item.price || 0) * item.quantity).toFixed(2)}
                           </span>
                         </div>
                       ))}
