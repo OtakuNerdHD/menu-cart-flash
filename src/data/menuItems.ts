@@ -12,6 +12,7 @@ export const menuItems: Product[] = [
     featured: true,
     available: true,
     restaurant_id: 1,
+    ingredients: "Pão, Carne bovina, Queijo cheddar, Alface, Tomate, Molho especial",
     nutritional_info: {
       ingredients: ["Pão", "Carne bovina", "Queijo cheddar", "Alface", "Tomate", "Molho especial"]
     }
@@ -25,6 +26,7 @@ export const menuItems: Product[] = [
     category: "pizzas",
     available: true,
     restaurant_id: 1,
+    ingredients: "Massa de pizza, Molho de tomate, Mussarela de búfala, Manjericão fresco, Azeite",
     nutritional_info: {
       ingredients: ["Massa de pizza", "Molho de tomate", "Mussarela de búfala", "Manjericão fresco", "Azeite"]
     }
@@ -38,6 +40,7 @@ export const menuItems: Product[] = [
     category: "saladas",
     available: true,
     restaurant_id: 1,
+    ingredients: "Alface romana, Croutons, Queijo parmesão, Molho caesar",
     nutritional_info: {
       ingredients: ["Alface romana", "Croutons", "Queijo parmesão", "Molho caesar"]
     }
@@ -51,6 +54,7 @@ export const menuItems: Product[] = [
     category: "massas",
     available: true,
     restaurant_id: 1,
+    ingredients: "Espaguete, Bacon, Ovo, Queijo parmesão, Pimenta preta",
     nutritional_info: {
       ingredients: ["Espaguete", "Bacon", "Ovo", "Queijo parmesão", "Pimenta preta"]
     }
@@ -64,6 +68,7 @@ export const menuItems: Product[] = [
     category: "japonesa",
     available: true,
     restaurant_id: 1,
+    ingredients: "Arroz, Peixe fresco variado, Alga nori, Wasabi, Gengibre",
     nutritional_info: {
       ingredients: ["Arroz", "Peixe fresco variado", "Alga nori", "Wasabi", "Gengibre"]
     }
@@ -78,6 +83,7 @@ export const menuItems: Product[] = [
     featured: true,
     available: true,
     restaurant_id: 1,
+    ingredients: "Filé mignon, Batata rústica, Molho de vinho, Ervas",
     nutritional_info: {
       ingredients: ["Filé mignon", "Batata rústica", "Molho de vinho", "Ervas"]
     }
@@ -91,6 +97,7 @@ export const menuItems: Product[] = [
     category: "mexicana",
     available: true,
     restaurant_id: 1,
+    ingredients: "Tortilla de trigo, Feijão, Arroz, Queijo, Guacamole, Pico de gallo",
     nutritional_info: {
       ingredients: ["Tortilla de trigo", "Feijão", "Arroz", "Queijo", "Guacamole", "Pico de gallo"]
     }
@@ -104,6 +111,7 @@ export const menuItems: Product[] = [
     category: "carnes",
     available: true,
     restaurant_id: 1,
+    ingredients: "Filé de frango, Farinha de rosca, Molho de tomate, Queijo mussarela",
     nutritional_info: {
       ingredients: ["Filé de frango", "Farinha de rosca", "Molho de tomate", "Queijo mussarela"]
     }
@@ -117,6 +125,7 @@ export const menuItems: Product[] = [
     category: "massas",
     available: true,
     restaurant_id: 1,
+    ingredients: "Arroz arbóreo, Mix de cogumelos, Vinho branco, Queijo parmesão",
     nutritional_info: {
       ingredients: ["Arroz arbóreo", "Mix de cogumelos", "Vinho branco", "Queijo parmesão"]
     }
@@ -131,6 +140,7 @@ export const menuItems: Product[] = [
     featured: true,
     available: true,
     restaurant_id: 1,
+    ingredients: "Chocolate, Farinha, Açúcar, Ovos, Sorvete de baunilha",
     nutritional_info: {
       ingredients: ["Chocolate", "Farinha", "Açúcar", "Ovos", "Sorvete de baunilha"]
     }

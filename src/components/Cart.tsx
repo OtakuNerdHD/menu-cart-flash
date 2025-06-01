@@ -81,7 +81,7 @@ const Cart = () => {
                               variant="ghost" 
                               size="icon" 
                               className="h-6 w-6 text-gray-400"
-                              onClick={() => removeFromCart(item.id, item.notes)}
+                              onClick={() => removeFromCart(item.id)}
                             >
                               <X className="h-4 w-4" />
                             </Button>
@@ -90,19 +90,13 @@ const Cart = () => {
                             R$ {item.price.toFixed(2)}
                           </div>
                           
-                          {item.notes && (
-                            <div className="text-sm text-red-500 italic mt-1">
-                              {item.notes}
-                            </div>
-                          )}
-                          
                           <div className="flex items-center justify-between mt-2">
                             <div className="flex items-center border rounded">
                               <Button 
                                 variant="ghost" 
                                 size="icon"
                                 className="h-8 w-8 p-0"
-                                onClick={() => updateQuantity(item.id, item.quantity - 1, item.notes)}
+                                onClick={() => updateQuantity(item.id, item.quantity - 1)}
                               >
                                 <Minus className="h-4 w-4" />
                               </Button>
@@ -111,7 +105,7 @@ const Cart = () => {
                                 variant="ghost" 
                                 size="icon"
                                 className="h-8 w-8 p-0"
-                                onClick={() => updateQuantity(item.id, item.quantity + 1, item.notes)}
+                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
                               >
                                 <Plus className="h-4 w-4" />
                               </Button>

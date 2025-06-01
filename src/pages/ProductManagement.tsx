@@ -1,635 +1,491 @@
+
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Search, Star } from 'lucide-react';
-import { useUserSwitcher } from '@/context/UserSwitcherContext';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
+import { Switch } from '../components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { PlusCircle, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { menuItems } from '@/data/menuItems';
-import { Product } from '@/types/supabase';
-import { 
-  Carousel, 
-  CarouselContent, 
-  CarouselItem, 
-  CarouselNext, 
-  CarouselPrevious 
-} from '@/components/ui/carousel';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { Category, Product } from '@/types/supabase';
 import MultipleImageUpload from '@/components/MultipleImageUpload';
-import { supabase } from "@/integrations/supabase/client";
-
-interface ProductFormState {
-  name: string;
-  price: string;
-  description: string;
-  category: string;
-  available: boolean;
-  featured: boolean;
-  images: string[];
-  ingredients: string;
-}
-
-// Defining a type for the Supabase returned data
-interface SupabaseProduct {
-  available: boolean;
-  category: string;
-  created_at: string;
-  description: string;
-  featured: boolean;
-  id: number;
-  image_url: string;
-  name: string;
-  nutritional_info: any;
-  price: number;
-  rating: number;
-  review_count: number;
-  updated_at: string;
-  restaurant_id: number;
-  team_id: string;
-  images: string[];
-}
 
 const ProductManagement = () => {
-  const navigate = useNavigate();
-  const { currentUser } = useUserSwitcher();
-  const [products, setProducts] = useState<Product[]>([...menuItems]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showAddEditDialog, setShowAddEditDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
-  const [formState, setFormState] = useState<ProductFormState>({
+  const queryClient = useQueryClient();
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [newCategory, setNewCategory] = useState<string>('');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [formData, setFormData] = useState<Partial<Product>>({
     name: '',
-    price: '',
     description: '',
-    category: 'pratos_principais',
+    price: 0,
+    category: '',
     available: true,
     featured: false,
-    images: [''],
-    ingredients: ''
+    ingredients: '', // Campo para ingredientes
+    note_hint: '',
+    image_url: '',
+    images: [],
   });
-  
-  const isAdminOrOwner = currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner';
-  
-  useEffect(() => {
-    // Buscar produtos do Supabase se disponível
-    fetchProductsFromSupabase();
-  }, []);
-  
-  const fetchProductsFromSupabase = async () => {
-    try {
+
+  // Buscar categorias
+  const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
+    queryKey: ['categories'],
+    queryFn: async () => {
+      // Mudança aqui: "categories" não consta nas tabelas do Supabase
+      // Usando uma busca com filtro em "products" para obter categorias distintas 
       const { data, error } = await supabase
         .from('products')
-        .select('*');
+        .select('category')
+        .not('category', 'is', null)
+        .order('category');
         
-      if (error) {
-        console.error('Erro ao buscar produtos do Supabase:', error);
-        return;
-      }
+      if (error) throw error;
       
-      if (data && data.length > 0) {
-        // Adicionar restaurant_id padrão como 1 se não existir
-        const productsWithRestaurantId = data.map((product: Product) => ({
-          ...product,
-          restaurant_id: product.restaurant_id || 1,
-          team_id: product.team_id || 'default_team_id', // Adicionar team_id padrão se não existir
-          // Assegura que sempre haja um array de imagens: usa images ou fallback para image_url
-          images: Array.isArray(product.images) && product.images.length > 0
-            ? product.images
-            : (product.image_url ? [product.image_url] : ['/placeholder.svg'])
-        })) as Product[];
-        
-        setProducts(productsWithRestaurantId);
-      }
-    } catch (error) {
-      console.error('Erro ao processar dados do Supabase:', error);
+      // Transformando resultados em formato de categorias distintas
+      const uniqueCategories: Category[] = [];
+      const categorySet = new Set<string>();
+      
+      data.forEach(item => {
+        if (item.category && !categorySet.has(item.category)) {
+          categorySet.add(item.category);
+          uniqueCategories.push({
+            id: uniqueCategories.length + 1,
+            name: item.category,
+            restaurant_id: 1
+          });
+        }
+      });
+      
+      return uniqueCategories;
     }
-  };
+  });
 
-  const resetForm = () => {
-    setFormState({
-      name: '',
-      price: '',
-      description: '',
-      category: 'pratos_principais',
-      available: true,
-      featured: false,
-      images: [''],
-      ingredients: ''
-    });
-  };
-  
-  const handleAddProduct = () => {
-    resetForm();
-    setCurrentProduct(null);
-    setShowAddEditDialog(true);
-  };
-  
-  const handleEditProduct = (product: Product) => {
-    setCurrentProduct(product);
-    setFormState({
-      name: product.name,
-      price: product.price.toString(),
-      description: product.description || '',
-      category: product.category || 'pratos_principais',
-      available: product.available !== false,
-      featured: product.featured || false,
-      images: product.images ?? (product.image_url ? [product.image_url] : ['']),
-      ingredients: (product.nutritional_info?.ingredients || []).join(', ')
-    });
-    setShowAddEditDialog(true);
-  };
-  
-  const handleDeleteProduct = (product: Product) => {
-    setCurrentProduct(product);
-    setShowDeleteDialog(true);
-  };
-  
-  const confirmDelete = async () => {
-    if (!currentProduct) return;
-    
-    // Tentar excluir do Supabase primeiro
-    try {
+  // Buscar produtos
+  const { data: products, isLoading: productsLoading } = useQuery({
+    queryKey: ['products'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('name');
+        
+      if (error) throw error;
+      return data as Product[];
+    }
+  });
+
+  useEffect(() => {
+    if (categoriesData) {
+      setCategories(categoriesData);
+    }
+  }, [categoriesData]);
+
+  // Mutação para criar categoria
+  const createCategoryMutation = useMutation({
+    mutationFn: async (categoryName: string) => {
+      // Em vez de inserir em uma tabela "categories", 
+      // criaremos um produto com essa categoria como exemplo
+      const { data, error } = await supabase
+        .from('products')
+        .insert([{ 
+          name: `Exemplo de ${categoryName}`, 
+          category: categoryName, 
+          price: 0,
+          restaurant_id: 1,
+          available: false,
+          description: 'Categoria criada automaticamente' 
+        }])
+        .select();
+        
+      if (error) throw error;
+      
+      // Retorna um objeto de categoria simulado
+      return {
+        id: Date.now(),
+        name: categoryName,
+        restaurant_id: 1
+      };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      setNewCategory('');
+      toast({
+        title: "Categoria criada",
+        description: "A categoria foi criada com sucesso",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao criar categoria",
+        description: error.message || "Ocorreu um erro ao criar a categoria",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Mutação para criar/atualizar produto
+  const productMutation = useMutation({
+    mutationFn: async (product: Partial<Product>) => {
+      // Se existir ID, é atualização, senão é criação
+      if (product.id) {
+        const { data, error } = await supabase
+          .from('products')
+          .update(product)
+          .eq('id', product.id)
+          .select();
+          
+        if (error) throw error;
+        return data[0];
+      } else {
+        const { data, error } = await supabase
+          .from('products')
+          .insert([{ ...product, restaurant_id: 1 }])
+          .select();
+          
+        if (error) throw error;
+        return data[0];
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      resetForm();
+      toast({
+        title: selectedProduct ? "Produto atualizado" : "Produto criado",
+        description: selectedProduct ? "O produto foi atualizado com sucesso" : "O produto foi criado com sucesso",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: selectedProduct ? "Erro ao atualizar produto" : "Erro ao criar produto",
+        description: error.message || "Ocorreu um erro ao processar o produto",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Mutação para excluir produto
+  const deleteProductMutation = useMutation({
+    mutationFn: async (productId: number) => {
       const { error } = await supabase
         .from('products')
         .delete()
-        .eq('id', currentProduct.id);
+        .eq('id', productId);
         
-      if (error) {
-        console.error('Erro ao excluir produto do Supabase:', error);
-        // Continua com o fallback local
-      } else {
-        toast({
-          title: "Produto excluído",
-          description: `${currentProduct.name} foi removido com sucesso`,
-        });
-        
-        setProducts(products.filter(p => p.id !== currentProduct.id));
-        setShowDeleteDialog(false);
-        setCurrentProduct(null);
-        return;
-      }
-    } catch (error) {
-      console.error('Erro ao processar exclusão de produto:', error);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      resetForm();
+      toast({
+        title: "Produto excluído",
+        description: "O produto foi excluído com sucesso",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erro ao excluir produto",
+        description: error.message || "Ocorreu um erro ao excluir o produto",
+        variant: "destructive",
+      });
     }
-    
-    // Fallback local
-    setProducts(products.filter(p => p.id !== currentProduct.id));
-    toast({
-      title: "Produto excluído",
-      description: `${currentProduct.name} foi removido com sucesso`,
-    });
-    setShowDeleteDialog(false);
-    setCurrentProduct(null);
+  });
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    if (name === 'price') {
+      setFormData(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
-  
-  const handleSubmitProduct = async () => {
-    if (!formState.name || !formState.price || !formState.description) {
+
+  const handleSwitchChange = (name: string, checked: boolean) => {
+    setFormData(prev => ({ ...prev, [name]: checked }));
+  };
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Validar campos obrigatórios
+    if (!formData.name || !formData.price || !formData.category) {
       toast({
         title: "Campos obrigatórios",
-        description: "Por favor, preencha todos os campos obrigatórios.",
-        variant: "destructive"
+        description: "Por favor, preencha todos os campos obrigatórios",
+        variant: "destructive",
       });
       return;
     }
-    
-    const price = parseFloat(formState.price.replace(',', '.'));
-    if (isNaN(price)) {
-      toast({
-        title: "Preço inválido",
-        description: "Por favor, insira um valor válido para o preço.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const productData: Product = {
-      id: currentProduct ? currentProduct.id : Date.now(),
-      name: formState.name,
-      description: formState.description,
-      price: price,
-      category: formState.category,
-      available: formState.available,
-      featured: formState.featured,
-      image_url: formState.images[0] || '/placeholder.svg',
-      images: formState.images,
-      restaurant_id: 1, // Definindo restaurant_id padrão como 1
-      team_id: 'default_team_id', // Definindo team_id padrão
-      nutritional_info: {
-        ingredients: formState.ingredients.split(',').map(i => i.trim()).filter(Boolean)
-      }
-    };
-    
-    // Tentar salvar no Supabase primeiro
-    try {
-      if (currentProduct) {
-        // Atualizar produto existente
-        const { error } = await supabase
-          .from('products')
-          .update({
-            name: productData.name,
-            description: productData.description,
-            price: productData.price,
-            category: productData.category,
-            available: productData.available,
-            featured: productData.featured,
-            image_url: productData.image_url,
-            images: productData.images,
-            nutritional_info: productData.nutritional_info,
-            restaurant_id: productData.restaurant_id,
-            team_id: productData.team_id,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', currentProduct.id);
-          
-        if (error) {
-          console.error('Erro ao atualizar produto no Supabase:', error);
-          // Continua com o fallback local
-        } else {
-          toast({
-            title: "Produto atualizado",
-            description: `${formState.name} foi atualizado com sucesso`,
-          });
-          
-          setProducts(products.map(p => p.id === currentProduct.id ? productData : p));
-          setShowAddEditDialog(false);
-          resetForm();
-          setCurrentProduct(null);
-          fetchProductsFromSupabase();
-          return;
-        }
-      } else {
-        // Adicionar novo produto
-        const { data, error } = await supabase
-          .from('products')
-          .insert([{
-            name: productData.name,
-            description: productData.description,
-            price: productData.price,
-            category: productData.category,
-            available: productData.available,
-            featured: productData.featured,
-            image_url: productData.image_url,
-            images: productData.images,
-            nutritional_info: productData.nutritional_info,
-            restaurant_id: productData.restaurant_id,
-            team_id: productData.team_id
-          }])
-          .select();
-          
-        if (error) {
-          console.error('Erro ao adicionar produto no Supabase:', error);
-          // Continua com o fallback local
-        } else if (data) {
-          toast({
-            title: "Produto adicionado",
-            description: `${formState.name} foi adicionado com sucesso`,
-          });
-          
-          // Convertendo explicitamente para o tipo Product
-          const newProduct: Product = {
-            ...(data[0] as SupabaseProduct)
-          };
-          
-          setProducts([...products, newProduct]);
-          setShowAddEditDialog(false);
-          resetForm();
-          setCurrentProduct(null);
-          fetchProductsFromSupabase();
-          return;
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao processar produto no Supabase:', error);
-    }
-    
-    // Fallback local
-    if (currentProduct) {
-      setProducts(products.map(p => p.id === currentProduct.id ? productData : p));
-      toast({
-        title: "Produto atualizado",
-        description: `${formState.name} foi atualizado com sucesso`,
-      });
-    } else {
-      setProducts([...products, productData]);
-      toast({
-        title: "Produto adicionado",
-        description: `${formState.name} foi adicionado com sucesso`,
-      });
-    }
-    
-    setShowAddEditDialog(false);
-    resetForm();
-    setCurrentProduct(null);
-  };
-  
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormState(prev => ({ ...prev, [name]: value }));
-  };
-  
-  const handleSwitchChange = (name: string, checked: boolean) => {
-    setFormState(prev => ({ ...prev, [name]: checked }));
-  };
-  
-  const handleImagesChange = (urls: string[]) => {
-    setFormState(prev => ({ ...prev, images: urls }));
-  };
-  
-  const filteredProducts = products.filter(product => 
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (product.category && product.category.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-  
-  const categories = [
-    { id: 'todos', name: 'Todos' },
-    { id: 'pratos_principais', name: 'Pratos Principais' },
-    { id: 'bebidas', name: 'Bebidas' },
-    { id: 'sobremesas', name: 'Sobremesas' },
-    { id: 'entradas', name: 'Entradas' },
-    { id: 'acompanhamentos', name: 'Acompanhamentos' }
-  ];
 
-  if (!isAdminOrOwner) {
-    return (
-      <div className="min-h-screen bg-gray-50 pt-16">
-        <div className="container mx-auto px-4 py-8">
-          <Card className="w-full max-w-md mx-auto">
-            <CardHeader>
-              <CardTitle>Acesso restrito</CardTitle>
-              <CardDescription>
-                Você não tem permissão para acessar esta página
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-500">
-                Esta página é destinada apenas para administradores e proprietários.
-              </p>
-              <Button className="mt-4" onClick={() => navigate('/')}>
-                Voltar para o início
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+    // Processar os ingredientes como string se necessário
+    let processedIngredients = formData.ingredients;
+    if (Array.isArray(formData.ingredients)) {
+      processedIngredients = formData.ingredients.join(', ');
+    }
+    
+    productMutation.mutate({
+      ...formData,
+      ingredients: processedIngredients as string,
+    });
+  };
+
+  const handleAddCategory = () => {
+    if (!newCategory.trim()) return;
+    createCategoryMutation.mutate(newCategory.trim());
+  };
+
+  const handleProductSelect = (product: Product) => {
+    setSelectedProduct(product);
+    setFormData({
+      ...product,
+      // Garantir que os ingredientes sejam tratados corretamente
+      ingredients: product.ingredients || 
+                  (product.nutritional_info?.ingredients && Array.isArray(product.nutritional_info.ingredients) 
+                    ? product.nutritional_info.ingredients.join(', ') 
+                    : '')
+    });
+  };
+
+  const handleImageUpload = (urls: string[]) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      image_url: urls[0] || prev.image_url, // A primeira imagem como principal
+      images: urls, // Todas as imagens no array
+      // Adiciona também como thumbnail
+      thumbnail: urls[0] || prev.image_url
+    }));
+  };
+
+  const resetForm = () => {
+    setSelectedProduct(null);
+    setFormData({
+      name: '',
+      description: '',
+      price: 0,
+      category: '',
+      available: true,
+      featured: false,
+      ingredients: '',
+      note_hint: '',
+      image_url: '',
+      images: [],
+    });
+  };
+
+  const handleDeleteProduct = () => {
+    if (selectedProduct && selectedProduct.id) {
+      if (window.confirm(`Tem certeza que deseja excluir o produto "${selectedProduct.name}"?`)) {
+        deleteProductMutation.mutate(selectedProduct.id);
+      }
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold">Gerenciamento de Produtos</h1>
-            <p className="text-gray-600">Gerencie o cardápio do restaurante</p>
-          </div>
-          <Button 
-            onClick={handleAddProduct}
-            className="mt-4 md:mt-0 flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" /> Adicionar Produto
-          </Button>
-        </div>
-        
-        <div className="mb-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input 
-                placeholder="Pesquisar produtos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-        </div>
-        
-        <Tabs defaultValue="todos" className="w-full">
-          <TabsList className="mb-4 flex w-full overflow-x-auto">
-            {categories.map(category => (
-              <TabsTrigger key={category.id} value={category.id} className="flex-shrink-0">
-                {category.name}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          
-          {categories.map(category => (
-            <TabsContent key={category.id} value={category.id} className="mt-0">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredProducts
-                  .filter(product => category.id === 'todos' || product.category === category.id)
-                  .map(product => (
-                    <Card key={product.id} className="overflow-hidden">
-                      <div className="aspect-video relative">
-                        <img 
-                          src={product.image_url || "/placeholder.svg"} 
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute top-2 right-2 flex gap-1">
-                          {product.featured && (
-                            <Badge className="bg-yellow-500">Destaque</Badge>
+    <div className="container mx-auto py-10">
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle>Gerenciar Produtos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="products" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="products">Produtos</TabsTrigger>
+              <TabsTrigger value="categories">Categorias</TabsTrigger>
+            </TabsList>
+            <TabsContent value="products" className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h3 className="text-xl font-semibold mb-2">
+                    {selectedProduct ? 'Editar Produto' : 'Novo Produto'}
+                  </h3>
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                      <Label htmlFor="name">Nome</Label>
+                      <Input
+                        type="text"
+                        id="name"
+                        name="name"
+                        value={formData.name || ''}
+                        onChange={handleInputChange}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="description">Descrição</Label>
+                      <Textarea
+                        id="description"
+                        name="description"
+                        value={formData.description || ''}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="price">Preço</Label>
+                      <Input
+                        type="number"
+                        id="price"
+                        name="price"
+                        value={formData.price || ''}
+                        onChange={handleInputChange}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="ingredients">Ingredientes</Label>
+                      <Textarea
+                        id="ingredients"
+                        name="ingredients"
+                        value={formData.ingredients || ''}
+                        onChange={handleInputChange}
+                        placeholder="Lista de ingredientes separados por vírgula"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="note_hint">Observação (Dica)</Label>
+                      <Input
+                        type="text"
+                        id="note_hint"
+                        name="note_hint"
+                        value={formData.note_hint || ''}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="category">Categoria</Label>
+                      <Select 
+                        value={formData.category || ''} 
+                        onValueChange={(value) => handleSelectChange('category', value)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Selecione uma categoria" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categoriesLoading ? (
+                            <SelectItem value="" disabled>Carregando...</SelectItem>
+                          ) : (
+                            categories.map((category) => (
+                              <SelectItem key={category.id} value={category.name}>{category.name}</SelectItem>
+                            ))
                           )}
-                          {product.available === false && (
-                            <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">
-                              Indisponível
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg flex justify-between items-center">
-                          {product.name}
-                          <span className="text-base font-normal">
-                            R$ {product.price.toFixed(2)}
-                          </span>
-                        </CardTitle>
-                        <CardDescription>
-                          {product.nutritional_info?.ingredients?.length > 0 ? (
-                            <span className="text-xs text-gray-500">
-                              Ingredientes: {product.nutritional_info.ingredients.join(', ')}
-                            </span>
-                          ) : null}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-gray-600 text-sm line-clamp-2">{product.description}</p>
-                      </CardContent>
-                      <CardContent className="pt-0 flex gap-2 justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditProduct(product)}
-                        >
-                          <Edit className="h-4 w-4 mr-2" /> Editar
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDeleteProduct(product)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" /> Excluir
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
-              </div>
-              
-              {filteredProducts.filter(product => category.id === 'todos' || product.category === category.id).length === 0 && (
-                <div className="text-center py-12">
-                  <p className="text-gray-500">Nenhum produto encontrado nesta categoria.</p>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="available">Disponível</Label>
+                      <Switch
+                        id="available"
+                        checked={formData.available || false}
+                        onCheckedChange={(checked) => handleSwitchChange('available', checked)}
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="featured">Destaque</Label>
+                      <Switch
+                        id="featured"
+                        checked={formData.featured || false}
+                        onCheckedChange={(checked) => handleSwitchChange('featured', checked)}
+                      />
+                    </div>
+                    <Button type="submit" disabled={productMutation.isPending}>
+                      {productMutation.isPending
+                        ? 'Salvando...'
+                        : selectedProduct
+                        ? 'Atualizar Produto'
+                        : 'Adicionar Produto'}
+                    </Button>
+                    {selectedProduct && (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={handleDeleteProduct}
+                        disabled={deleteProductMutation.isPending}
+                      >
+                        {deleteProductMutation.isPending ? 'Excluindo...' : 'Excluir Produto'}
+                      </Button>
+                    )}
+                    {selectedProduct && (
+                      <Button type="button" variant="secondary" onClick={resetForm}>
+                        Cancelar
+                      </Button>
+                    )}
+                  </form>
                 </div>
-              )}
+                <div>
+                  <h3 className="text-xl font-semibold mb-2">Imagens do Produto</h3>
+                  <MultipleImageUpload onUploadComplete={handleImageUpload} />
+                  {formData.image_url && (
+                    <img
+                      src={formData.image_url}
+                      alt={formData.name}
+                      className="mt-4 rounded-md max-w-full h-auto"
+                    />
+                  )}
+                </div>
+              </div>
             </TabsContent>
-          ))}
-        </Tabs>
-      </div>
-      
-      <Dialog open={showAddEditDialog} onOpenChange={setShowAddEditDialog}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {currentProduct ? 'Editar Produto' : 'Adicionar Novo Produto'}
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <Label htmlFor="name">Nome do Produto*</Label>
+            <TabsContent value="categories" className="space-y-4">
+              <h3 className="text-xl font-semibold mb-2">Gerenciar Categorias</h3>
+              <div className="flex space-x-2">
                 <Input
-                  id="name"
-                  name="name"
-                  value={formState.name}
-                  onChange={handleInputChange}
-                  placeholder="Ex: X-Burguer Especial"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="price">Preço*</Label>
-                <Input
-                  id="price"
-                  name="price"
                   type="text"
-                  inputMode="decimal"
-                  value={formState.price}
-                  onChange={handleInputChange}
-                  placeholder="Ex: 29,90"
+                  placeholder="Nova categoria"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
                 />
+                <Button onClick={handleAddCategory} disabled={createCategoryMutation.isPending}>
+                  {createCategoryMutation.isPending ? 'Adicionando...' : 'Adicionar'}
+                </Button>
               </div>
-              
-              <div>
-                <Label htmlFor="category">Categoria*</Label>
-                <select
-                  id="category"
-                  name="category"
-                  value={formState.category}
-                  onChange={handleInputChange}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <option value="pratos_principais">Pratos Principais</option>
-                  <option value="bebidas">Bebidas</option>
-                  <option value="sobremesas">Sobremesas</option>
-                  <option value="entradas">Entradas</option>
-                  <option value="acompanhamentos">Acompanhamentos</option>
-                </select>
-              </div>
-              
-              <div className="col-span-2">
-                <Label htmlFor="description">Descrição do Produto*</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  value={formState.description}
-                  onChange={handleInputChange}
-                  placeholder="Descreva o produto detalhadamente..."
-                  rows={3}
-                />
-              </div>
-              
-              <div className="col-span-2">
-                <Label htmlFor="ingredients">Ingredientes (separados por vírgula)</Label>
-                <Textarea
-                  id="ingredients"
-                  name="ingredients"
-                  value={formState.ingredients}
-                  onChange={handleInputChange}
-                  placeholder="Ex: Pão, carne, queijo, alface, tomate"
-                  rows={2}
-                />
-              </div>
-              
-              <div className="col-span-2">
-                <Label className="mb-2 block">Imagens do Produto (até 5 imagens)</Label>
-                <p className="text-sm text-gray-500 mb-4">
-                  A primeira imagem será usada como thumbnail no cardápio.
-                </p>
-                
-                <MultipleImageUpload
-                  values={formState.images.filter(img => img !== '')}
-                  onImagesUpload={handleImagesChange}
-                  maxImages={5}
-                  label="Selecionar imagens"
-                />
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <Switch 
-                  id="available" 
-                  checked={formState.available}
-                  onCheckedChange={(checked) => handleSwitchChange('available', checked)}
-                />
-                <Label htmlFor="available">Produto Disponível</Label>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <Switch 
-                  id="featured" 
-                  checked={formState.featured}
-                  onCheckedChange={(checked) => handleSwitchChange('featured', checked)}
-                />
-                <Label htmlFor="featured">Destaque no Cardápio</Label>
-              </div>
-            </div>
+              <ul>
+                {categoriesLoading ? (
+                  <li>Carregando categorias...</li>
+                ) : (
+                  categories.map((category) => (
+                    <li key={category.id} className="py-2 border-b">
+                      {category.name}
+                    </li>
+                  ))
+                )}
+              </ul>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+      <div className="mt-6">
+        <h2 className="text-2xl font-bold mb-4">Lista de Produtos</h2>
+        {productsLoading ? (
+          <p>Carregando produtos...</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {products?.map((product) => (
+              <Card key={product.id} className="cursor-pointer hover:shadow-md transition-shadow duration-300" onClick={() => handleProductSelect(product)}>
+                <CardHeader>
+                  <CardTitle>{product.name}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-500">Categoria: {product.category}</p>
+                  <p className="text-sm text-gray-500">Preço: R$ {product.price.toFixed(2)}</p>
+                  {product.image_url && (
+                    <img
+                      src={product.image_url}
+                      alt={product.name}
+                      className="mt-2 rounded-md max-w-full h-32 object-cover"
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            ))}
           </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddEditDialog(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSubmitProduct} type="button">
-              {currentProduct ? 'Salvar Alterações' : 'Adicionar Produto'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmar exclusão</DialogTitle>
-          </DialogHeader>
-          <p>
-            Tem certeza que deseja excluir o produto "{currentProduct?.name}"? Esta ação não pode ser desfeita.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              Excluir
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        )}
+      </div>
     </div>
   );
 };

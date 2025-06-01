@@ -1,4 +1,5 @@
-import { useToast } from "@/hooks/use-toast"
+
+import { useEffect, useState } from "react";
 import {
   Toast,
   ToastClose,
@@ -6,14 +7,47 @@ import {
   ToastProvider,
   ToastTitle,
   ToastViewport,
-} from "@/components/ui/toast"
+} from "@/components/ui/toast";
 
 export function Toaster() {
-  const { toasts } = useToast()
+  // Como estamos usando o Sonner, não precisamos mais do estado de toasts aqui
+  const [customToasts, setCustomToasts] = useState<any[]>([]);
+
+  // Event listener para toasts disparados fora do React
+  useEffect(() => {
+    const handleCustomToast = (e: CustomEvent) => {
+      const props = e.detail;
+      const id = Math.random().toString(36).substring(2, 9);
+      setCustomToasts(prev => [...prev, { id, ...props }]);
+      
+      // Auto-dismiss após a duração especificada ou 5 segundos
+      const duration = props.duration || 5000;
+      setTimeout(() => {
+        setCustomToasts(prev => prev.filter(toast => toast.id !== id));
+      }, duration);
+    };
+
+    const handleDismissToast = (e: CustomEvent) => {
+      const { id } = e.detail;
+      if (id) {
+        setCustomToasts(prev => prev.filter(toast => toast.id !== id));
+      } else {
+        setCustomToasts([]);
+      }
+    };
+
+    document.addEventListener("toast-show", handleCustomToast as EventListener);
+    document.addEventListener("toast-dismiss", handleDismissToast as EventListener);
+
+    return () => {
+      document.removeEventListener("toast-show", handleCustomToast as EventListener);
+      document.removeEventListener("toast-dismiss", handleDismissToast as EventListener);
+    };
+  }, []);
 
   return (
     <ToastProvider>
-      {toasts.map(function ({ id, title, description, action, ...props }) {
+      {customToasts.map(function ({ id, title, description, action, ...props }) {
         return (
           <Toast key={id} {...props}>
             <div className="grid gap-1">

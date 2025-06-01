@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
@@ -37,44 +38,41 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       return;
     }
     
-    // Mostrar preview local
+    // Mostrar preview local temporário
     const objectUrl = URL.createObjectURL(file);
     setPreview(objectUrl);
     
     setIsUploading(true);
     
     try {
-      // Tentar fazer upload para o Supabase Storage se disponível
-      let imageUrl = '';
-      try {
-        // Criar um nome de arquivo único
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-        const filePath = `product-images/${fileName}`;
+      // Upload para o bucket do Supabase
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+      const filePath = `product-images/${fileName}`;
+      
+      const { data, error } = await supabase
+        .storage
+        .from('images')
+        .upload(filePath, file);
         
-        // Upload para o Supabase Storage
-        const { data, error } = await supabase
-          .storage
-          .from('product-images')
-          .upload(filePath, file);
-          
-        if (error) {
-          throw new Error(error.message);
-        }
-        
-        // Obter URL pública da imagem
-        const { data: publicUrl } = supabase
-          .storage
-          .from('product-images')
-          .getPublicUrl(filePath);
-          
-        imageUrl = publicUrl?.publicUrl || '';
-      } catch (err) {
-        console.error('Erro no upload para o Supabase:', err);
-        // Fallback para URL local temporária (em produção, isso não funcionaria persistentemente)
-        imageUrl = objectUrl;
+      if (error) {
+        throw new Error(error.message);
       }
       
+      // Obter URL pública permanente da imagem
+      const { data: publicUrl } = supabase
+        .storage
+        .from('images')
+        .getPublicUrl(filePath);
+      
+      // Usar a URL pública gerada pelo bucket
+      const imageUrl = publicUrl?.publicUrl || '';
+      
+      // Revogar a URL temporária do objeto
+      URL.revokeObjectURL(objectUrl);
+      
+      // Atualizar o preview com a URL permanente
+      setPreview(imageUrl);
       onImageUpload(imageUrl);
       
       toast({

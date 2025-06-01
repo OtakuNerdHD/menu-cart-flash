@@ -4,7 +4,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useUserSwitcher } from '@/context/UserSwitcherContext';
-import { RefreshCw, UserPlus, X, User, Trash2 } from 'lucide-react';
+import { RefreshCw, UserPlus, X, User } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -13,49 +13,37 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ImageUpload from '@/components/ImageUpload';
-import { useAuth } from '@/context/AuthContext';
-import { Profile } from '@/context/AuthContext';
-
-// Definindo o tipo AppUser para corresponder à estrutura usada no componente
-interface AppUser {
-  id: string | number; // ID pode ser string (do Supabase) ou número (do mock)
-  full_name: string;
-  email: string;
-  role: 'admin' | 'restaurant_owner' | 'manager' | 'waiter' | 'chef' | 'delivery_person' | 'customer' | 'visitor';
-  status: 'active' | 'inactive';
-  photo_url: string;
-}
 
 // Mock de dados de usuários
-const mockUsers: AppUser[] = [
-  { id: 1, full_name: 'João Silva', email: 'joao@email.com', role: 'waiter', status: 'active', photo_url: '' },
-  { id: 2, full_name: 'Maria Souza', email: 'maria@email.com', role: 'chef', status: 'active', photo_url: '' },
-  { id: 3, full_name: 'Carlos Pereira', email: 'carlos@email.com', role: 'customer', status: 'active', photo_url: '' },
-  { id: 4, full_name: 'Ana Oliveira', email: 'ana@email.com', role: 'waiter', status: 'inactive', photo_url: '' },
+const mockUsers = [
+  { id: 1, name: 'João Silva', email: 'joao@email.com', role: 'waiter', status: 'active', photo_url: '' },
+  { id: 2, name: 'Maria Souza', email: 'maria@email.com', role: 'chef', status: 'active', photo_url: '' },
+  { id: 3, name: 'Carlos Pereira', email: 'carlos@email.com', role: 'customer', status: 'active', photo_url: '' },
+  { id: 4, name: 'Ana Oliveira', email: 'ana@email.com', role: 'waiter', status: 'inactive', photo_url: '' },
 ];
 
 // Mock de usuários extras que podem ser "descobertos" ao atualizar
-const extraUsers: AppUser[] = [
-  { id: 5, full_name: 'Roberto Alves', email: 'roberto@email.com', role: 'customer', status: 'active', photo_url: '' },
-  { id: 6, full_name: 'Fernanda Lima', email: 'fernanda@email.com', role: 'chef', status: 'active', photo_url: '' },
+const extraUsers = [
+  { id: 5, name: 'Roberto Alves', email: 'roberto@email.com', role: 'customer', status: 'active', photo_url: '' },
+  { id: 6, name: 'Fernanda Lima', email: 'fernanda@email.com', role: 'chef', status: 'active', photo_url: '' },
 ];
 
 const UserManagement = () => {
   const { currentUser } = useUserSwitcher();
-  const [users, setUsers] = useState<AppUser[]>(mockUsers); // Tipar o estado users
+  const [users, setUsers] = useState(mockUsers);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [extraUsersAdded, setExtraUsersAdded] = useState(false);
   const navigate = useNavigate();
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [currentUser2Edit, setCurrentUser2Edit] = useState<any>(null);
-  const [newUser, setNewUser] = useState<Omit<AppUser, 'id'> & { password: string }>({
-    full_name: '',
+  const [newUser, setNewUser] = useState({
+    name: '',
     email: '',
+    password: '',
     role: 'customer',
     status: 'active',
-    photo_url: '',
-    password: ''
+    photo_url: ''
   });
   
   const isAdminOrOwner = currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner';
@@ -78,7 +66,7 @@ const UserManagement = () => {
   const fetchUsersFromSupabase = async () => {
     try {
       const { data, error } = await supabase
-        .from('profiles')
+        .from('users')
         .select('*');
         
       if (error) {
@@ -87,13 +75,14 @@ const UserManagement = () => {
       }
       
       if (data && data.length > 0) {
-        const supabaseUsers: AppUser[] = data.map((user: Profile) => ({
+        // Transformar dados do Supabase para o formato esperado pela UI
+        const supabaseUsers = data.map(user => ({
           id: user.id,
-          full_name: user.name || user.email || 'Nome não disponível', // Ajustado para user.name de Profile
-          email: user.email || 'Email não disponível',
-          role: user.role || 'customer', // Adicionado fallback para role
-          status: 'active', // Definir um status padrão, já que Profile não tem status
-          photo_url: user.avatar_url || ''
+          name: `${user.first_name} ${user.last_name}`,
+          email: user.email,
+          role: user.role,
+          status: 'active',  // Assumindo que todos estão ativos por padrão
+          photo_url: user.photo_url || ''
         }));
         
         setUsers(supabaseUsers);
@@ -176,13 +165,19 @@ const UserManagement = () => {
     
     try {
       // Tentar atualizar no Supabase
+      const nameParts = currentUser2Edit.name.split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
       const { error } = await supabase
-        .from('profiles')
+        .from('users')
         .update({
-          name: currentUser2Edit.full_name, // Ajustado para full_name
+          first_name: firstName,
+          last_name: lastName,
           email: currentUser2Edit.email,
           role: currentUser2Edit.role,
-          avatar_url: currentUser2Edit.photo_url
+          photo_url: currentUser2Edit.photo_url
+          // Removemos 'status' aqui, já que não faz parte do tipo
         })
         .eq('id', currentUser2Edit.id);
         
@@ -214,7 +209,7 @@ const UserManagement = () => {
     
     toast({
       title: "Usuário atualizado com sucesso",
-      description: `${currentUser2Edit.full_name} foi atualizado.`
+      description: `${currentUser2Edit.name} foi atualizado.`
     });
     
     setIsEditUserOpen(false);
@@ -223,7 +218,7 @@ const UserManagement = () => {
   
   const handleAddUser = async () => {
     // Validação básica
-    if (!newUser.full_name || !newUser.email || !newUser.password) {
+    if (!newUser.name || !newUser.email || !newUser.password) {
       toast({
         title: "Campos obrigatórios",
         description: "Preencha todos os campos obrigatórios",
@@ -232,78 +227,51 @@ const UserManagement = () => {
       return;
     }
     
-    // Criar usuário usando a autenticação nativa do Supabase
+    // Tente adicionar ao Supabase primeiro
     try {
-      // Primeiro, criar o usuário na autenticação
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: newUser.email,
-        password: newUser.password,
-        options: {
-          data: {
-            full_name: newUser.full_name,
+      // Dividir nome e sobrenome
+      const nameParts = newUser.name.split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
+      const { data, error } = await supabase
+        .from('users')
+        .insert([
+          {
+            first_name: firstName,
+            last_name: lastName,
+            email: newUser.email,
+            password: newUser.password, // Nota: em um sistema real, a senha seria hasheada
             role: newUser.role,
-            avatar_url: newUser.photo_url
+            username: newUser.email, // Usando email como username por padrão
+            photo_url: newUser.photo_url
+            // Removemos 'status' aqui, já que não faz parte do tipo
           }
-        }
-      });
-      
-      if (authError) {
-        console.error('Erro ao criar usuário na autenticação:', authError);
-        throw authError;
-      }
-      
-      // Se o usuário foi criado com sucesso, o perfil será criado automaticamente via trigger
-      // ou podemos criar manualmente se necessário
-      if (authData.user) {
-        // Aguardar um pouco para o trigger criar o perfil
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        ])
+        .select();
         
-        // Verificar se o perfil foi criado, se não, criar manualmente
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', authData.user.id)
-          .single();
-          
-        if (profileError && profileError.code === 'PGRST116') {
-          // Perfil não existe, criar manualmente
-          const { error: insertError } = await supabase
-            .from('profiles')
-            .insert({
-              id: authData.user.id,
-              email: newUser.email,
-              full_name: newUser.full_name,
-              role: newUser.role,
-              avatar_url: newUser.photo_url
-            });
-            
-          if (insertError) {
-            console.error('Erro ao criar perfil:', insertError);
-            throw insertError;
-          }
-        }
+      if (error) {
+        console.error('Erro ao adicionar usuário ao Supabase:', error);
+        // Continua com o fallback para localStorage
+      } else if (data) {
+        toast({
+          title: "Usuário adicionado com sucesso",
+          description: `${newUser.name} foi adicionado ao sistema.`
+        });
+        
+        // Atualizar a lista de usuários
+        fetchUsersFromSupabase();
+        setIsAddUserOpen(false);
+        setNewUser({
+          name: '',
+          email: '',
+          password: '',
+          role: 'customer',
+          status: 'active',
+          photo_url: ''
+        });
+        return;
       }
-      
-      // Se chegou até aqui, o usuário foi criado com sucesso
-      console.log('Usuário criado com sucesso na autenticação do Supabase');
-      
-      toast({
-        title: "Usuário adicionado com sucesso",
-        description: `${newUser.full_name} foi adicionado ao sistema.`
-      });
-      
-      // Recarregar usuários do Supabase para garantir sincronização
-      await fetchUsersFromSupabase();
-      setIsAddUserOpen(false);
-      setNewUser({
-        full_name: '',
-        email: '',
-        password: '',
-        role: 'customer',
-        status: 'active',
-        photo_url: ''
-      });
-      return;
     } catch (error) {
       console.error('Erro ao processar adição de usuário:', error);
     }
@@ -312,7 +280,7 @@ const UserManagement = () => {
     const newId = Math.max(...users.map(u => u.id), 0) + 1;
     const userToAdd = {
       id: newId,
-      full_name: newUser.full_name,
+      name: newUser.name,
       email: newUser.email,
       role: newUser.role,
       status: newUser.status,
@@ -325,13 +293,13 @@ const UserManagement = () => {
     
     toast({
       title: "Usuário adicionado com sucesso",
-      description: `${newUser.full_name} foi adicionado ao sistema.`
+      description: `${newUser.name} foi adicionado ao sistema.`
     });
     
     // Limpar o formulário e fechar o modal
     setIsAddUserOpen(false);
     setNewUser({
-      full_name: '',
+      name: '',
       email: '',
       password: '',
       role: 'customer',
@@ -357,18 +325,18 @@ const UserManagement = () => {
     
     toast({
       title: "Status atualizado",
-      description: `${user?.full_name} agora está ${newStatus === 'active' ? 'ativo' : 'inativo'}.`
+      description: `${user?.name} agora está ${newStatus === 'active' ? 'ativo' : 'inativo'}.`
     });
     
     // Tentar atualizar no Supabase também
     try {
-      // Vamos adicionar um campo 'status' na tabela profiles se necessário
-      // Por enquanto, mantemos apenas o controle local
+      // Como não podemos atualizar o campo 'status' diretamente, atualizamos apenas o que é permitido
+      // e usamos outra forma para rastrear o status do usuário internamente
       supabase
-        .from('profiles')
+        .from('users')
         .update({ 
-          // Se você quiser persistir o status, adicione um campo 'status' na tabela profiles
-          // status: newStatus
+          // Não temos campo status na tabela, então não atualizamos nada
+          // Podemos criar uma tabela separada para rastrear status ou usar outra abordagem
         })
         .eq('id', userId)
         .then(({ error }) => {
@@ -379,54 +347,6 @@ const UserManagement = () => {
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
     }
-  };
-
-  const handleDeleteUser = async (userId) => {
-    const user = users.find(u => u.id === userId);
-    if (!user) return;
-
-    // Confirmar exclusão
-    if (!window.confirm(`Tem certeza que deseja excluir o usuário ${user.full_name}? Esta ação não pode ser desfeita.`)) {
-      return;
-    }
-
-    try {
-      // Para excluir um usuário do Supabase Auth, precisamos usar a API de administração
-      // Por enquanto, vamos apenas remover o perfil da tabela profiles
-      // Em produção, você deve usar a API de administração do Supabase para deletar o usuário da autenticação
-      
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
-
-      if (error) {
-        console.error('Erro ao excluir perfil do Supabase:', error);
-        throw error;
-      }
-      
-      toast({
-        title: "Usuário excluído com sucesso",
-        description: `${user.full_name} foi removido do sistema.`
-      });
-      
-      // Atualizar a lista de usuários
-      await fetchUsersFromSupabase();
-      return;
-      // Removida a chave extra que estava aqui antes do catch
-    } catch (error) {
-      console.error('Erro ao processar exclusão de usuário:', error);
-    }
-
-    // Fallback para localStorage se o Supabase falhar
-    const updatedUsers = users.filter(u => u.id !== userId);
-    setUsers(updatedUsers);
-    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
-
-    toast({
-      title: "Usuário excluído com sucesso",
-      description: `${user.full_name} foi removido do sistema.`
-    });
   };
 
   if (!isAdminOrOwner) {
@@ -485,13 +405,13 @@ const UserManagement = () => {
             <Card key={user.id}>
               <CardHeader className="flex flex-row items-center gap-3 pb-2">
                 <Avatar className="h-12 w-12">
-                  <AvatarImage src={user.photo_url} alt={user.full_name} />
+                  <AvatarImage src={user.photo_url} alt={user.name} />
                   <AvatarFallback className="bg-menu-primary text-white">
-                    {user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)}
+                    {user.name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <CardTitle className="text-base">{user.full_name}</CardTitle>
+                  <CardTitle className="text-base">{user.name}</CardTitle>
                   <CardDescription className="text-xs">{user.email}</CardDescription>
                 </div>
               </CardHeader>
@@ -522,23 +442,13 @@ const UserManagement = () => {
                   >
                     {user.status === 'active' ? 'Desativar' : 'Ativar'}
                   </Button>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      className="flex-1"
-                      onClick={() => handleEditUser(user)}
-                    >
-                      Editar
-                    </Button>
-                    <Button 
-                      variant="destructive" 
-                      className="flex-1"
-                      onClick={() => handleDeleteUser(user.id)}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Excluir
-                    </Button>
-                  </div>
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => handleEditUser(user)}
+                  >
+                    Editar
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -567,8 +477,8 @@ const UserManagement = () => {
               <Label htmlFor="name">Nome Completo</Label>
               <Input
                 id="name"
-                name="full_name"
-                value={newUser.full_name}
+                name="name"
+                value={newUser.name}
                 onChange={handleInputChange}
                 placeholder="Digite o nome completo"
               />
@@ -652,8 +562,8 @@ const UserManagement = () => {
                 <Label htmlFor="edit_name">Nome Completo</Label>
                 <Input
                   id="edit_name"
-                  name="full_name"
-                  value={currentUser2Edit.full_name}
+                  name="name"
+                  value={currentUser2Edit.name}
                   onChange={handleInputChange}
                   placeholder="Digite o nome completo"
                 />

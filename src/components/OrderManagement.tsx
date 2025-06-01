@@ -9,34 +9,9 @@ import { Dialog } from '@/components/ui/dialog';
 import OrderDetailsDialog from '@/components/OrderDetailsDialog';
 import { toast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
-import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
+import { supabase } from '@/integrations/supabase/client';
 
-// Dados de exemplo - futuramente virão da API
-const mockOrders = [
-  // Removidos os pedidos mockados para evitar que apareçam automaticamente após limpar todos os pedidos
-];
-
-interface OrderItem {
-  name: string;
-  quantity: number;
-  price: number;
-  notes?: string;
-  image?: string;
-  product_id: number;
-}
-
-interface OrderProps {
-  id: number;
-  table: string;
-  table_name?: string;
-  status: string;
-  items: OrderItem[];
-  total: number;
-  createdAt: string;
-  assignedTo: string | null;
-}
-
-const getStatusColor = (status: string) => {
+const getStatusColor = (status) => {
   switch (status) {
     case 'pending':
       return 'bg-yellow-100 text-yellow-800';
@@ -51,7 +26,7 @@ const getStatusColor = (status: string) => {
   }
 };
 
-const getStatusText = (status: string) => {
+const getStatusText = (status) => {
   switch (status) {
     case 'pending':
       return 'Pendente';
@@ -66,116 +41,193 @@ const getStatusText = (status: string) => {
   }
 };
 
+// Função auxiliar para gerenciar o tipo de produtos
+const ensureProductData = (product: any) => {
+  if (!product) return null;
+  return {
+    name: typeof product === 'object' && product.name ? product.name : '',
+    price: typeof product === 'object' && product.price ? product.price : 0,
+    image_url: typeof product === 'object' && product.image_url ? product.image_url : ''
+  };
+};
+
+const renderOrderItems = (items: any[]) => {
+  return items.map((item, index) => {
+    const productData = ensureProductData(item.product);
+    if (!productData) return null;
+    
+    return (
+      <div key={index} className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <div className="h-10 w-10 bg-gray-200 rounded-md overflow-hidden">
+            {productData.image_url && (
+              <img 
+                src={productData.image_url} 
+                alt={productData.name} 
+                className="h-full w-full object-cover"
+              />
+            )}
+          </div>
+          <div>
+            <p className="font-medium">{productData.name}</p>
+            <p className="text-sm text-gray-500">
+              R$ {productData.price.toFixed(2)} × {item.quantity}
+            </p>
+          </div>
+        </div>
+        <p className="font-medium">
+          R$ {(productData.price * item.quantity).toFixed(2)}
+        </p>
+      </div>
+    );
+  });
+};
+
 const OrderManagement = () => {
   const { currentUser } = useUserSwitcher();
-  const { getOrders } = useSupabaseWithMultiTenant();
-  const [orders, setOrders] = useState(mockOrders);
-  const [selectedOrder, setSelectedOrder] = useState<typeof mockOrders[0] | null>(null);
+  const [orders, setOrders] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   
   const isStaff = ['admin', 'restaurant_owner', 'waiter', 'chef'].includes(currentUser?.role || '');
 
-  // Carregar pedidos do Supabase ao iniciar
   useEffect(() => {
-    fetchOrdersFromSupabase();
+    fetchOrders();
+
+    // Configurar a escuta em tempo real para atualizações na tabela de pedidos
+    const ordersSubscription = supabase
+      .channel('orders-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'orders'
+      }, () => {
+        console.log('Detectada alteração em pedidos, atualizando...');
+        fetchOrders();
+      })
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(ordersSubscription);
+    };
   }, []);
 
-  const fetchOrdersFromSupabase = async () => {
+  const fetchOrders = async () => {
+    setIsLoading(true);
     try {
-      // Usar o hook multi-tenant para buscar pedidos
-      const ordersData = await getOrders();
-      
-      // Se não houver pedidos, inicializar com array vazio
-      if (!ordersData || ordersData.length === 0) {
-        setOrders([]);
+      // Buscar pedidos do Supabase
+      const { data: ordersData, error } = await supabase
+        .from('orders')
+        .select('*');
+
+      if (error) {
+        console.error('Erro ao buscar pedidos:', error);
+        loadOrdersFromLocalStorage();
         return;
       }
-      
-      // Mapear os pedidos com seus itens completos
-      const processedOrders = ordersData.map(order => {
-        // Os itens já vêm incluídos pela consulta com join
-        const orderItems = order.order_items?.map((item: any) => ({
-          name: item.name || 'Produto Desconhecido',
-          quantity: item.quantity,
-          price: item.price || 0,
-          notes: item.notes || undefined,
-          image: item.image_url || undefined,
-          product_id: item.product_id
-        })) || [];
+
+      if (ordersData && ordersData.length > 0) {
+        console.log("Pedidos recuperados do Supabase:", ordersData);
         
-        // Calcular o total do pedido
-        const total = orderItems.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+        // Buscar os itens de cada pedido
+        const processedOrders = await Promise.all(
+          ordersData.map(async (order) => {
+            // Buscar itens do pedido
+            const { data: orderItemsData, error: orderItemsError } = await supabase
+              .from('order_items')
+              .select(`
+                *,
+                product:product_id (*)
+              `)
+              .eq('order_id', order.id);
+            
+            if (orderItemsError) {
+              console.error('Erro ao buscar itens do pedido:', orderItemsError);
+              return null;
+            }
+
+            // Processar os itens do pedido
+            const items = Array.isArray(orderItemsData) ? orderItemsData.map(item => {
+              const product = item.product || {};
+              
+              // Verificar se product é um objeto e tem as propriedades necessárias
+              const productName = typeof product === 'object' && product !== null && 'name' in product 
+                ? String(product.name || "Produto não disponível") 
+                : "Produto não disponível";
+                
+              const productPrice = typeof product === 'object' && product !== null && 'price' in product 
+                ? Number(product.price || 0) 
+                : 0;
+                
+              const productImageUrl = typeof product === 'object' && product !== null && 'image_url' in product 
+                ? String(product.image_url || null) 
+                : null;
+              
+              return {
+                name: productName,
+                quantity: item.quantity || 1,
+                price: productPrice,
+                notes: item.notes || "",
+                image_url: productImageUrl
+              };
+            }) : [];
+
+            return {
+              id: order.id,
+              table: order.table_name || `Mesa ${order.table_id || 'Desconhecida'}`,
+              status: order.status || 'pending',
+              items: items,
+              total: order.total || items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+              createdAt: order.created_at || new Date().toISOString(),
+              assignedTo: order.assigned_to || null
+            };
+          })
+        );
+
+        // Filtrar pedidos nulos (que podem ter ocorrido devido a erros)
+        const validOrders = processedOrders.filter(order => order !== null);
         
-        return {
-          ...order,
-          items: orderItems,
-          total: total
-        };
-      });
-      
-      setOrders(processedOrders);
-      
+        setOrders(validOrders);
+        // Atualizar também o localStorage como backup
+        localStorage.setItem('tableOrders', JSON.stringify(validOrders));
+      } else {
+        console.log("Nenhum pedido encontrado no Supabase");
+        // Buscar os pedidos salvos no localStorage como fallback
+        loadOrdersFromLocalStorage();
+      }
     } catch (error) {
-      console.error('Erro ao buscar pedidos do Supabase:', error);
-      toast({
-        title: 'Erro ao carregar pedidos',
-        description: error instanceof Error ? error.message : String(error),
-        variant: 'destructive'
-      });
+      console.error('Erro ao processar pedidos:', error);
+      // Buscar os pedidos salvos no localStorage como fallback
+      loadOrdersFromLocalStorage();
+    } finally {
+      setIsLoading(false);
     }
   };
-  
-  // Função de fallback para carregar pedidos do localStorage
-  const loadOrders = () => {
+
+  const loadOrdersFromLocalStorage = () => {
     const storedOrders = localStorage.getItem('tableOrders');
     if (storedOrders) {
       try {
-        const parsedOrders = JSON.parse(storedOrders);
-        // Substitui completamente os pedidos em vez de combinar com os predefinidos
-        setOrders(parsedOrders);
+        setOrders(JSON.parse(storedOrders));
       } catch (error) {
-        console.error('Erro ao carregar pedidos:', error);
+        console.error('Erro ao carregar pedidos do localStorage:', error);
       }
-    } else {
-      // Se não houver pedidos no localStorage, inicializa com array vazio
-      setOrders([]);
     }
   };
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    // Buscar dados atualizados do Supabase
-    fetchOrdersFromSupabase().then(() => {
+    fetchOrders();
+    setTimeout(() => {
       toast({
         title: "Atualizado",
         description: "Lista de pedidos atualizada com sucesso",
       });
       setIsRefreshing(false);
-    }).catch(() => {
-      setIsRefreshing(false);
-    });
-  };
-
-  const handleDeleteAll = async () => {
-    try {
-      await supabase.from('order_items').delete().gt('id', 0);
-      await supabase.from('orders').delete().gt('id', 0);
-      localStorage.removeItem('tableOrders');
-      setOrders([]);
-      toast({
-        title: "Todos os pedidos apagados",
-        description: "Todos os pedidos foram removidos com sucesso",
-      });
-    } catch (error) {
-      console.error("Erro ao apagar pedidos:", error);
-      toast({
-        title: "Erro ao apagar pedidos",
-        description: error instanceof Error ? error.message : "Falha ao limpar pedidos",
-        variant: "destructive",
-      });
-    }
+    }, 800);
   };
 
   // Se não for funcionário, mostrar mensagem de acesso negado
@@ -204,24 +256,42 @@ const OrderManagement = () => {
     );
   }
   
-  const handleAssignTable = (orderId: number) => {
+  const handleAssignTable = async (orderId) => {
     if (!currentUser) return;
     
-    setOrders(prevOrders => 
-      prevOrders.map(order => 
-        order.id === orderId 
-          ? { ...order, assignedTo: currentUser.name } 
-          : order
-      )
-    );
-    
-    toast({
-      title: "Mesa assumida com sucesso",
-      description: `Você é o responsável por ${orders.find(o => o.id === orderId)?.table_name || orders.find(o => o.id === orderId)?.table}`,
-    });
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ assigned_to: currentUser.name })
+        .eq('id', orderId);
+
+      if (error) {
+        throw error;
+      }
+
+      setOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === orderId 
+            ? { ...order, assignedTo: currentUser.name } 
+            : order
+        )
+      );
+      
+      toast({
+        title: "Mesa assumida com sucesso",
+        description: `Você é o responsável pela ${orders.find(o => o.id === orderId)?.table}`,
+      });
+    } catch (error) {
+      console.error('Erro ao assumir mesa:', error);
+      toast({
+        title: "Erro ao assumir mesa",
+        description: "Não foi possível assumir a mesa. Tente novamente.",
+        variant: "destructive"
+      });
+    }
   };
   
-  const handleOpenDetails = (order: typeof orders[0]) => {
+  const handleOpenDetails = (order) => {
     setSelectedOrder(order);
     setShowDetails(true);
   };
@@ -246,140 +316,136 @@ const OrderManagement = () => {
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </Button>
           </div>
-          <div className="flex items-center gap-2">
-            {['admin', 'restaurant_owner'].includes(currentUser?.role || '') && (
-              <Button variant="destructive" onClick={handleDeleteAll}>
-                Apagar todos os pedidos
-              </Button>
-            )}
-            {['admin', 'restaurant_owner', 'chef'].includes(currentUser?.role || '') && (
-              <Button onClick={handleKitchenManagement}>
-                Acessar Cozinha
-              </Button>
-            )}
-          </div>
+          {['admin', 'restaurant_owner', 'chef'].includes(currentUser?.role || '') && (
+            <Button onClick={handleKitchenManagement}>
+              Acessar Cozinha
+            </Button>
+          )}
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {orders.map(order => (
-            <Card key={order.id} className="overflow-hidden">
-              <div className={`h-2 ${order.status === 'pending' ? 'bg-yellow-500' : order.status === 'preparing' ? 'bg-blue-500' : 'bg-green-500'}`}></div>
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-start">
-                  <CardTitle>{order.table_name || order.table}</CardTitle>
-                  <Badge className={getStatusColor(order.status)}>
-                    {getStatusText(order.status)}
-                  </Badge>
-                </div>
-                <CardDescription className="flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  {new Date(order.createdAt).toLocaleTimeString('pt-BR', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
-                </CardDescription>
-                {order.assignedTo ? (
-                  <div className="mt-1 text-sm flex items-center gap-1 text-gray-600">
-                    <User className="w-4 h-4" />
-                    <span>Atendido por: {order.assignedTo}</span>
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-menu-primary"></div>
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-semibold text-gray-600">Nenhum pedido encontrado</h2>
+            <p className="mt-2 text-gray-500">
+              Não há pedidos ativos no momento
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {orders.map(order => (
+              <Card key={order.id} className="overflow-hidden">
+                <div className={`h-2 ${order.status === 'pending' ? 'bg-yellow-500' : order.status === 'preparing' ? 'bg-blue-500' : 'bg-green-500'}`}></div>
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start">
+                    <CardTitle>{order.table}</CardTitle>
+                    <Badge className={getStatusColor(order.status)}>
+                      {getStatusText(order.status)}
+                    </Badge>
                   </div>
-                ) : (
-                  <div className="mt-1 text-sm flex items-center gap-1 text-yellow-600">
-                    <User className="w-4 h-4" />
-                    <span>Atendimento pendente</span>
-                  </div>
-                )}
-              </CardHeader>
-              
-              <CardContent>
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-500 mb-2">Itens</h4>
-                    <ul className="space-y-2">
-                      {order.items.map((item, index) => (
-                        <li key={index} className="flex flex-col text-sm">
-                          <div className="flex justify-between">
-                            <span>{item.quantity}x {item.name}</span>
-                            <span>R$ {(item.price * item.quantity).toFixed(2)}</span>
-                          </div>
-                          {item.notes && (
-                            <p className="text-sm text-red-500 italic mt-1">{item.notes}</p>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div className="flex justify-between font-medium">
-                    <span>Total</span>
-                    <span>R$ {order.total.toFixed(2)}</span>
-                  </div>
-                  
-                  <div className="pt-3 space-y-2">
-                    {currentUser?.role === 'waiter' && (
-                      <>
-                        <Button 
-                          className="w-full" 
-                          variant={order.status === 'ready' ? 'default' : 'outline'}
-                          onClick={() => order.assignedTo ? handleOpenDetails(order) : handleAssignTable(order.id)}
-                        >
-                          {!order.assignedTo ? 'Assumir mesa' : order.status === 'ready' ? 'Entregar pedido' : 'Verificar status'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full"
-                          onClick={() => handleOpenDetails(order)}
-                        >
-                          Ver detalhes
-                        </Button>
-                      </>
-                    )}
+                  <CardDescription className="flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    {new Date(order.createdAt).toLocaleTimeString('pt-BR', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </CardDescription>
+                  {order.assignedTo ? (
+                    <div className="mt-1 text-sm flex items-center gap-1 text-gray-600">
+                      <User className="w-4 h-4" />
+                      <span>Atendido por: {order.assignedTo}</span>
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-sm flex items-center gap-1 text-yellow-600">
+                      <User className="w-4 h-4" />
+                      <span>Atendimento pendente</span>
+                    </div>
+                  )}
+                </CardHeader>
+                
+                <CardContent>
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-500 mb-2">Itens</h4>
+                      <ul className="space-y-2">
+                        {renderOrderItems(order.items)}
+                      </ul>
+                    </div>
                     
-                    {currentUser?.role === 'chef' && (
-                      <div className="space-y-2">
-                        <Button 
-                          className="w-full" 
-                          variant={order.status === 'pending' ? 'default' : 'outline'}
-                          onClick={handleKitchenManagement}
-                        >
-                          {order.status === 'pending' ? 'Iniciar preparo' : 
-                           order.status === 'preparing' ? 'Marcar como pronto' : 'Ver detalhes'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full"
-                          onClick={() => handleOpenDetails(order)}
-                        >
-                          Ver detalhes
-                        </Button>
-                      </div>
-                    )}
+                    <Separator />
                     
-                    {(currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner') && (
-                      <div className="space-y-2">
-                        <Button 
-                          className="w-full"
-                          onClick={() => !order.assignedTo ? handleAssignTable(order.id) : handleOpenDetails(order)}
-                        >
-                          {!order.assignedTo ? 'Assumir mesa' : 'Alterar status'}
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          className="w-full"
-                          onClick={() => handleOpenDetails(order)}
-                        >
-                          Ver detalhes
-                        </Button>
-                      </div>
-                    )}
+                    <div className="flex justify-between font-medium">
+                      <span>Total</span>
+                      <span>R$ {order.total.toFixed(2)}</span>
+                    </div>
+                    
+                    <div className="pt-3 space-y-2">
+                      {currentUser?.role === 'waiter' && (
+                        <>
+                          <Button 
+                            className="w-full" 
+                            variant={order.status === 'ready' ? 'default' : 'outline'}
+                            onClick={() => order.assignedTo ? handleOpenDetails(order) : handleAssignTable(order.id)}
+                          >
+                            {!order.assignedTo ? 'Assumir mesa' : order.status === 'ready' ? 'Entregar pedido' : 'Verificar status'}
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            className="w-full"
+                            onClick={() => handleOpenDetails(order)}
+                          >
+                            Ver detalhes
+                          </Button>
+                        </>
+                      )}
+                      
+                      {currentUser?.role === 'chef' && (
+                        <div className="space-y-2">
+                          <Button 
+                            className="w-full" 
+                            variant={order.status === 'pending' ? 'default' : 'outline'}
+                            onClick={handleKitchenManagement}
+                          >
+                            {order.status === 'pending' ? 'Iniciar preparo' : 
+                             order.status === 'preparing' ? 'Marcar como pronto' : 'Ver detalhes'}
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            className="w-full"
+                            onClick={() => handleOpenDetails(order)}
+                          >
+                            Ver detalhes
+                          </Button>
+                        </div>
+                      )}
+                      
+                      {(currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner') && (
+                        <div className="space-y-2">
+                          <Button 
+                            className="w-full"
+                            onClick={() => !order.assignedTo ? handleAssignTable(order.id) : handleOpenDetails(order)}
+                          >
+                            {!order.assignedTo ? 'Assumir mesa' : 'Alterar status'}
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            className="w-full"
+                            onClick={() => handleOpenDetails(order)}
+                          >
+                            Ver detalhes
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
 
       {selectedOrder && (

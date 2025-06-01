@@ -16,15 +16,36 @@ const MenuItem = ({ item }: MenuItemProps) => {
   const { addToCart } = useCart();
   const [showDetails, setShowDetails] = useState(false);
   
+  // Função para determinar qual imagem usar como thumbnail
+  const getDisplayImage = () => {
+    // Ordem de prioridade: thumbnail > image_url > primeira imagem do array > placeholder
+    if (item.thumbnail) {
+      return item.thumbnail;
+    } else if (item.image_url) {
+      return item.image_url;
+    } else if (item.images && item.images.length > 0) {
+      return item.images[0];
+    } else if (item.gallery && item.gallery.length > 0) {
+      return item.gallery[0]; 
+    }
+    return "/placeholder.svg";
+  };
+  
   const handleAddToCart = () => {
     addToCart({
       id: item.id,
       name: item.name,
       price: item.price,
-      imageUrl: item.image_url,
-      image: item.image_url, // Para compatibilidade
+      imageUrl: getDisplayImage(),
+      image: getDisplayImage(), // Para compatibilidade
       description: item.description,
-      category: item.category
+      category: item.category,
+      ingredients: item.ingredients // Adicionando os ingredientes ao carrinho
+    });
+    
+    toast({
+      title: "Item adicionado",
+      description: `${item.name} foi adicionado ao carrinho`,
     });
   };
   
@@ -32,12 +53,28 @@ const MenuItem = ({ item }: MenuItemProps) => {
     setShowDetails(true);
   };
 
+  // Extrair uma descrição curta dos ingredientes para exibir no card
+  let shortDescription = item.description || '';
+  
+  // Se não tiver descrição mas tiver ingredientes, usar os ingredientes como descrição
+  if (!shortDescription && item.ingredients) {
+    shortDescription = `Ingredientes: ${typeof item.ingredients === 'string' ? item.ingredients : ''}`;
+  } else if (!shortDescription && item.nutritional_info?.ingredients) {
+    // Fallback para compatibilidade
+    const ingredients = Array.isArray(item.nutritional_info.ingredients) 
+      ? item.nutritional_info.ingredients.join(', ') 
+      : '';
+    if (ingredients) {
+      shortDescription = `Ingredientes: ${ingredients}`;
+    }
+  }
+
   return (
     <>
       <Card className="overflow-hidden">
         <div className="aspect-video relative">
           <img 
-            src={item.image_url || "/placeholder.svg"} 
+            src={getDisplayImage()} 
             alt={item.name}
             className="w-full h-full object-cover"
           />
@@ -52,7 +89,7 @@ const MenuItem = ({ item }: MenuItemProps) => {
           <CardDescription className="text-xs">R$ {item.price.toFixed(2)}</CardDescription>
         </CardHeader>
         <CardContent className="pb-1 pt-0 px-3">
-          <p className="text-gray-600 text-xs line-clamp-1">{item.description}</p>
+          <p className="text-gray-600 text-xs line-clamp-1">{shortDescription}</p>
         </CardContent>
         <CardFooter className="flex justify-between px-3 py-2">
           <Button 

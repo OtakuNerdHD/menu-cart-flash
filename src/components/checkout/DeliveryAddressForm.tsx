@@ -10,7 +10,6 @@ import { useCart } from '@/context/CartContext';
 import { Loader2, CreditCard, Wallet, CreditCardIcon, DollarSign, QrCode } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DeliveryAddressFormProps } from './DeliveryAddressFormProps';
-import { supabase } from '@/integrations/supabase/client';
 
 // Payment method type
 type PaymentMethod = 'card' | 'pix' | 'cash' | 'card_delivery';
@@ -103,61 +102,71 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
     setPaymentStep('payment');
   };
   
-  // Função centralizada para criar pedido (delivery ou interno)
-  const createOrder = async ({ paymentMethod, paymentInfo, deliveryAddress }: { paymentMethod: PaymentMethod; paymentInfo: string; deliveryAddress: any; }) => {
-    const baseOrder = { total, restaurant_id: 1, status: 'pending', delivery_type: 'delivery', payment_method: paymentMethod };
-    const orderObj = { ...baseOrder, address: deliveryAddress, table_name: null };
-    console.log('Payload orderObj:', orderObj);
-    try {
-      const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .insert([orderObj])
-        .select('id');
-      if (orderError || !orderData || orderData.length === 0) {
-        console.error('Supabase error detalhe:', orderError);
-        console.log('Order payload:', orderObj);
-        throw new Error('Não foi possível criar o pedido');
-      }
-      const orderId = orderData[0].id;
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(cartItems.map(item => ({ product_id: item.id, quantity: item.quantity, price: item.price, notes: item.notes || undefined, order_id: orderId })));
-      if (itemsError) {
-        console.error("Erro ao criar itens do pedido:", itemsError);
-        throw new Error("Não foi possível adicionar os itens ao pedido");
-      }
-      clearCart();
-      if (onSuccess) onSuccess();
-      toast({ title: "Pedido realizado!", description: `Seu pedido foi registrado com sucesso. Pagamento: ${paymentInfo}` });
-    } catch (error) {
-      console.error("Erro ao processar pedido:", error);
-      toast({ title: "Erro ao processar pedido", description: error instanceof Error ? error.message : "Ocorreu um erro ao processar seu pedido", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const initMercadoPago = async () => {
+  const initMercadoPago = () => {
     if ((paymentMethod === 'card' || paymentMethod === 'pix') && window.MercadoPago) {
       setIsLoading(true);
-      setTimeout(async () => {
-        const paymentInfo = paymentMethod === 'card' ? 'Cartão (Mercado Pago)' : 'Pix (Mercado Pago)';
-        const addressObj = { street: endereco, number: numero, complement: complemento || undefined, neighborhood: bairro, city: cidade, state: estado, zipcode: cep };
-        await createOrder({ paymentMethod, paymentInfo, deliveryAddress: addressObj });
+      
+      // Simulação de processamento de pagamento
+      setTimeout(() => {
+        const orderId = `ORDER-${Math.floor(Math.random() * 1000000)}`;
+        clearCart();
+        
+        if (onSuccess) {
+          onSuccess();
+        }
+        
+        navigate(`/order-tracking/${orderId}`);
+        
+        toast({
+          title: "Pedido realizado!",
+          description: `Seu pedido #${orderId} foi processado com sucesso.`,
+        });
+        
+        setIsLoading(false);
       }, 2000);
     }
   };
 
-  const handlePayment = async () => {
+  const handlePayment = () => {
     if (paymentTab === 'online' && (paymentMethod === 'card' || paymentMethod === 'pix')) {
-      await initMercadoPago();
+      initMercadoPago();
     } else if (paymentTab === 'delivery' && (paymentMethod === 'cash' || paymentMethod === 'card_delivery')) {
+      if (paymentMethod === 'cash' && needChange) {
+        const changeValue = parseFloat(changeAmount.replace(',', '.'));
+        if (!changeAmount || isNaN(changeValue) || changeValue <= total) {
+          toast({
+            title: "Valor de troco inválido",
+            description: "O valor para troco deve ser maior que o valor da compra.",
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+      
       setIsLoading(true);
-      const paymentInfo = paymentMethod === 'cash'
-        ? (needChange ? `Dinheiro (Troco para R$ ${changeAmount})` : 'Dinheiro (Sem troco)')
-        : 'Cartão na entrega';
-      const addressObj = { street: endereco, number: numero, complement: complemento || undefined, neighborhood: bairro, city: cidade, state: estado, zipcode: cep };
-      await createOrder({ paymentMethod, paymentInfo, deliveryAddress: addressObj });
+      
+      // Simulação de pedido com pagamento na entrega
+      setTimeout(() => {
+        const paymentInfo = paymentMethod === 'cash' 
+          ? (needChange ? `Dinheiro (Troco para R$ ${changeAmount})` : 'Dinheiro (Sem troco)') 
+          : 'Cartão na entrega';
+          
+        const orderId = `ORDER-${Math.floor(Math.random() * 1000000)}`;
+        clearCart();
+        
+        if (onSuccess) {
+          onSuccess();
+        }
+        
+        navigate(`/order-tracking/${orderId}`);
+        
+        toast({
+          title: "Pedido realizado!",
+          description: `Seu pedido #${orderId} foi registrado com sucesso. Pagamento: ${paymentInfo}`,
+        });
+        
+        setIsLoading(false);
+      }, 1500);
     }
   };
 
