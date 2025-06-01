@@ -34,18 +34,42 @@ export const LoginForm = ({ onSetActiveTab }: LoginFormProps) => {
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validação básica
+    if (!loginForm.email || !loginForm.password) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Por favor, preencha email e senha.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsLoading(true);
+    console.log('Tentando fazer login com:', loginForm.email);
     
     try {
       const { error } = await signIn(loginForm.email, loginForm.password);
       
       if (error) {
+        console.error('Erro no login:', error);
+        let errorMessage = "Verifique suas credenciais e tente novamente.";
+        
+        if (error.message.includes('Invalid login credentials')) {
+          errorMessage = "Email ou senha incorretos.";
+        } else if (error.message.includes('Email not confirmed')) {
+          errorMessage = "Por favor, confirme seu email antes de fazer login.";
+        } else if (error.message.includes('Too many requests')) {
+          errorMessage = "Muitas tentativas de login. Aguarde alguns minutos.";
+        }
+        
         toast({
           title: "Erro ao fazer login",
-          description: error.message || "Verifique suas credenciais e tente novamente.",
+          description: errorMessage,
           variant: "destructive"
         });
       } else {
+        console.log('Login realizado com sucesso');
         toast({
           title: "Login realizado com sucesso",
           description: "Bem-vindo ao sistema!",
@@ -53,10 +77,10 @@ export const LoginForm = ({ onSetActiveTab }: LoginFormProps) => {
         navigate('/');
       }
     } catch (error: any) {
-      console.error('Erro ao fazer login:', error);
+      console.error('Erro inesperado ao fazer login:', error);
       toast({
-        title: "Erro ao fazer login",
-        description: error.message || "Verifique suas credenciais e tente novamente.",
+        title: "Erro inesperado",
+        description: "Ocorreu um erro inesperado. Tente novamente.",
         variant: "destructive"
       });
     } finally {
@@ -71,6 +95,7 @@ export const LoginForm = ({ onSetActiveTab }: LoginFormProps) => {
       const { error } = await signInWithGoogle();
       
       if (error) {
+        console.error('Erro no login com Google:', error);
         toast({
           title: "Erro ao autenticar com Google",
           description: error.message || "Não foi possível fazer login com o Google. Tente novamente.",
@@ -84,7 +109,7 @@ export const LoginForm = ({ onSetActiveTab }: LoginFormProps) => {
         });
       }
     } catch (error: any) {
-      console.error('Erro ao fazer login com Google:', error);
+      console.error('Erro inesperado ao fazer login com Google:', error);
       toast({
         title: "Erro ao autenticar com Google",
         description: error.message || "Não foi possível fazer login com o Google. Tente novamente.",
@@ -110,6 +135,7 @@ export const LoginForm = ({ onSetActiveTab }: LoginFormProps) => {
               value={loginForm.email}
               onChange={handleLoginChange}
               required
+              disabled={isLoading}
             />
           </div>
         </div>
@@ -127,11 +153,13 @@ export const LoginForm = ({ onSetActiveTab }: LoginFormProps) => {
               value={loginForm.password}
               onChange={handleLoginChange}
               required
+              disabled={isLoading}
             />
             <button
               type="button"
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
               onClick={() => setShowPassword(!showPassword)}
+              disabled={isLoading}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>

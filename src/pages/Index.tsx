@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import MenuGrid from '@/components/MenuGrid';
@@ -21,7 +22,9 @@ const Index = () => {
       setLoading(true);
       
       try {
-        const isLocalEnvironment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        console.log('Carregando produtos...');
+        console.log('teamId:', teamId);
+        console.log('isReady:', isReady);
         
         // Se há team_id configurado, usar o teamSupabase com filtros
         if (teamId && isReady && teamSupabase) {
@@ -29,13 +32,34 @@ const Index = () => {
           const data = await teamSupabase.getProducts({ available: true });
 
           if (data && data.length > 0) {
-            const productsWithRestaurantId = data.map(product => ({
-              ...product,
-              restaurant_id: product.restaurant_id || 1,
-            } as Product));
+            console.log(`${data.length} produtos encontrados:`, data);
             
-            setProducts(productsWithRestaurantId);
-            console.log(`${data.length} produtos carregados do Supabase para team_id: ${teamId}`);
+            const productsWithAllFields = data.map((product: any): Product => ({
+              id: product.id,
+              name: product.name || '',
+              description: product.description || '',
+              price: product.price || 0,
+              category: product.category || '',
+              available: product.available !== false,
+              team_id: product.team_id || '',
+              restaurant_id: product.restaurant_id || 1,
+              created_at: product.created_at || new Date().toISOString(),
+              updated_at: product.updated_at || new Date().toISOString(),
+              featured: product.featured || false,
+              gallery: product.gallery || [],
+              ingredients: product.ingredients || '',
+              note_hint: product.note_hint || '',
+              rating: product.rating || 0,
+              review_count: product.review_count || 0,
+              image_url: product.image_url || '',
+              images: Array.isArray(product.images) && product.images.length > 0
+                ? product.images
+                : (product.image_url ? [product.image_url] : []),
+              nutritional_info: product.nutritional_info || {}
+            });
+            
+            setProducts(productsWithAllFields);
+            console.log(`${productsWithAllFields.length} produtos carregados do Supabase para team_id: ${teamId}`);
           } else {
             console.log(`Nenhum produto encontrado para team_id: ${teamId}, buscando produtos gerais`);
             // Tentar buscar produtos sem filtro de team como fallback
@@ -45,12 +69,31 @@ const Index = () => {
               .eq('available', true);
               
             if (generalData && generalData.length > 0) {
-              const productsWithRestaurantId = generalData.map(product => ({
-                ...product,
+              const productsWithAllFields = generalData.map((product: any): Product => ({
+                id: product.id,
+                name: product.name || '',
+                description: product.description || '',
+                price: product.price || 0,
+                category: product.category || '',
+                available: product.available !== false,
+                team_id: product.team_id || '',
                 restaurant_id: product.restaurant_id || 1,
-              } as Product));
+                created_at: product.created_at || new Date().toISOString(),
+                updated_at: product.updated_at || new Date().toISOString(),
+                featured: product.featured || false,
+                gallery: product.gallery || [],
+                ingredients: product.ingredients || '',
+                note_hint: product.note_hint || '',
+                rating: product.rating || 0,
+                review_count: product.review_count || 0,
+                image_url: product.image_url || '',
+                images: Array.isArray(product.images) && product.images.length > 0
+                  ? product.images
+                  : (product.image_url ? [product.image_url] : []),
+                nutritional_info: product.nutritional_info || {}
+              }));
               
-              setProducts(productsWithRestaurantId);
+              setProducts(productsWithAllFields);
               console.log(`${generalData.length} produtos gerais carregados como fallback`);
             } else {
               console.log('Usando dados mockados como último recurso');
@@ -68,12 +111,31 @@ const Index = () => {
             .eq('available', true);
             
           if (data && data.length > 0) {
-            const productsWithRestaurantId = data.map(product => ({
-              ...product,
+            const productsWithAllFields = data.map((product: any): Product => ({
+              id: product.id,
+              name: product.name || '',
+              description: product.description || '',
+              price: product.price || 0,
+              category: product.category || '',
+              available: product.available !== false,
+              team_id: product.team_id || '',
               restaurant_id: product.restaurant_id || 1,
-            } as Product));
+              created_at: product.created_at || new Date().toISOString(),
+              updated_at: product.updated_at || new Date().toISOString(),
+              featured: product.featured || false,
+              gallery: product.gallery || [],
+              ingredients: product.ingredients || '',
+              note_hint: product.note_hint || '',
+              rating: product.rating || 0,
+              review_count: product.review_count || 0,
+              image_url: product.image_url || '',
+              images: Array.isArray(product.images) && product.images.length > 0
+                ? product.images
+                : (product.image_url ? [product.image_url] : []),
+              nutritional_info: product.nutritional_info || {}
+            }));
             
-            setProducts(productsWithRestaurantId);
+            setProducts(productsWithAllFields);
             console.log(`${data.length} produtos carregados do Supabase (modo geral)`);
           } else {
             console.log('Nenhum produto encontrado no Supabase, usando dados mockados');

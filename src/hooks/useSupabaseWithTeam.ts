@@ -99,7 +99,7 @@ export const useSupabaseWithTeam = () => {
           .eq('team_id', teamId);
 
         if (restaurant_id) {
-          query = query.eq('restaurant_id', Number(restaurant_id));
+          query = query.eq('restaurant_id', parseInt(restaurant_id, 10));
         }
 
         const { data, error } = await query;
