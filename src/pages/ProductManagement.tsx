@@ -13,7 +13,7 @@ import { Plus, Edit, Trash2, ImageIcon, Star } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
 import { categories } from '@/data/menuItems';
-import { Product, SupabaseProduct } from '@/types/supabase';
+import { Product } from '@/types/supabase';
 import ImageUpload from '@/components/ImageUpload';
 import MultipleImageUpload from '@/components/MultipleImageUpload';
 
@@ -96,7 +96,7 @@ const ProductManagement = () => {
     setIsSubmitting(true);
 
     try {
-      const productData: Partial<SupabaseProduct> = {
+      const productData: Partial<Product> = {
         name: formData.name,
         description: formData.description,
         price: formData.price,

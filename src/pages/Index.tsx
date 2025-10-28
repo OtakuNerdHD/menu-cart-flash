@@ -56,7 +56,7 @@ const Index = () => {
                 ? product.images
                 : (product.image_url ? [product.image_url] : []),
               nutritional_info: product.nutritional_info || {}
-            });
+            }));
             
             setProducts(productsWithAllFields);
             console.log(`${productsWithAllFields.length} produtos carregados do Supabase para team_id: ${teamId}`);

@@ -229,16 +229,14 @@ export const useSupabaseWithMultiTenant = () => {
 
   // Mesas
   const getTables = async (restaurant_id?: string) => {
-    let query = supabase.from('tables').select('*');
+    const baseQuery = supabase.from('tables').select('*');
+    const teamQuery = addTeamFilter(baseQuery);
     
-    // Aplicar filtro de team automaticamente
-    query = addTeamFilter(query);
+    const finalQuery = restaurant_id 
+      ? teamQuery.eq('restaurant_id', Number(restaurant_id))
+      : teamQuery;
     
-    if (restaurant_id) {
-      query = query.eq('restaurant_id', Number(restaurant_id));
-    }
-    
-    const { data, error } = await query;
+    const { data, error } = await finalQuery;
     if (error) throw error;
     return data;
   };
