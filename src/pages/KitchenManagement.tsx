@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import KitchenOrderDetails from '@/components/KitchenOrderDetails';
 import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +25,7 @@ import {
 
 const KitchenManagement = () => {
   const { currentUser } = useUserSwitcher();
+  const { isSuperAdmin } = useAuth();
   const { getOrders } = useSupabaseWithMultiTenant();
   const [orders, setOrders] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('preparing');
@@ -35,7 +37,7 @@ const KitchenManagement = () => {
   const [pickedUpFilter, setPickedUpFilter] = useState<'all' | 'store' | 'delivery'>('all');
   const navigate = useNavigate();
   
-  const isKitchenStaff = ['admin', 'restaurant_owner', 'chef'].includes(currentUser?.role || '');
+  const isKitchenStaff = isSuperAdmin || ['admin', 'restaurant_owner', 'chef'].includes(currentUser?.role || '');
 
   // Se não for funcionário da cozinha, mostrar mensagem de acesso negado
   if (!isKitchenStaff) {

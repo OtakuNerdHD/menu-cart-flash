@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { getSubdomain, isAdminMode } from '@/utils/getSubdomain';
 import { supabase } from '@/integrations/supabase/client';
+import { useMultiTenant } from '@/context/MultiTenantContext';
 
 interface Client {
   id: string;
@@ -43,8 +43,7 @@ export const ClientProvider: React.FC<ClientProviderProps> = ({ children }) => {
   const [client, setClient] = useState<Client | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [subdomain, setSubdomain] = useState<string | null>(null);
-  const [adminMode, setAdminMode] = useState(false);
+  const { subdomain, isAdminMode, isLoading: tenantLoading } = useMultiTenant();
 
   const fetchClient = async (slug: string) => {
     try {
@@ -99,34 +98,26 @@ export const ClientProvider: React.FC<ClientProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
-    const currentSubdomain = getSubdomain();
-    const currentAdminMode = isAdminMode();
-    
-    setSubdomain(currentSubdomain);
-    setAdminMode(currentAdminMode);
-    
-    if (currentAdminMode) {
-      // Modo admin - não carregar cliente específico
-      console.log('Modo admin ativado - não carregando cliente específico');
+    if (tenantLoading) {
+      return;
+    }
+
+    if (isAdminMode || !subdomain) {
+      console.log('Modo admin ou sem subdomínio - não carregando cliente específico');
       setClient(null);
       setError(null);
       setIsLoading(false);
-    } else if (currentSubdomain) {
-      // Modo cliente - carregar dados do cliente
-      fetchClient(currentSubdomain);
-    } else {
-      // Sem subdomínio e não é modo admin - erro
-      setError('Subdomínio não detectado');
-      setClient(null);
-      setIsLoading(false);
+      return;
     }
-  }, []);
+
+    fetchClient(subdomain);
+  }, [tenantLoading, subdomain, isAdminMode]);
 
   const value: ClientContextType = {
     client,
     isLoading,
     error,
-    isAdminMode: adminMode,
+    isAdminMode,
     subdomain,
     refetchClient
   };

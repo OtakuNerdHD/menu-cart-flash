@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useSubdomain } from '@/hooks/useSubdomain';
 import { supabase } from '@/integrations/supabase/client';
+import { useMultiTenant } from '@/context/MultiTenantContext';
 
 interface TeamContextType {
   teamId: string | null;
@@ -18,7 +18,7 @@ interface TeamProviderProps {
 export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
   const [teamId, setTeamIdState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { subdomain, isLoading: subdomainLoading, isAdminMode } = useSubdomain();
+  const { subdomain, isLoading: tenantLoading, isAdminMode, currentTeam } = useMultiTenant();
 
   useEffect(() => {
     const initializeTeamId = async () => {
@@ -34,7 +34,15 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
           return;
         }
 
-        // 2. Se estiver em modo admin, não definir team_id
+        // 2. Se houver team resolvido pelo multi-tenant, usar esse ID
+        if (currentTeam?.id) {
+          setTeamIdState(currentTeam.id);
+          localStorage.setItem('current_team_id', currentTeam.id);
+          console.log(`Team ID definido via contexto multi-tenant: ${currentTeam.id}`);
+          return;
+        }
+
+        // 3. Se estiver em modo admin, não definir team_id
         if (isAdminMode) {
           setTeamIdState(null);
           localStorage.removeItem('current_team_id');
@@ -42,7 +50,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
           return;
         }
 
-        // 3. Se houver subdomínio, buscar o team correspondente
+        // 4. Se houver subdomínio, buscar o team correspondente
         if (subdomain) {
           const { data: team, error } = await supabase
             .from('teams')
@@ -60,7 +68,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
           }
         }
 
-        // 4. Verificar localStorage como fallback
+        // 5. Verificar localStorage como fallback
         const savedTeamId = localStorage.getItem('current_team_id');
         if (savedTeamId && savedTeamId !== 'default-team') {
           setTeamIdState(savedTeamId);
@@ -68,7 +76,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
           return;
         }
 
-        // 5. Em ambiente local sem subdomínio, permitir sem team_id
+        // 6. Em ambiente local sem subdomínio, permitir sem team_id
         const isLocalEnvironment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         if (isLocalEnvironment) {
           setTeamIdState(null);
@@ -77,7 +85,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
           return;
         }
 
-        // 6. Último recurso: definir como null
+        // 7. Último recurso: definir como null
         setTeamIdState(null);
         localStorage.removeItem('current_team_id');
         console.log('Nenhum team_id definido');
@@ -91,10 +99,10 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
     };
 
     // Aguardar o carregamento do subdomínio antes de inicializar
-    if (!subdomainLoading) {
+    if (!tenantLoading) {
       initializeTeamId();
     }
-  }, [subdomain, subdomainLoading, isAdminMode]);
+  }, [subdomain, tenantLoading, isAdminMode, currentTeam]);
 
   const setTeamId = (newTeamId: string | null) => {
     setTeamIdState(newTeamId);

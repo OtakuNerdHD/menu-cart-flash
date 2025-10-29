@@ -7,17 +7,52 @@ import { useAuth } from '@/context/AuthContext';
 import { useMultiTenant } from '@/context/MultiTenantContext';
 import { Sheet, SheetTrigger, SheetContent } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
 import { Link, useNavigate } from 'react-router-dom';
 import TenantIndicator from '@/components/TenantIndicator';
 import { toast } from '@/hooks/use-toast';
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Administrador',
+  restaurant_owner: 'Proprietário',
+  chef: 'Chef',
+  waiter: 'Garçom',
+  delivery: 'Entregador',
+  customer: 'Cliente',
+};
+
+const getMetadataString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
 
 const Header = () => {
   const { totalItems, toggleCart } = useCart();
   const { user, currentUser, signOut } = useAuth();
   const { isAdminMode } = useMultiTenant();
   const navigate = useNavigate();
-  
-  const isAdminOrOwner = currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner';
+
+  const metadata = user?.user_metadata as Record<string, unknown> | undefined;
+  const appMetadata = user?.app_metadata as Record<string, unknown> | undefined;
+
+  const userRole = currentUser?.role
+    ?? getMetadataString(appMetadata?.['role'])
+    ?? getMetadataString(metadata?.['role']);
+
+  const displayName = currentUser?.full_name
+    ?? getMetadataString(metadata?.['full_name'])
+    ?? currentUser?.email
+    ?? user?.email
+    ?? 'Usuário';
+
+  const displayEmail = currentUser?.email
+    ?? getMetadataString(metadata?.['email'])
+    ?? user?.email;
+
+  const roleLabel = userRole ? ROLE_LABELS[userRole] ?? userRole : null;
+
+  const isAdminOrOwner = userRole === 'admin' || userRole === 'restaurant_owner';
 
   const handleLogout = async () => {
     try {
@@ -51,67 +86,85 @@ const Header = () => {
             </SheetTrigger>
             <SheetContent side="left" className="w-[300px] sm:w-[400px]">
               <div className="flex flex-col h-full">
-                <h3 className="text-lg font-bold mb-4">Menu</h3>
                 <nav className="flex flex-col gap-4">
+                  {user ? (
+                    <>
+                      <div className="flex items-start gap-4 py-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                          <User className="h-5 w-5 text-gray-600" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-base font-semibold text-gray-900">
+                            {displayName}
+                          </span>
+                          {displayEmail && (
+                            <span className="text-sm text-gray-500">
+                              {displayEmail}
+                            </span>
+                          )}
+                          {roleLabel && (
+                            <Badge variant="secondary" className="w-fit px-3 py-1 text-xs capitalize">
+                              {roleLabel}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <Separator />
+                    </>
+                  ) : null}
+
                   <Link to="/" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
                     Home
                   </Link>
-                  
+
                   {!user ? (
                     <Link to="/login" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
                       Login / Cadastro
                     </Link>
                   ) : (
                     <>
-                      <div className="flex items-center gap-2 py-2 border-b border-gray-100">
-                        <User className="h-4 w-4" />
-                        <span className="text-sm text-gray-600">
-                          {currentUser?.full_name || currentUser?.email || 'Usuário'}
-                        </span>
-                      </div>
-                      
                       <Link to="/order-tracking" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
                         Acompanhar Pedido
                       </Link>
-                      
+
                       {/* Páginas visíveis apenas para Garçons, Chef, Admin e Dono */}
-                      {['waiter', 'chef', 'admin', 'restaurant_owner'].includes(currentUser?.role || '') && (
+                      {['waiter', 'chef', 'admin', 'restaurant_owner'].includes(userRole || '') && (
                         <Link to="/order-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
-                          Gerenciamento de Pedidos
+                          Pedidos
                         </Link>
                       )}
-                      
+
                       {/* Páginas visíveis apenas para Chef, Admin e Dono */}
-                      {['chef', 'admin', 'restaurant_owner'].includes(currentUser?.role || '') && (
+                      {['chef', 'admin', 'restaurant_owner'].includes(userRole || '') && (
                         <Link to="/kitchen-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
-                          Gerenciamento de Cozinha
+                          Cozinha
                         </Link>
                       )}
-                      
+
                       {/* Páginas visíveis apenas para Admin e Dono */}
                       {isAdminOrOwner && (
                         <>
                           <Link to="/product-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
-                            Gerenciamento de Produtos
+                            Produtos
                           </Link>
                           <Link to="/user-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
-                            Gerenciamento de Usuários
+                            Usuários
                           </Link>
                           <Link to="/api-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
-                            Gerenciamento de APIs
+                            APIs
                           </Link>
                         </>
                       )}
-                      
+
                       {/* Dashboard SAAS apenas para admins no modo admin */}
-                      {isAdminMode && currentUser?.role === 'admin' && (
+                      {isAdminMode && userRole === 'admin' && (
                         <Link to="/dashboard-saas" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
                           Dashboard SAAS
                         </Link>
                       )}
-                      
+
                       <Separator className="my-2" />
-                      
+
                       <Button 
                         variant="ghost" 
                         onClick={handleLogout}

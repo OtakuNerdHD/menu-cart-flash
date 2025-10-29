@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { useMultiTenant } from '@/context/MultiTenantContext';
 import { useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext'; // Importar useAuth
+import { useAuth } from '@/context/AuthContext';
 
 /**
  * Hook que encapsula operações do Supabase com isolamento multi-tenant
@@ -9,7 +9,7 @@ import { useAuth } from '@/context/AuthContext'; // Importar useAuth
  */
 export const useSupabaseWithMultiTenant = () => {
   const { currentTeam, isAdminMode } = useMultiTenant();
-  const { loading: authLoading, user: authUser } = useAuth(); // Obter estado de loading e usuário do AuthContext
+  const { loading: authLoading, user: authUser, isSuperAdmin } = useAuth();
 
   // Configurar o team_id no Supabase para RLS
   useEffect(() => {
@@ -32,35 +32,19 @@ export const useSupabaseWithMultiTenant = () => {
         console.log('Sessão ativa confirmada, configurando RLS para:', authUser.id);
         
         if (isAdminMode) {
-          // Configurar modo admin - verificar se é admin geral
-          const hostname = window.location.hostname;
-          const isGeneralAdmin = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === 'app.delliapp.com.br';
-          
-          if (isGeneralAdmin) {
-            const result1 = await supabase.rpc('set_app_config', {
-              config_name: 'app.current_user_role',
-              config_value: 'general_admin'
-            });
-            
-            const result2 = await supabase.rpc('set_app_config', {
-                config_name: 'app.current_team_id',
-                config_value: null // Correção: Usar null para admin geral
-              });
-            
-            console.log('Configurações RLS aplicadas para admin geral:', result1, result2);
-          } else {
-            const result1 = await supabase.rpc('set_app_config', {
-              config_name: 'app.current_user_role',
-              config_value: 'admin'
-            });
-            
-            const result2 = await supabase.rpc('set_app_config', {
-                config_name: 'app.current_team_id',
-                config_value: null // Correção: Usar null para admin de subdomínio
-              });
-            
-            console.log('Configurações RLS aplicadas para modo admin:', result1, result2);
-          }
+          const roleValue = isSuperAdmin ? 'general_admin' : 'admin';
+
+          const result1 = await supabase.rpc('set_app_config', {
+            config_name: 'app.current_user_role',
+            config_value: roleValue
+          });
+
+          const result2 = await supabase.rpc('set_app_config', {
+            config_name: 'app.current_team_id',
+            config_value: null
+          });
+
+          console.log(`Configurações RLS aplicadas para ${roleValue}:`, result1, result2);
         } else if (currentTeam?.id) {
           // Configurar modo team específico
           const result1 = await supabase.rpc('set_app_config', {
@@ -81,7 +65,7 @@ export const useSupabaseWithMultiTenant = () => {
     };
 
     configureSupabase();
-  }, [isAdminMode, currentTeam, authLoading, authUser]); // Adicionar authLoading e authUser às dependências
+  }, [isAdminMode, currentTeam, authLoading, authUser, isSuperAdmin]);
 
   // Função para adicionar filtro de team automaticamente
   const addTeamFilter = (query: any) => {

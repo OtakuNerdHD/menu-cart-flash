@@ -9,6 +9,8 @@ import { categories } from '@/data/menuItems';
 import { useTeam } from '@/context/TeamContext';
 import { useSupabaseWithTeam } from '@/hooks/useSupabaseWithTeam';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
+import { useMultiTenant } from '@/context/MultiTenantContext';
 
 const Index = () => {
   const [selectedCategory, setSelectedCategory] = useState('todos');
@@ -16,6 +18,8 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const { teamId, isLoading: teamLoading } = useTeam();
   const { teamSupabase, isReady } = useSupabaseWithTeam();
+  const { loading: authLoading, isSuperAdmin, user } = useAuth();
+  const { isLoading: multiTenantLoading, isAdminMode } = useMultiTenant();
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -25,6 +29,11 @@ const Index = () => {
         console.log('Carregando produtos...');
         console.log('teamId:', teamId);
         console.log('isReady:', isReady);
+        console.log('authLoading:', authLoading);
+        console.log('multiTenantLoading:', multiTenantLoading);
+        console.log('isSuperAdmin:', isSuperAdmin);
+        console.log('isAdminMode:', isAdminMode);
+        console.log('user:', user?.id);
         
         // Se há team_id configurado, usar o teamSupabase com filtros
         if (teamId && isReady && teamSupabase) {
@@ -152,10 +161,10 @@ const Index = () => {
     };
 
     // Aguardar o carregamento do team antes de buscar produtos
-    if (!teamLoading) {
+    if (!teamLoading && !authLoading && !multiTenantLoading) {
       fetchProducts();
     }
-  }, [isReady, teamLoading, teamSupabase, teamId]);
+  }, [isReady, teamLoading, teamSupabase, teamId, authLoading, multiTenantLoading, isAdminMode, isSuperAdmin, user?.id]);
 
   const filteredItems = selectedCategory === 'todos'
     ? products
@@ -193,7 +202,7 @@ const Index = () => {
             <span className="text-sm text-gray-500">{filteredItems.length} itens</span>
           </div>
           
-          {(loading || teamLoading) ? (
+          {(loading || teamLoading || authLoading || multiTenantLoading) ? (
             <div className="py-10 text-center">
               <p className="text-gray-500">Carregando produtos...</p>
             </div>

@@ -10,7 +10,7 @@ export const useSubdomain = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAdminMode, setIsAdminMode] = useState(false);
   
-  const { currentUser, loading: authLoading } = useAuth();
+  const { currentUser, loading: authLoading, isSuperAdmin } = useAuth();
 
   useEffect(() => {
     const detectSubdomain = () => {
@@ -29,10 +29,9 @@ export const useSubdomain = () => {
             console.log(`Ambiente local: modo cliente ativado para ${clientParam}`);
           } else {
             setSubdomain(null);
-            // Em ambiente local, verificar se usuário é admin para ativar modo admin
-            const isUserAdmin = currentUser?.role === 'admin';
+            const isUserAdmin = isSuperAdmin || currentUser?.role === 'admin';
             setIsAdminMode(isUserAdmin);
-            console.log(`Ambiente local: modo admin ${isUserAdmin ? 'ativado' : 'desativado'} - usuário ${isUserAdmin ? 'é' : 'não é'} admin`);
+            console.log(`Ambiente local: modo admin ${isUserAdmin ? 'ativado' : 'desativado'} - ${isUserAdmin ? 'super/admin' : 'usuário comum'}`);
           }
         } else {
           // Produção: extrair subdomínio
@@ -41,10 +40,9 @@ export const useSubdomain = () => {
           // Se for app.delliapp.com.br (domínio raiz admin)
           if (parts.length === 4 && parts[0] === 'app' && parts[1] === 'delliapp' && parts[2] === 'com' && parts[3] === 'br') {
             setSubdomain(null);
-            // Ativar modo admin APENAS se usuário tem role 'admin'
-            const isUserAdmin = currentUser?.role === 'admin';
+            const isUserAdmin = isSuperAdmin || currentUser?.role === 'admin';
             setIsAdminMode(isUserAdmin);
-            console.log(`Produção: app.delliapp.com.br - modo admin ${isUserAdmin ? 'ativado' : 'desativado'} - usuário ${isUserAdmin ? 'é' : 'não é'} admin`);
+            console.log(`Produção: app.delliapp.com.br - modo admin ${isUserAdmin ? 'ativado' : 'desativado'} - ${isUserAdmin ? 'super/admin' : 'usuário comum'}`);
           }
           // Se for cliente.delliapp.com.br, extrair o cliente
           else if (parts.length === 4 && parts[1] === 'delliapp' && parts[2] === 'com' && parts[3] === 'br' && parts[0] !== 'app') {
@@ -72,7 +70,7 @@ export const useSubdomain = () => {
       detectSubdomain();
       setIsLoading(false);
     }
-  }, [authLoading, currentUser]); // Dependência do estado de autenticação
+  }, [authLoading, currentUser, isSuperAdmin]); // Dependência do estado de autenticação
 
   const switchToClient = (clientSlug: string) => {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {

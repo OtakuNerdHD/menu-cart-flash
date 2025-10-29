@@ -17,6 +17,7 @@ interface AuthContextType {
   user: User | null;
   currentUser: Profile | null;
   loading: boolean;
+  isSuperAdmin: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, userData?: any) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<{ error: any }>;
@@ -26,6 +27,11 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const SUPER_ADMIN_EMAILS = (import.meta.env.VITE_SUPER_ADMIN_EMAILS ?? 'joabychaves10@gmail.com')
+  .split(',')
+  .map(email => email.trim().toLowerCase())
+  .filter(Boolean);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -41,37 +47,46 @@ interface AuthProviderProps {
 
 // Função para determinar o redirect URL correto baseado no ambiente e subdomínio
 const getRedirectUrl = (): string => {
-  const hostname = window.location.hostname;
-  const protocol = window.location.protocol;
-  const port = window.location.port;
+  const { origin, hostname, protocol } = window.location;
 
   // Ambiente local (localhost ou 127.0.0.1)
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `${protocol}//${hostname}:${port}/auth/callback`;
+    return `${origin}/auth/callback`;
   }
 
   // Ambiente de desenvolvimento Netlify (ex: delliapp.netlify.app)
   if (hostname.endsWith('netlify.app')) {
-    // Para desenvolvimento no Netlify, redirecionar para a raiz do subdomínio atual + /auth/callback
-    // Isso deve levar ao index da aplicação no subdomínio correto após o login.
-    return `${protocol}//${hostname}/auth/callback`; 
+    return `${origin}/auth/callback`;
   }
-  
-  // Produção - delliapp.com.br com subdomínios
+
+  // Produção - delliapp.com.br com subdomínios (tld .com.br)
   const parts = hostname.split('.');
-  // Ex: app.delliapp.com.br ou cliente.delliapp.com.br
-  if (parts.length === 3 && parts[1] === 'delliapp' && parts[2] === 'com' && parts[3] === 'br') { // Ajustado para delliapp.com.br
-    return `${protocol}//${hostname}/auth/callback`; // Mantém o subdomínio atual
+  const isDelliappDomain =
+    parts.length >= 3 &&
+    parts[parts.length - 3] === 'delliapp' &&
+    parts[parts.length - 2] === 'com' &&
+    parts[parts.length - 1] === 'br';
+
+  if (isDelliappDomain) {
+    return `${protocol}//${hostname}/auth/callback`;
   }
-  
+
   // Fallback para o domínio atual (caso geral ou configuração não prevista)
-  return `${protocol}//${hostname}/auth/callback`;
+  return `${origin}/auth/callback`;
 };
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  useEffect(() => {
+    const emailFromUser = user?.email?.toLowerCase();
+    const emailFromProfile = currentUser?.email?.toLowerCase();
+    const resolvedEmail = emailFromUser || emailFromProfile;
+    setIsSuperAdmin(resolvedEmail ? SUPER_ADMIN_EMAILS.includes(resolvedEmail) : false);
+  }, [user, currentUser]);
 
   useEffect(() => {
     let isMounted = true;
@@ -259,10 +274,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const value = {
+  const value: AuthContextType = {
     user,
     currentUser,
     loading,
+    isSuperAdmin,
     signIn,
     signUp,
     signInWithGoogle,

@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode, useCallback } from 'react';
 import { useSubdomain } from '@/hooks/useSubdomain';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 
 interface Team {
   id: string;
@@ -29,13 +30,50 @@ interface MultiTenantProviderProps {
 
 export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ children }) => {
   const { subdomain, isLoading: subdomainLoading, isAdminMode, switchToClient, switchToAdmin } = useSubdomain();
+  const { isSuperAdmin } = useAuth();
   const [currentTeam, setCurrentTeam] = useState<Team | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Verificar se está em ambiente local
-  const isLocalEnvironment = React.useMemo(() => {
+  const isLocalEnvironment = useMemo(() => {
     const hostname = window.location.hostname;
     return (hostname === 'localhost' || hostname === '127.0.0.1');
+  }, []);
+
+  const effectiveAdminMode = useMemo(() => {
+    if (isSuperAdmin) return true;
+    return isAdminMode;
+  }, [isSuperAdmin, isAdminMode]);
+
+  const effectiveSubdomain = useMemo(() => {
+    if (effectiveAdminMode) return null;
+    return subdomain;
+  }, [effectiveAdminMode, subdomain]);
+
+  const applyRlsConfig = useCallback(async (roleValue: 'general_admin' | 'admin' | 'user', teamId: string | null) => {
+    try {
+      const { error: roleError } = await supabase.rpc('set_app_config', {
+        config_name: 'app.current_user_role',
+        config_value: roleValue
+      });
+
+      if (roleError) {
+        console.warn('Falha ao configurar papel via set_app_config:', roleError);
+      }
+
+      const { error: teamError } = await supabase.rpc('set_app_config', {
+        config_name: 'app.current_team_id',
+        config_value: teamId ?? ''
+      });
+
+      if (teamError) {
+        console.warn('Falha ao configurar team via set_app_config:', teamError);
+      }
+
+      console.log('[MultiTenant] applyRlsConfig', { roleValue, teamId, roleError, teamError });
+    } catch (error) {
+      console.warn('Erro ao configurar RLS no MultiTenantContext:', error);
+    }
   }, []);
 
   const loadTeamBySlug = async (slug: string) => {
@@ -59,52 +97,30 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
   };
 
   const refreshTeam = async () => {
-    if (!subdomain || isAdminMode) {
+    setIsLoading(true);
+
+    if (!effectiveSubdomain || effectiveAdminMode) {
+      const roleValue = effectiveAdminMode && isSuperAdmin ? 'general_admin' : 'admin';
+      await applyRlsConfig(roleValue, null);
       setCurrentTeam(null);
-      // Finalizar carregamento mesmo sem team em modo admin
       setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
-    const team = await loadTeamBySlug(subdomain);
+    const team = await loadTeamBySlug(effectiveSubdomain);
     
     if (team) {
       setCurrentTeam(team);
       console.log('Team carregado com sucesso:', team);
       
-      // Configurar o team_id no Supabase para RLS
-      try {
-        const { error } = await supabase.rpc('set_current_team_id', {
-          team_id: team.id.toString()
-        });
-        
-        if (error) {
-          console.warn('Erro ao configurar team_id no Supabase:', error);
-        } else {
-          console.log('Team ID configurado no Supabase para RLS:', team.id);
-        }
-      } catch (error) {
-        console.warn('Erro ao configurar team_id no Supabase:', error);
-      }
+      const roleValue: 'user' | 'admin' = isSuperAdmin ? 'admin' : 'user';
+      await applyRlsConfig(roleValue, team.id.toString());
     } else {
       setCurrentTeam(null);
-      console.log('Nenhum team encontrado para o subdomínio:', subdomain);
+      console.log('Nenhum team encontrado para o subdomínio:', effectiveSubdomain);
       
-      // Limpar o team_id no Supabase para modo admin ou sem team
-      try {
-        const { error } = await supabase.rpc('set_current_team_id', {
-          team_id: ''
-        });
-        
-        if (error) {
-          console.warn('Erro ao limpar team_id no Supabase:', error);
-        } else {
-          console.log('Team ID limpo no Supabase (modo admin ou sem team)');
-        }
-      } catch (error) {
-        console.warn('Erro ao limpar team_id no Supabase:', error);
-      }
+      const roleValue = isSuperAdmin ? 'general_admin' : 'admin';
+      await applyRlsConfig(roleValue, null);
     }
     
     setIsLoading(false);
@@ -114,7 +130,7 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
     if (!subdomainLoading) {
       refreshTeam();
     }
-  }, [subdomain, isAdminMode, subdomainLoading]);
+  }, [effectiveSubdomain, effectiveAdminMode, subdomainLoading]);
 
   // Garantir que o carregamento seja finalizado em ambiente local
   useEffect(() => {
@@ -131,10 +147,10 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
 
   const value: MultiTenantContextType = {
     currentTeam,
-    isLoading: isLocalEnvironment ? false : (subdomainLoading || isLoading), // Forçar isLoading como false em ambiente local
-    isAdminMode,
-    isClientMode: !isAdminMode && !!subdomain,
-    subdomain,
+    isLoading: isLocalEnvironment ? false : (subdomainLoading || isLoading),
+    isAdminMode: effectiveAdminMode,
+    isClientMode: !effectiveAdminMode && !!effectiveSubdomain,
+    subdomain: effectiveSubdomain,
     switchToClient,
     switchToAdmin,
     refreshTeam
