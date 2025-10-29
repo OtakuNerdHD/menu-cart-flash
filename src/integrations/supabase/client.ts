@@ -2,11 +2,15 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+// Usar credenciais explícitas para garantir persistência de sessão em todos ambientes
+const supabaseUrl = 'https://jzosgtmmjswjtjvibpye.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6b3NndG1tanN3anRqdmlicHllIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM5MDkxNjQsImV4cCI6MjA1OTQ4NTE2NH0.Ky2APyH6-3v52zWQonNV9fJr9PG5L5oS9zaZe12IWp0';
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Supabase credentials are missing. Configure VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.');
-}
-
-export const supabase = createClient<Database>(supabaseUrl, supabaseKey);
+export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storageKey: 'delliapp_auth',
+  },
+});

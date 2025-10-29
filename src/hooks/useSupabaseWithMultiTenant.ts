@@ -3,6 +3,24 @@ import { useMultiTenant } from '@/context/MultiTenantContext';
 import { useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
+const NO_TEAM_SENTINEL = '00000000-0000-0000-0000-000000000000';
+
+// Normaliza um slug inserido pelo usuário:
+// - lower-case, trim
+// - remove http(s)://
+// - se contiver ponto, usa apenas o primeiro rótulo (ex.: "raminhos.com.br" -> "raminhos")
+// - mantém somente [a-z0-9-], troca sequências inválidas por '-'
+// - remove hifens duplicados e nas extremidades
+const normalizeSlug = (input: string): string => {
+  let s = (input || '').toLowerCase().trim();
+  s = s.replace(/^https?:\/\//, '');
+  if (s.includes('.')) s = s.split('.')[0];
+  s = s.replace(/[^a-z0-9-]+/g, '-');
+  s = s.replace(/-+/g, '-');
+  s = s.replace(/^-+|-+$/g, '');
+  return s;
+};
+
 /**
  * Hook que encapsula operações do Supabase com isolamento multi-tenant
  * Filtra automaticamente os dados baseado no team atual
@@ -41,10 +59,15 @@ export const useSupabaseWithMultiTenant = () => {
 
           const result2 = await supabase.rpc('set_app_config', {
             config_name: 'app.current_team_id',
-            config_value: null
+            config_value: NO_TEAM_SENTINEL
           });
 
-          console.log(`Configurações RLS aplicadas para ${roleValue}:`, result1, result2);
+          const result3 = await supabase.rpc('set_app_config', {
+            config_name: 'app.current_team',
+            config_value: NO_TEAM_SENTINEL
+          });
+
+          console.log(`Configurações RLS aplicadas para ${roleValue}:`, result1, result2, result3);
         } else if (currentTeam?.id) {
           // Configurar modo team específico
           const result1 = await supabase.rpc('set_app_config', {
@@ -56,8 +79,13 @@ export const useSupabaseWithMultiTenant = () => {
                config_name: 'app.current_team_id',
                config_value: currentTeam.id.toString()
              });
+
+          const result3 = await supabase.rpc('set_app_config', {
+            config_name: 'app.current_team',
+            config_value: currentTeam.id.toString()
+          });
           
-          console.log('Configurações RLS aplicadas para team:', currentTeam.id, result1, result2);
+          console.log('Configurações RLS aplicadas para team:', currentTeam.id, result1, result2, result3);
         }
       } catch (error) {
         console.warn('Erro ao configurar RLS:', error);
@@ -66,6 +94,27 @@ export const useSupabaseWithMultiTenant = () => {
 
     configureSupabase();
   }, [isAdminMode, currentTeam, authLoading, authUser, isSuperAdmin]);
+
+  // Garante que consultas administrativas rodem com RLS correto
+  const ensureRlsAdmin = async () => {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error || !session) throw new Error('Sessão não encontrada');
+    if (!isSuperAdmin) {
+      throw new Error('Acesso negado: apenas super admin podem executar operações globais.');
+    }
+    await supabase.rpc('set_app_config', {
+      config_name: 'app.current_user_role',
+      config_value: 'general_admin'
+    });
+    await supabase.rpc('set_app_config', {
+      config_name: 'app.current_team_id',
+      config_value: NO_TEAM_SENTINEL
+    });
+    await supabase.rpc('set_app_config', {
+      config_name: 'app.current_team',
+      config_value: NO_TEAM_SENTINEL
+    });
+  };
 
   // Função para adicionar filtro de team automaticamente
   const addTeamFilter = (query: any) => {
@@ -246,7 +295,9 @@ export const useSupabaseWithMultiTenant = () => {
     if (!isAdminMode) {
       throw new Error('Acesso negado: apenas admins podem listar teams');
     }
-    
+    // Evita erro de UUID quando a página carrega antes do hook configurar o RLS
+    await ensureRlsAdmin();
+
     const { data, error } = await supabase
       .from('teams')
       .select('*')
@@ -278,48 +329,51 @@ export const useSupabaseWithMultiTenant = () => {
         throw new Error('Acesso negado: apenas usuários admin podem criar clientes');
       }
       
-      // Garantir que as configurações RLS estão aplicadas
-      await supabase.rpc('set_app_config', {
-        config_name: 'app.current_user_role',
-        config_value: 'general_admin'
-      });
-      
-      await supabase.rpc('set_app_config', {
-        config_name: 'app.current_team_id',
-        config_value: null
-      });
-      
-      // Verificar se o slug já existe
+      // Garantir RLS admin para leitura e criação
+      await ensureRlsAdmin();
+
+      // Verificar se o slug já existe (com RLS admin ativo)
+      const normalizedSlug = normalizeSlug(teamData.slug);
       const { data: existingTeam, error: checkError } = await supabase
         .from('teams')
         .select('id, slug')
-        .eq('slug', teamData.slug)
+        .eq('slug', normalizedSlug)
         .maybeSingle();
       
       if (checkError) throw checkError;
       
       if (existingTeam) {
-        throw new Error(`Slug '${teamData.slug}' já está em uso. Escolha outro slug.`);
+        throw new Error(`Slug '${normalizedSlug}' já está em uso. Escolha outro slug.`);
       }
       
-      // Preparar dados do team
-      const preparedData = {
-        name: teamData.name,
-        slug: teamData.slug,
-        description: teamData.description || null,
-        settings: teamData.settings || {}
-      };
-      
-      // Inserir o novo team
-      const { data: newTeam, error: insertError } = await supabase
-        .from('teams')
-        .insert(preparedData)
-        .select()
-        .single();
-      
-      if (insertError) throw insertError;
-      
-      return newTeam;
+      const { data: rpcResult, error: rpcError } = await supabase.rpc(
+        'create_team_as_admin' as never,
+        {
+          team_name: teamData.name,
+          team_slug: normalizedSlug,
+          team_description: teamData.description || null
+        } as never
+      );
+
+      if (rpcError) {
+        throw rpcError;
+      }
+
+      // Provisionar subdomínio no Cloudflare via Edge Function (best-effort)
+      try {
+        const provisionRes = await supabase.functions.invoke('provision-domain' as never, {
+          body: { slug: normalizedSlug } as never
+        });
+        if (provisionRes.error) {
+          console.warn('Falha ao provisionar subdomínio (Cloudflare):', provisionRes.error);
+        } else {
+          console.log('Provisionamento Cloudflare:', provisionRes.data);
+        }
+      } catch (e) {
+        console.warn('Erro ao chamar função de provisionamento Cloudflare:', e);
+      }
+
+      return rpcResult;
     } catch (error: any) {
       console.error('Erro ao criar restaurante:', error);
       throw error;
@@ -346,24 +400,45 @@ export const useSupabaseWithMultiTenant = () => {
       throw new Error('Acesso negado: apenas usuários admin podem atualizar clientes');
     }
     
-    // Garantir que as configurações RLS estão aplicadas
-    await supabase.rpc('set_app_config', {
-      config_name: 'app.current_user_role',
-      config_value: 'general_admin'
+    // Garantir RLS admin
+    await ensureRlsAdmin();
+
+    // Filtrar somente colunas válidas da tabela teams para evitar 400 por campos desconhecidos
+    const allowed: Record<string, boolean> = {
+      name: true,
+      slug: true,
+      description: true,
+      domain: true,
+      settings: true,
+      is_active: true,
+      logo_url: true,
+    };
+    const filtered: any = {};
+    Object.keys(updates || {}).forEach((k) => {
+      if (allowed[k]) filtered[k] = updates[k];
     });
-    
-    await supabase.rpc('set_app_config', {
-      config_name: 'app.current_team_id',
-      config_value: null
-    });
-    
+    if (typeof filtered.slug === 'string') {
+      filtered.slug = normalizeSlug(filtered.slug);
+    }
+
+    // Se não há nada do team para atualizar, apenas retorne o registro atual
+    if (Object.keys(filtered).length === 0) {
+      const { data: current, error: fetchErr } = await supabase
+        .from('teams')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (fetchErr) throw fetchErr;
+      return current;
+    }
+
     const { data, error } = await supabase
       .from('teams')
-      .update(updates)
+      .update(filtered)
       .eq('id', id)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   };
@@ -392,7 +467,7 @@ export const useSupabaseWithMultiTenant = () => {
     
     await supabase.rpc('set_app_config', {
       config_name: 'app.current_team_id',
-      config_value: null
+      config_value: NO_TEAM_SENTINEL
     });
     
     const { error } = await supabase

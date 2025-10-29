@@ -1,5 +1,6 @@
+import { supabase } from '@/integrations/supabase/client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ShoppingCart, Menu, LogOut, User } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
@@ -29,16 +30,20 @@ const getMetadataString = (value: unknown): string | undefined => {
 
 const Header = () => {
   const { totalItems, toggleCart } = useCart();
-  const { user, currentUser, signOut } = useAuth();
-  const { isAdminMode } = useMultiTenant();
+  const { user, currentUser, signOut, isSuperAdmin } = useAuth();
+  const { isAdminMode, currentTeam } = useMultiTenant();
+  const [membershipRole, setMembershipRole] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const metadata = user?.user_metadata as Record<string, unknown> | undefined;
   const appMetadata = user?.app_metadata as Record<string, unknown> | undefined;
 
-  const userRole = currentUser?.role
+  const userRoleFromProfile = currentUser?.role
     ?? getMetadataString(appMetadata?.['role'])
     ?? getMetadataString(metadata?.['role']);
+
+  // Em modo cliente, priorizar papel do membership do tenant
+  const userRole = (!isAdminMode && membershipRole) ? membershipRole : userRoleFromProfile;
 
   const displayName = currentUser?.full_name
     ?? getMetadataString(metadata?.['full_name'])
@@ -52,7 +57,21 @@ const Header = () => {
 
   const roleLabel = userRole ? ROLE_LABELS[userRole] ?? userRole : null;
 
-  const isAdminOrOwner = userRole === 'admin' || userRole === 'restaurant_owner';
+  const isAdminOrOwner = isSuperAdmin || userRole === 'admin' || userRole === 'restaurant_owner' || userRole === 'owner' || userRole === 'manager';
+
+  useEffect(() => {
+    const fetchMembershipRole = async () => {
+      try {
+        if (!user || !currentTeam || isAdminMode) { setMembershipRole(null); return; }
+        const { data, error } = await supabase.rpc('get_membership_role_by_team' as never, { p_team_id: currentTeam.id } as never);
+        if (error) { setMembershipRole('client'); return; }
+        setMembershipRole((data as string) || 'client');
+      } catch {
+        setMembershipRole('client');
+      }
+    };
+    fetchMembershipRole();
+  }, [user?.id, currentTeam?.id, isAdminMode]);
 
   const handleLogout = async () => {
     try {

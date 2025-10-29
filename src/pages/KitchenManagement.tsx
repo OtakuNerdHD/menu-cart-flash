@@ -12,6 +12,7 @@ import KitchenOrderDetails from '@/components/KitchenOrderDetails';
 import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import { useMultiTenant } from '@/context/MultiTenantContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,7 +26,9 @@ import {
 
 const KitchenManagement = () => {
   const { currentUser } = useUserSwitcher();
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, currentUser: authUser } = useAuth();
+  const { currentTeam } = useMultiTenant();
+  const [membershipRole, setMembershipRole] = useState<string | null>(null);
   const { getOrders } = useSupabaseWithMultiTenant();
   const [orders, setOrders] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('preparing');
@@ -37,7 +40,35 @@ const KitchenManagement = () => {
   const [pickedUpFilter, setPickedUpFilter] = useState<'all' | 'store' | 'delivery'>('all');
   const navigate = useNavigate();
   
-  const isKitchenStaff = isSuperAdmin || ['admin', 'restaurant_owner', 'chef'].includes(currentUser?.role || '');
+  useEffect(() => {
+    const fetchMembershipRole = async () => {
+      try {
+        if (!authUser || !currentTeam) { setMembershipRole(null); return; }
+        const { data, error } = await supabase.rpc('get_membership_role_by_team' as never, { p_team_id: currentTeam.id } as never);
+        if (error) {
+          console.warn('Falha ao obter papel via RPC (cozinha):', error);
+          setMembershipRole('client');
+          return;
+        }
+        setMembershipRole((data as string) || 'client');
+      } catch (e) {
+        console.error('Erro ao buscar papel no tenant (RPC cozinha):', e);
+        setMembershipRole('client');
+      }
+    };
+    fetchMembershipRole();
+  }, [authUser?.id, currentTeam?.id]);
+
+  const isKitchenStaff = isSuperAdmin || ['admin', 'owner', 'restaurant_owner', 'chef', 'manager'].includes((membershipRole || '').toLowerCase());
+
+  // Evitar bloquear antes de resolver o papel no tenant
+  if (!isSuperAdmin && currentTeam && membershipRole === null) {
+    return (
+      <div className="min-h-screen bg-gray-50 pt-16">
+        <div className="container mx-auto px-4 py-8">Carregando permissões...</div>
+      </div>
+    );
+  }
 
   // Se não for funcionário da cozinha, mostrar mensagem de acesso negado
   if (!isKitchenStaff) {

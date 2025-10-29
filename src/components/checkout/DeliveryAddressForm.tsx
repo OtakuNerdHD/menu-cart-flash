@@ -11,6 +11,9 @@ import { Loader2, CreditCard, Wallet, CreditCardIcon, DollarSign, QrCode } from 
 import { useNavigate } from 'react-router-dom';
 import { DeliveryAddressFormProps } from './DeliveryAddressFormProps';
 import { supabase } from '@/integrations/supabase/client';
+import { useCheckout } from '@/hooks/useCheckout';
+import { useMultiTenant } from '@/context/MultiTenantContext';
+import { useAuth } from '@/context/AuthContext';
 
 // Payment method type
 type PaymentMethod = 'card' | 'pix' | 'cash' | 'card_delivery';
@@ -19,6 +22,9 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
   const { subtotal, cartItems, clearCart } = useCart();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const { createPreference } = useCheckout();
+  const { currentTeam } = useMultiTenant();
+  const { user } = useAuth();
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'address' | 'payment'>('address');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
@@ -104,8 +110,14 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
   };
   
   // Função centralizada para criar pedido (delivery ou interno)
-  const createOrder = async ({ paymentMethod, paymentInfo, deliveryAddress }: { paymentMethod: PaymentMethod; paymentInfo: string; deliveryAddress: any; }) => {
-    const baseOrder = { total, restaurant_id: 1, status: 'pending', delivery_type: 'delivery', payment_method: paymentMethod };
+  const createOrder = async (
+    { paymentMethod, paymentInfo, deliveryAddress }: { paymentMethod: PaymentMethod; paymentInfo: string; deliveryAddress: any; },
+    options?: { silent?: boolean }
+  ): Promise<number | null> => {
+    const teamId = currentTeam?.id || null;
+    const baseOrder: any = { total, restaurant_id: 1, status: 'pending', delivery_type: 'delivery', payment_method: paymentMethod };
+    if (teamId) baseOrder.team_id = teamId;
+    if (user?.id) baseOrder.user_id = user.id;
     const orderObj = { ...baseOrder, address: deliveryAddress, table_name: null };
     console.log('Payload orderObj:', orderObj);
     try {
@@ -118,33 +130,48 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
         console.log('Order payload:', orderObj);
         throw new Error('Não foi possível criar o pedido');
       }
-      const orderId = orderData[0].id;
+      const orderId = orderData[0].id as number;
       const { error: itemsError } = await supabase
         .from('order_items')
-        .insert(cartItems.map(item => ({ product_id: item.id, quantity: item.quantity, price: item.price, notes: item.notes || undefined, order_id: orderId })));
+        .insert(cartItems.map(item => ({ product_id: item.id, quantity: item.quantity, price: item.price, notes: item.notes || undefined, order_id: orderId, team_id: teamId || undefined })));
       if (itemsError) {
         console.error("Erro ao criar itens do pedido:", itemsError);
         throw new Error("Não foi possível adicionar os itens ao pedido");
       }
-      clearCart();
-      if (onSuccess) onSuccess();
-      toast({ title: "Pedido realizado!", description: `Seu pedido foi registrado com sucesso. Pagamento: ${paymentInfo}` });
+      if (!options?.silent) {
+        clearCart();
+        if (onSuccess) onSuccess();
+        toast({ title: "Pedido realizado!", description: `Seu pedido foi registrado com sucesso. Pagamento: ${paymentInfo}` });
+      }
+      return orderId;
     } catch (error) {
       console.error("Erro ao processar pedido:", error);
       toast({ title: "Erro ao processar pedido", description: error instanceof Error ? error.message : "Ocorreu um erro ao processar seu pedido", variant: "destructive" });
+      return null;
     } finally {
       setIsLoading(false);
     }
   };
 
   const initMercadoPago = async () => {
-    if ((paymentMethod === 'card' || paymentMethod === 'pix') && window.MercadoPago) {
-      setIsLoading(true);
-      setTimeout(async () => {
-        const paymentInfo = paymentMethod === 'card' ? 'Cartão (Mercado Pago)' : 'Pix (Mercado Pago)';
-        const addressObj = { street: endereco, number: numero, complement: complemento || undefined, neighborhood: bairro, city: cidade, state: estado, zipcode: cep };
-        await createOrder({ paymentMethod, paymentInfo, deliveryAddress: addressObj });
-      }, 2000);
+    if (paymentMethod !== 'card' && paymentMethod !== 'pix') return;
+    setIsLoading(true);
+    const paymentInfo = paymentMethod === 'card' ? 'Cartão (Mercado Pago)' : 'Pix (Mercado Pago)';
+    const addressObj = { street: endereco, number: numero, complement: complemento || undefined, neighborhood: bairro, city: cidade, state: estado, zipcode: cep };
+    // 1) Cria o pedido em estado pending, sem limpar o carrinho (silent), para obter orderId
+    const orderId = await createOrder({ paymentMethod, paymentInfo, deliveryAddress: addressObj }, { silent: true });
+    if (!orderId) return;
+    // 2) Cria a preferência no Mercado Pago e redireciona
+    try {
+      const singleItem = [{ title: `Pedido #${orderId}`, quantity: 1, unit_price: total, currency_id: 'BRL' }];
+      await createPreference(singleItem as any, { external_reference: String(orderId) });
+      // redireciona automaticamente; se optar por não redirecionar, trate o retorno aqui
+      // Após retorno, o webhook atualizará o status do pedido
+    } catch (e) {
+      console.error('Falha ao criar preferência Mercado Pago:', e);
+      toast({ title: 'Erro ao iniciar pagamento', description: e instanceof Error ? e.message : 'Falha ao conectar ao Mercado Pago', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
     }
   };
 

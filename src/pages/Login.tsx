@@ -25,6 +25,37 @@ interface RegisterFormState {
   phone: string;
 }
 
+const getSignupErrorMessage = (error: any): string => {
+  if (!error) return 'Não foi possível completar o cadastro. Tente novamente.';
+
+  const raw = String(error.message ?? '').toLowerCase();
+  if (
+    raw.includes('already registered') ||
+    raw.includes('already exists') ||
+    raw.includes('profile_email_conflict') ||
+    raw.includes('duplicate key')
+  ) {
+    return 'Esse e-mail já está cadastrado. Tente recuperar a senha ou utilize outro e-mail.';
+  }
+
+  return error.message ?? 'Não foi possível completar o cadastro. Tente novamente.';
+};
+
+const getLoginErrorMessage = (error: any): string => {
+  if (!error) return 'Erro inesperado. Tente novamente.';
+
+  const raw = String(error.message ?? '').toLowerCase();
+  if (raw.includes('email not confirmed') || raw.includes('not confirmed')) {
+    return 'Conta ainda não confirmada. Verifique seu e-mail e confirme o cadastro para acessar.';
+  }
+
+  if (raw.includes('invalid login credentials')) {
+    return 'E-mail ou senha incorretos. Verifique os dados e tente novamente.';
+  }
+
+  return error.message ?? 'Erro inesperado. Tente novamente.';
+};
+
 const Login = () => {
   const navigate = useNavigate();
   // Certificar que signInWithGoogle está sendo desestruturado corretamente de useAuth
@@ -72,7 +103,7 @@ const Login = () => {
       if (error) {
         toast({
           title: "Erro ao fazer login",
-          description: error.message || "Verifique suas credenciais e tente novamente.",
+          description: getLoginErrorMessage(error),
           variant: "destructive"
         });
       } else {
@@ -116,7 +147,7 @@ const Login = () => {
       if (error) {
         toast({
           title: "Erro ao fazer cadastro",
-          description: error.message || "Não foi possível completar o cadastro. Tente novamente.",
+          description: getSignupErrorMessage(error),
           variant: "destructive"
         });
       } else {

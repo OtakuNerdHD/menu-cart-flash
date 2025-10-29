@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode, useCallback, useRef } from 'react';
 import { useSubdomain } from '@/hooks/useSubdomain';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+
+const NO_TEAM_SENTINEL = '00000000-0000-0000-0000-000000000000';
 
 interface Team {
   id: string;
@@ -30,9 +32,10 @@ interface MultiTenantProviderProps {
 
 export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ children }) => {
   const { subdomain, isLoading: subdomainLoading, isAdminMode, switchToClient, switchToAdmin } = useSubdomain();
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, user } = useAuth();
   const [currentTeam, setCurrentTeam] = useState<Team | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const ensuredRef = useRef<string | null>(null);
 
   // Verificar se está em ambiente local
   const isLocalEnvironment = useMemo(() => {
@@ -41,8 +44,8 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
   }, []);
 
   const effectiveAdminMode = useMemo(() => {
-    if (isSuperAdmin) return true;
-    return isAdminMode;
+    // Admin mode apenas quando for super admin no domínio principal
+    return isSuperAdmin && isAdminMode;
   }, [isSuperAdmin, isAdminMode]);
 
   const effectiveSubdomain = useMemo(() => {
@@ -63,35 +66,45 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
 
       const { error: teamError } = await supabase.rpc('set_app_config', {
         config_name: 'app.current_team_id',
-        config_value: teamId ?? ''
+        config_value: teamId ?? NO_TEAM_SENTINEL
       });
 
       if (teamError) {
         console.warn('Falha ao configurar team via set_app_config:', teamError);
       }
 
-      console.log('[MultiTenant] applyRlsConfig', { roleValue, teamId, roleError, teamError });
+      // Adicional: manter variável 'app.current_team' alinhada para políticas que esperam este nome
+      const { error: legacyTeamVarError } = await supabase.rpc('set_app_config', {
+        config_name: 'app.current_team',
+        config_value: teamId ?? NO_TEAM_SENTINEL
+      });
+
+      if (legacyTeamVarError) {
+        console.warn('Falha ao configurar app.current_team via set_app_config:', legacyTeamVarError);
+      }
+
+      console.log('[MultiTenant] applyRlsConfig', { roleValue, teamId, roleError, teamError, legacyTeamVarError });
     } catch (error) {
       console.warn('Erro ao configurar RLS no MultiTenantContext:', error);
     }
   }, []);
 
-  const loadTeamBySlug = async (slug: string) => {
+  const loadTeamById = async (id: string) => {
     try {
       const { data, error } = await supabase
         .from('teams')
         .select('*')
-        .eq('slug', slug)
+        .eq('id', id)
         .single();
 
       if (error) {
-        console.error('Erro ao buscar team por slug:', error);
+        console.error('Erro ao buscar team por id:', error);
         return null;
       }
 
       return data;
     } catch (error) {
-      console.error('Erro ao carregar team:', error);
+      console.error('Erro ao carregar team por id:', error);
       return null;
     }
   };
@@ -99,28 +112,46 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
   const refreshTeam = async () => {
     setIsLoading(true);
 
-    if (!effectiveSubdomain || effectiveAdminMode) {
-      const roleValue = effectiveAdminMode && isSuperAdmin ? 'general_admin' : 'admin';
-      await applyRlsConfig(roleValue, null);
+    // Domínio principal: só super admin recebe privilégios; demais são 'user' com sentinel
+    if (!effectiveSubdomain) {
+      const roleValue = isSuperAdmin ? 'general_admin' : 'user';
+      await applyRlsConfig(roleValue, NO_TEAM_SENTINEL);
       setCurrentTeam(null);
       setIsLoading(false);
       return;
     }
 
-    const team = await loadTeamBySlug(effectiveSubdomain);
-    
-    if (team) {
-      setCurrentTeam(team);
-      console.log('Team carregado com sucesso:', team);
-      
+    // Modo cliente: primeiro garante associação e contexto pelo RPC
+    let ensuredTeamId: string | null = null;
+    if (user) {
+      try {
+        const { data: ensured, error: ensureErr } = await supabase.rpc('ensure_membership' as never, { team_slug: effectiveSubdomain } as never);
+        if (!ensureErr && ensured) {
+          ensuredTeamId = String(ensured);
+          ensuredRef.current = ensuredTeamId;
+        } else if (ensureErr) {
+          console.warn('ensure_membership falhou:', ensureErr);
+        }
+      } catch (e) {
+        console.warn('Erro ensure_membership:', e);
+      }
+    }
+
+    if (ensuredTeamId) {
       const roleValue: 'user' | 'admin' = isSuperAdmin ? 'admin' : 'user';
-      await applyRlsConfig(roleValue, team.id.toString());
+      await applyRlsConfig(roleValue, ensuredTeamId);
+
+      const team = await loadTeamById(ensuredTeamId);
+      if (team) {
+        setCurrentTeam(team);
+        console.log('Team carregado via ensure_membership:', team);
+      } else {
+        setCurrentTeam(null);
+      }
     } else {
+      // Não conseguiu garantir membership; cair para admin sentinel (sem acessar dados)
+      await applyRlsConfig(isSuperAdmin ? 'general_admin' : 'admin', NO_TEAM_SENTINEL);
       setCurrentTeam(null);
-      console.log('Nenhum team encontrado para o subdomínio:', effectiveSubdomain);
-      
-      const roleValue = isSuperAdmin ? 'general_admin' : 'admin';
-      await applyRlsConfig(roleValue, null);
     }
     
     setIsLoading(false);
@@ -131,6 +162,13 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
       refreshTeam();
     }
   }, [effectiveSubdomain, effectiveAdminMode, subdomainLoading]);
+
+  // Garantia extra desnecessária agora; manter apenas log
+  useEffect(() => {
+    if (user && currentTeam && !effectiveAdminMode) {
+      console.log('[MultiTenant] currentTeam assegurado', currentTeam.id);
+    }
+  }, [user, currentTeam, effectiveAdminMode]);
 
   // Garantir que o carregamento seja finalizado em ambiente local
   useEffect(() => {

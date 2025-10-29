@@ -19,6 +19,8 @@ import OrderManagement from "./pages/OrderManagement";
 import OrderTracking from "./pages/OrderTracking";
 import KitchenManagement from "./pages/KitchenManagement";
 import ProductManagement from "./pages/ProductManagement";
+import ProductDetail from "./pages/ProductDetail";
+import Combos from "./pages/Combos";
 import UserManagement from "./pages/UserManagement";
 import ApiManagement from "./pages/ApiManagement";
 import Login from "./pages/Login";
@@ -26,6 +28,7 @@ import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 import Cart from "./components/Cart";
 import DashboardSAAS from "./pages/DashboardSAAS";
+import MobileBottomNav from "@/components/navigation/MobileBottomNav";
 
 const queryClient = new QueryClient();
 
@@ -75,6 +78,8 @@ const AppRouter = () => {
             <Route path="/order-management" element={<OrderManagement />} />
             <Route path="/kitchen-management" element={<KitchenManagement />} />
             <Route path="/order-tracking/:orderId?" element={<OrderTracking />} />
+            <Route path="/combos" element={<Combos />} />
+            <Route path="/products/:id" element={<ProductDetail />} />
             <Route path="/product-management" element={<ProductManagement />} />
             <Route path="/user-management" element={<UserManagement />} />
             <Route path="/api-management" element={<ApiManagement />} />
@@ -90,6 +95,8 @@ const AppRouter = () => {
             <Route path="/order-management" element={<OrderManagement />} />
             <Route path="/kitchen-management" element={<KitchenManagement />} />
             <Route path="/order-tracking/:orderId?" element={<OrderTracking />} />
+            <Route path="/combos" element={<Combos />} />
+            <Route path="/products/:id" element={<ProductDetail />} />
             <Route path="/product-management" element={<ProductManagement />} />
             <Route path="/user-management" element={<UserManagement />} />
             <Route path="/api-management" element={<ApiManagement />} />
@@ -101,6 +108,7 @@ const AppRouter = () => {
       </Routes>
       {/* UserSwitcher temporariamente desabilitado */}
       <Cart />
+      <MobileBottomNav />
     </>
   );
 };

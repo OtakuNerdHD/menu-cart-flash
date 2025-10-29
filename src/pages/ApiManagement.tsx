@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,12 +10,48 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowDownToLine, RefreshCcw, Check, X, Key } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useMultiTenant } from '@/context/MultiTenantContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const ApiManagement = () => {
   const { currentUser } = useUserSwitcher();
   const navigate = useNavigate();
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner';
+  const { currentTeam } = useMultiTenant();
+  const { currentUser: authUser, isSuperAdmin } = useAuth();
+  const [membershipRole, setMembershipRole] = useState<string | null>(null);
+  const isTenantAdmin = ['admin','restaurant_owner','owner','manager'].includes((membershipRole || '').toLowerCase());
+  const isAdmin = isSuperAdmin || isTenantAdmin;
+
+  useEffect(() => {
+    const fetchMembershipRole = async () => {
+      try {
+        if (!authUser) { setMembershipRole(null); return; }
+        if (currentTeam?.id) {
+          const { data, error } = await supabase.rpc('get_membership_role_by_team' as never, { p_team_id: currentTeam.id } as never);
+          if (error) { setMembershipRole('client'); return; }
+          setMembershipRole((data as string) || 'client');
+          return;
+        }
+        const host = window.location.hostname;
+        const parts = host.split('.');
+        const isDelli = parts.length >= 3 && parts[parts.length-3] === 'delliapp' && parts[parts.length-2] === 'com' && parts[parts.length-1] === 'br';
+        const slug = (isDelli && parts[0] !== 'app') ? parts[0] : null;
+        if (slug) {
+          const { data, error } = await supabase.rpc('get_membership_role_by_slug' as never, { p_team_slug: slug } as never);
+          if (error) { setMembershipRole('client'); return; }
+          setMembershipRole((data as string) || 'client');
+        } else {
+          setMembershipRole('client');
+        }
+      } catch (e) {
+        console.error('Erro ao buscar papel no tenant (RPC):', e);
+        setMembershipRole('client');
+      }
+    };
+    fetchMembershipRole();
+  }, [authUser?.id, currentTeam?.id]);
   
   const [apiUrl, setApiUrl] = useState('');
   const [apiToken, setApiToken] = useState('');
@@ -87,6 +123,15 @@ const ApiManagement = () => {
       setResetOrderTracking(false);
     }, 1000);
   };
+
+  // Evitar bloquear antes de resolver o papel no tenant
+  if (!isSuperAdmin && currentTeam && membershipRole === null) {
+    return (
+      <div className="min-h-screen bg-gray-50 pt-16">
+        <div className="container mx-auto px-4 py-8">Carregando permissões...</div>
+      </div>
+    );
+  }
 
   if (!isAdmin) {
     return (

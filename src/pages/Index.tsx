@@ -6,11 +6,14 @@ import CategoryFilter from '@/components/CategoryFilter';
 import { Product } from '@/types/supabase';
 import { menuItems as fallbackMenuItems } from '@/data/menuItems';
 import { categories } from '@/data/menuItems';
+import { comboHighlights } from '@/data/combos';
 import { useTeam } from '@/context/TeamContext';
 import { useSupabaseWithTeam } from '@/hooks/useSupabaseWithTeam';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useMultiTenant } from '@/context/MultiTenantContext';
+
+const comboMocks = comboHighlights;
 
 const Index = () => {
   const [selectedCategory, setSelectedCategory] = useState('todos');
@@ -189,34 +192,53 @@ const Index = () => {
   
   return (
     <div className="min-h-screen flex flex-col pt-16">
-      <main className="flex-grow container mx-auto px-4 py-8">
-        <section className="mb-8">
-          <h1 className="text-3xl font-bold mb-2 text-menu-secondary">Cardápio Digital</h1>
-          <p className="text-gray-600 max-w-2xl">
-            Explore nosso delicioso menu com opções para todos os gostos. Adicione itens ao seu carrinho e faça seu pedido facilmente.
-          </p>
-          {teamId && (
-            <div className="mt-2 text-sm text-gray-500">
-              Team ID: {teamId}
-            </div>
-          )}
+      <main className="flex-grow container mx-auto px-4 py-4 sm:py-7">
+        <section className="mb-5 sm:mb-8">
+          <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-menu-primary">Combos em destaque</span>
+          </div>
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 scrollbar-hide">
+            {comboMocks.map((combo, index) => (
+              <div
+                key={index}
+                className="min-w-[160px] max-w-[180px] flex-shrink-0 snap-center overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-transform hover:-translate-y-1"
+              >
+                <div className="h-32 w-full overflow-hidden">
+                  <img
+                    src={combo.image}
+                    alt={combo.title}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="p-3">
+                  <h3 className="text-sm font-semibold text-gray-900 line-clamp-2">
+                    {combo.title}
+                  </h3>
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
 
-        <section className="mb-8">
-          <h2 className="text-2xl font-bold mb-4 text-menu-secondary">Categorias</h2>
+        <section className="mb-4 sm:mb-7">
+          <h2 className="hidden text-2xl font-bold mb-3 text-menu-secondary sm:block">Categorias</h2>
           <CategoryFilter 
             selectedCategory={selectedCategory} 
             onCategoryChange={setSelectedCategory} 
           />
         </section>
         
-        <section className="mb-12">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-menu-secondary">
-              {selectedCategory === 'todos' ? 'Todos os itens' : 
-                selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}
-            </h2>
-            <span className="text-sm text-gray-500">{filteredItems.length} itens</span>
+        <section className="mb-8 sm:mb-12">
+          <div className="flex flex-col gap-2 mb-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-menu-secondary">
+                {selectedCategory === 'todos' ? 'Todos os itens' : 
+                  selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}
+              </h2>
+            </div>
+            {teamId && (
+              <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">Tenant: {teamId}</span>
+            )}
           </div>
           
           {(loading || teamLoading || authLoading || multiTenantLoading) ? (

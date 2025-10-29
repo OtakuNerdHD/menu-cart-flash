@@ -22,7 +22,7 @@ const MenuGrid: React.FC<MenuGridProps> = ({ items }) => {
   }
   
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 md:grid-cols-3 md:gap-6">
       {items.map(item => (
         <MenuItem key={item.id} item={item} />
       ))}

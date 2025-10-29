@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ImageUpload from '@/components/ImageUpload';
 import { useAuth } from '@/context/AuthContext';
+import { useMultiTenant } from '@/context/MultiTenantContext';
 
 // Interface para perfil do Supabase
 interface SupabaseProfile {
@@ -38,30 +38,19 @@ interface AppUser {
   photo_url: string;
 }
 
-// Mock de dados de usuários
-const mockUsers: AppUser[] = [
-  { id: 1, full_name: 'João Silva', email: 'joao@email.com', role: 'waiter', status: 'active', photo_url: '' },
-  { id: 2, full_name: 'Maria Souza', email: 'maria@email.com', role: 'chef', status: 'active', photo_url: '' },
-  { id: 3, full_name: 'Carlos Pereira', email: 'carlos@email.com', role: 'customer', status: 'active', photo_url: '' },
-  { id: 4, full_name: 'Ana Oliveira', email: 'ana@email.com', role: 'waiter', status: 'inactive', photo_url: '' },
-];
-
-// Mock de usuários extras que podem ser "descobertos" ao atualizar
-const extraUsers: AppUser[] = [
-  { id: 5, full_name: 'Roberto Alves', email: 'roberto@email.com', role: 'customer', status: 'active', photo_url: '' },
-  { id: 6, full_name: 'Fernanda Lima', email: 'fernanda@email.com', role: 'chef', status: 'active', photo_url: '' },
-];
+// Removidos mocks/extra users para evitar poluição e cruzamento de tenants
 
 const UserManagement = () => {
   const { currentUser } = useUserSwitcher();
   const { currentUser: authUser } = useAuth();
-  const [users, setUsers] = useState<AppUser[]>(mockUsers); // Tipar o estado users
+  const { isAdminMode, currentTeam } = useMultiTenant();
+  const [users, setUsers] = useState<AppUser[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [extraUsersAdded, setExtraUsersAdded] = useState(false);
   const navigate = useNavigate();
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [currentUser2Edit, setCurrentUser2Edit] = useState<any>(null);
+  const [membershipRole, setMembershipRole] = useState<string | null>(null);
   const [newUser, setNewUser] = useState<Omit<AppUser, 'id'> & { password: string }>({
     full_name: '',
     email: '',
@@ -71,37 +60,64 @@ const UserManagement = () => {
     password: ''
   });
   
-  // Verificar se é admin baseado no usuário logado
-  const isAdminOrOwner = authUser?.role === 'admin' || currentUser?.role === 'admin' || currentUser?.role === 'restaurant_owner';
+  // Verificar se é admin do tenant baseado em team_members
+  const isTenantAdmin = ['admin','restaurant_owner','owner','manager'].includes((membershipRole || '').toLowerCase());
+  const isAdminOrOwner = isAdminMode || isTenantAdmin;
+
+  if (!isAdminMode && currentTeam && membershipRole === null) {
+    return (
+      <div className="min-h-screen bg-gray-50 pt-16">
+        <div className="container mx-auto px-4 py-8">Carregando permissões...</div>
+      </div>
+    );
+  }
 
   useEffect(() => {
-    // Carregar usuários do localStorage se existirem
-    const storedUsers = localStorage.getItem('appUsers');
-    if (storedUsers) {
+    const fetchMembershipRole = async () => {
       try {
-        setUsers(JSON.parse(storedUsers));
-      } catch (error) {
-        console.error('Erro ao carregar usuários:', error);
+        if (!authUser || isAdminMode) { setMembershipRole(null); return; }
+        if (currentTeam?.id) {
+          const { data, error } = await supabase.rpc('get_membership_role_by_team' as never, { p_team_id: currentTeam.id } as never);
+          if (error) { setMembershipRole('client'); return; }
+          setMembershipRole((data as string) || 'client');
+          return;
+        }
+        // Fallback: resolver por slug quando o currentTeam ainda não carregou
+        const host = window.location.hostname;
+        const parts = host.split('.');
+        const isDelli = parts.length >= 3 && parts[parts.length-3] === 'delliapp' && parts[parts.length-2] === 'com' && parts[parts.length-1] === 'br';
+        const slug = (isDelli && parts[0] !== 'app') ? parts[0] : null;
+        if (slug) {
+          const { data, error } = await supabase.rpc('get_membership_role_by_slug' as never, { p_team_slug: slug } as never);
+          if (error) { setMembershipRole('client'); return; }
+          setMembershipRole((data as string) || 'client');
+        } else {
+          setMembershipRole('client');
+        }
+      } catch (e) {
+        console.error('Erro ao buscar papel no tenant (RPC):', e);
+        setMembershipRole('client');
       }
-    }
-    
-    // Se temos Supabase conectado, buscar usuários de lá também
+    };
+    fetchMembershipRole();
+  }, [authUser?.id, currentTeam?.id, isAdminMode]);
+
+  useEffect(() => {
     fetchUsersFromSupabase();
-  }, []);
+  }, [currentTeam?.id, isAdminMode]);
   
   const fetchUsersFromSupabase = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*');
-        
-      if (error) {
-        console.error('Erro ao buscar usuários do Supabase:', error);
-        return;
-      }
-      
-      if (data && data.length > 0) {
-        const supabaseUsers: AppUser[] = data.map((user: any) => ({
+      if (isAdminMode) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) {
+          console.error('Erro ao buscar usuários (admin):', error);
+          return;
+        }
+        const supabaseUsers: AppUser[] = (data || []).map((user: any) => ({
           id: user.id,
           full_name: user.full_name || user.email || 'Nome não disponível',
           email: user.email || 'Email não disponível',
@@ -109,42 +125,37 @@ const UserManagement = () => {
           status: (['active', 'inactive'].includes(user.status) ? user.status : 'active') as 'active' | 'inactive',
           photo_url: user.avatar_url || ''
         }));
-        
         setUsers(supabaseUsers);
-        localStorage.setItem('appUsers', JSON.stringify(supabaseUsers));
+      } else {
+        // Modo cliente: confiar na RLS de profiles para restringir ao tenant atual
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) { console.error('Erro ao buscar perfis do tenant:', error); setUsers([]); return; }
+        const supabaseUsers: AppUser[] = (data || []).map((user: any) => ({
+          id: user.id,
+          full_name: user.full_name || user.email || 'Nome não disponível',
+          email: user.email || 'Email não disponível',
+          role: (['admin', 'restaurant_owner', 'manager', 'waiter', 'chef', 'delivery_person', 'customer', 'visitor'].includes(user.role) ? user.role : 'customer') as AppUser['role'],
+          status: (['active', 'inactive'].includes(user.status) ? user.status : 'active') as 'active' | 'inactive',
+          photo_url: user.avatar_url || ''
+        }));
+        setUsers(supabaseUsers);
       }
     } catch (error) {
       console.error('Erro ao processar dados do Supabase:', error);
     }
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true);
-    
-    // Simular uma requisição para atualizar os usuários
-    setTimeout(() => {
-      if (!extraUsersAdded) {
-        // Adicionar usuários extras apenas na primeira atualização
-        const updatedUsers = [...users, ...extraUsers];
-        setUsers(updatedUsers);
-        setExtraUsersAdded(true);
-        
-        // Salvar no localStorage para persistência
-        localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
-        
-        toast({
-          title: "Lista de usuários atualizada",
-          description: "Foram encontrados 2 novos usuários no sistema."
-        });
-      } else {
-        toast({
-          title: "Lista de usuários atualizada",
-          description: "Nenhum novo usuário encontrado."
-        });
-      }
-      
-      setIsRefreshing(false);
-    }, 800);
+    await fetchUsersFromSupabase();
+    toast({
+      title: 'Lista de usuários atualizada',
+      description: 'Dados sincronizados com o servidor.'
+    });
+    setIsRefreshing(false);
   };
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -218,19 +229,10 @@ const UserManagement = () => {
       console.error('Erro ao processar atualização de usuário:', error);
     }
     
-    // Fallback para localStorage
-    const updatedUsers = users.map(user => 
-      user.id === currentUser2Edit.id ? currentUser2Edit : user
-    );
-    
+    // Se falhar no Supabase, manter apenas em memória
+    const updatedUsers = users.map(user => user.id === currentUser2Edit.id ? currentUser2Edit : user);
     setUsers(updatedUsers);
-    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
-    
-    toast({
-      title: "Usuário atualizado com sucesso",
-      description: `${currentUser2Edit.full_name} foi atualizado.`
-    });
-    
+    toast({ title: 'Usuário atualizado (local)', description: `${currentUser2Edit.full_name} foi atualizado localmente.` });
     setIsEditUserOpen(false);
     setCurrentUser2Edit(null);
   };
@@ -296,6 +298,17 @@ const UserManagement = () => {
             throw insertError;
           }
         }
+
+        // Vincular o usuário ao tenant atual como 'client' por padrão
+        if (currentTeam?.id) {
+          const { error: memErr } = await (supabase as any)
+            .from('team_members')
+            .upsert({ team_id: currentTeam.id, user_id: authData.user.id, role: 'client' }, { onConflict: 'team_id,user_id' })
+            .select();
+          if (memErr) {
+            console.warn('Falha ao vincular usuário ao tenant atual:', memErr);
+          }
+        }
       }
       
       // Se chegou até aqui, o usuário foi criado com sucesso
@@ -322,36 +335,8 @@ const UserManagement = () => {
       console.error('Erro ao processar adição de usuário:', error);
     }
     
-    // Fallback para localStorage se o Supabase falhar
-    const newId = Math.max(...users.map(u => typeof u.id === 'number' ? u.id : 0), 0) + 1;
-    const userToAdd: AppUser = {
-      id: newId,
-      full_name: newUser.full_name,
-      email: newUser.email,
-      role: newUser.role,
-      status: newUser.status,
-      photo_url: newUser.photo_url
-    };
-    
-    const updatedUsers = [...users, userToAdd];
-    setUsers(updatedUsers);
-    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
-    
-    toast({
-      title: "Usuário adicionado com sucesso",
-      description: `${newUser.full_name} foi adicionado ao sistema.`
-    });
-    
-    // Limpar o formulário e fechar o modal
-    setIsAddUserOpen(false);
-    setNewUser({
-      full_name: '',
-      email: '',
-      password: '',
-      role: 'customer',
-      status: 'active',
-      photo_url: ''
-    });
+    // Se falhar no Supabase, não inserir localmente para evitar vazamento entre tenants
+    toast({ title: 'Falha ao adicionar usuário', description: 'Não foi possível sincronizar com o servidor.', variant: 'destructive' });
   };
   
   const toggleUserStatus = (userId: string | number) => {
@@ -364,7 +349,6 @@ const UserManagement = () => {
     });
     
     setUsers(updatedUsers);
-    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
     
     const user = users.find(u => u.id === userId);
     const newStatus = user?.status === 'active' ? 'inactive' : 'active';
@@ -418,6 +402,18 @@ const UserManagement = () => {
         console.error('Erro ao excluir perfil do Supabase:', error);
         throw error;
       }
+
+      // Remover também o membership do tenant atual
+      if (currentTeam?.id) {
+        const { error: memDelErr } = await (supabase as any)
+          .from('team_members')
+          .delete()
+          .eq('team_id', currentTeam.id)
+          .eq('user_id', userId.toString());
+        if (memDelErr) {
+          console.warn('Falha ao remover membership do tenant:', memDelErr);
+        }
+      }
       
       toast({
         title: "Usuário excluído com sucesso",
@@ -431,15 +427,8 @@ const UserManagement = () => {
       console.error('Erro ao processar exclusão de usuário:', error);
     }
 
-    // Fallback para localStorage se o Supabase falhar
-    const updatedUsers = users.filter(u => u.id !== userId);
-    setUsers(updatedUsers);
-    localStorage.setItem('appUsers', JSON.stringify(updatedUsers));
-
-    toast({
-      title: "Usuário excluído com sucesso",
-      description: `${user.full_name} foi removido do sistema.`
-    });
+    // Se falhar no Supabase, não remover localmente para evitar inconsistência
+    toast({ title: 'Falha ao excluir usuário', description: 'Não foi possível sincronizar com o servidor.', variant: 'destructive' });
   };
 
   if (!isAdminOrOwner) {
