@@ -113,8 +113,10 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
     }
   };
 
+  const isReady = !isLoading && (teamId !== null || isAdminMode);
+
   return (
-    <TeamContext.Provider value={{ teamId, setTeamId, isLoading, isReady: !isLoading && !!teamId }}>
+    <TeamContext.Provider value={{ teamId, setTeamId, isLoading, isReady }}>
       {children}
     </TeamContext.Provider>
   );
