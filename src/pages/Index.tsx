@@ -22,18 +22,6 @@ const Index = () => {
   const { isLoading: multiTenantLoading, isAdminMode } = useMultiTenant();
 
   useEffect(() => {
-    let cancelled = false;
-
-    const shouldWait = authLoading || teamLoading || multiTenantLoading;
-
-    if (shouldWait) {
-      console.log('Index aguardando contextos', { authLoading, teamLoading, multiTenantLoading, user: user?.id });
-      setLoading(true);
-      return () => {
-        cancelled = true;
-      };
-    }
-
     const fetchProducts = async () => {
       setLoading(true);
       
@@ -52,11 +40,45 @@ const Index = () => {
           console.log(`Carregando produtos para team_id: ${teamId}`);
           const data = await teamSupabase.getProducts({ available: true });
 
-          if (!cancelled) {
-            if (data && data.length > 0) {
-              console.log(`${data.length} produtos encontrados:`, data);
+          if (data && data.length > 0) {
+            console.log(`${data.length} produtos encontrados:`, data);
+            
+            const productsWithAllFields = data.map((product: any): Product => ({
+              id: product.id,
+              name: product.name || '',
+              description: product.description || '',
+              price: product.price || 0,
+              category: product.category || '',
+              available: product.available !== false,
+              team_id: product.team_id || '',
+              restaurant_id: product.restaurant_id || 1,
+              created_at: product.created_at || new Date().toISOString(),
+              updated_at: product.updated_at || new Date().toISOString(),
+              featured: product.featured || false,
+              gallery: product.gallery || [],
+              ingredients: product.ingredients || '',
+              note_hint: product.note_hint || '',
+              rating: product.rating || 0,
+              review_count: product.review_count || 0,
+              image_url: product.image_url || '',
+              images: Array.isArray(product.images) && product.images.length > 0
+                ? product.images
+                : (product.image_url ? [product.image_url] : []),
+              nutritional_info: product.nutritional_info || {}
+            }));
+            
+            setProducts(productsWithAllFields);
+            console.log(`${productsWithAllFields.length} produtos carregados do Supabase para team_id: ${teamId}`);
+          } else {
+            console.log(`Nenhum produto encontrado para team_id: ${teamId}, buscando produtos gerais`);
+            // Tentar buscar produtos sem filtro de team como fallback
+            const { data: generalData, error } = await supabase
+              .from('products')
+              .select('*')
+              .eq('available', true);
               
-              const productsWithAllFields = data.map((product: any): Product => ({
+            if (generalData && generalData.length > 0) {
+              const productsWithAllFields = generalData.map((product: any): Product => ({
                 id: product.id,
                 name: product.name || '',
                 description: product.description || '',
@@ -81,107 +103,68 @@ const Index = () => {
               }));
               
               setProducts(productsWithAllFields);
-              console.log(`${productsWithAllFields.length} produtos carregados do Supabase para team_id: ${teamId}`);
+              console.log(`${generalData.length} produtos gerais carregados como fallback`);
             } else {
-              console.log(`Nenhum produto encontrado para team_id: ${teamId}, buscando produtos gerais`);
-              const { data: generalData } = await supabase
-                .from('products')
-                .select('*')
-                .eq('available', true);
-
-              if (generalData && generalData.length > 0) {
-                const productsWithAllFields = generalData.map((product: any): Product => ({
-                  id: product.id,
-                  name: product.name || '',
-                  description: product.description || '',
-                  price: product.price || 0,
-                  category: product.category || '',
-                  available: product.available !== false,
-                  team_id: product.team_id || '',
-                  restaurant_id: product.restaurant_id || 1,
-                  created_at: product.created_at || new Date().toISOString(),
-                  updated_at: product.updated_at || new Date().toISOString(),
-                  featured: product.featured || false,
-                  gallery: product.gallery || [],
-                  ingredients: product.ingredients || '',
-                  note_hint: product.note_hint || '',
-                  rating: product.rating || 0,
-                  review_count: product.review_count || 0,
-                  image_url: product.image_url || '',
-                  images: Array.isArray(product.images) && product.images.length > 0
-                    ? product.images
-                    : (product.image_url ? [product.image_url] : []),
-                  nutritional_info: product.nutritional_info || {}
-                }));
-                
-                setProducts(productsWithAllFields);
-                console.log(`${generalData.length} produtos gerais carregados como fallback`);
-              } else {
-                console.log('Usando dados mockados como último recurso');
-                setProducts(fallbackMenuItems);
-              }
-            }
-          }
-        } else {
-          console.log('Carregando todos os produtos (sem filtro de team)');
-          const { data } = await supabase
-            .from('products')
-            .select('*')
-            .eq('available', true);
-
-          if (!cancelled) {
-            if (data && data.length > 0) {
-              const productsWithAllFields = data.map((product: any): Product => ({
-                id: product.id,
-                name: product.name || '',
-                description: product.description || '',
-                price: product.price || 0,
-                category: product.category || '',
-                available: product.available !== false,
-                team_id: product.team_id || '',
-                restaurant_id: product.restaurant_id || 1,
-                created_at: product.created_at || new Date().toISOString(),
-                updated_at: product.updated_at || new Date().toISOString(),
-                featured: product.featured || false,
-                gallery: product.gallery || [],
-                ingredients: product.ingredients || '',
-                note_hint: product.note_hint || '',
-                rating: product.rating || 0,
-                review_count: product.review_count || 0,
-                image_url: product.image_url || '',
-                images: Array.isArray(product.images) && product.images.length > 0
-                  ? product.images
-                  : (product.image_url ? [product.image_url] : []),
-                nutritional_info: product.nutritional_info || {}
-              }));
-              
-              setProducts(productsWithAllFields);
-              console.log(`${data.length} produtos carregados do Supabase (modo geral)`);
-            } else {
-              console.log('Nenhum produto encontrado no Supabase, usando dados mockados');
+              console.log('Usando dados mockados como último recurso');
               setProducts(fallbackMenuItems);
             }
           }
+        } 
+        // Se não há team_id (modo admin ou ambiente local), buscar todos os produtos
+        else {
+          console.log('Carregando todos os produtos (sem filtro de team)');
+          
+          const { data, error } = await supabase
+            .from('products')
+            .select('*')
+            .eq('available', true);
+            
+          if (data && data.length > 0) {
+            const productsWithAllFields = data.map((product: any): Product => ({
+              id: product.id,
+              name: product.name || '',
+              description: product.description || '',
+              price: product.price || 0,
+              category: product.category || '',
+              available: product.available !== false,
+              team_id: product.team_id || '',
+              restaurant_id: product.restaurant_id || 1,
+              created_at: product.created_at || new Date().toISOString(),
+              updated_at: product.updated_at || new Date().toISOString(),
+              featured: product.featured || false,
+              gallery: product.gallery || [],
+              ingredients: product.ingredients || '',
+              note_hint: product.note_hint || '',
+              rating: product.rating || 0,
+              review_count: product.review_count || 0,
+              image_url: product.image_url || '',
+              images: Array.isArray(product.images) && product.images.length > 0
+                ? product.images
+                : (product.image_url ? [product.image_url] : []),
+              nutritional_info: product.nutritional_info || {}
+            }));
+            
+            setProducts(productsWithAllFields);
+            console.log(`${data.length} produtos carregados do Supabase (modo geral)`);
+          } else {
+            console.log('Nenhum produto encontrado no Supabase, usando dados mockados');
+            setProducts(fallbackMenuItems);
+          }
         }
       } catch (err) {
-        if (!cancelled) {
-          console.error('Erro ao buscar produtos:', err);
-          console.log('Usando dados mockados devido ao erro');
-          setProducts(fallbackMenuItems);
-        }
+        console.error('Erro ao buscar produtos:', err);
+        console.log('Usando dados mockados devido ao erro');
+        setProducts(fallbackMenuItems);
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     };
 
-    fetchProducts();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authLoading, teamLoading, multiTenantLoading, isReady, teamSupabase, teamId, isAdminMode, isSuperAdmin, user?.id]);
+    // Aguardar o carregamento do team antes de buscar produtos
+    if (!teamLoading && !authLoading && !multiTenantLoading) {
+      fetchProducts();
+    }
+  }, [isReady, teamLoading, teamSupabase, teamId, authLoading, multiTenantLoading, isAdminMode, isSuperAdmin, user?.id]);
 
   const filteredItems = selectedCategory === 'todos'
     ? products

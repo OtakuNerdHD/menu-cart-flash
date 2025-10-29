@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
 
@@ -81,37 +81,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  const configureRlsForUser = useCallback(async (sessionUser: User | null) => {
-    try {
-      const email = sessionUser?.email?.toLowerCase();
-      const isSuper = email ? SUPER_ADMIN_EMAILS.includes(email) : false;
-
-      if (!isSuper) {
-        return;
-      }
-
-      const { error: roleError } = await supabase.rpc('set_app_config', {
-        config_name: 'app.current_user_role',
-        config_value: 'general_admin'
-      });
-
-      if (roleError) {
-        console.warn('Falha ao configurar role para super admin:', roleError);
-      }
-
-      const { error: teamError } = await supabase.rpc('set_app_config', {
-        config_name: 'app.current_team_id',
-        config_value: ''
-      });
-
-      if (teamError) {
-        console.warn('Falha ao limpar team_id para super admin:', teamError);
-      }
-    } catch (error) {
-      console.warn('Erro ao configurar RLS para super admin:', error);
-    }
-  }, []);
-
   useEffect(() => {
     const emailFromUser = user?.email?.toLowerCase();
     const emailFromProfile = currentUser?.email?.toLowerCase();
@@ -141,7 +110,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (activeSession?.user) {
           console.log('Sessão ativa encontrada (initializeSession):', activeSession.user.id);
           setUser(activeSession.user);
-          configureRlsForUser(activeSession.user);
           await fetchUserProfile(activeSession.user.id); // fetchUserProfile agora não mexe no loading global
           // Lógica de refresh de token pode ser adicionada aqui se necessário
           return activeSession.user;
@@ -170,7 +138,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setUser(session?.user ?? null);
         if (session?.user) {
-          configureRlsForUser(session.user);
           await fetchUserProfile(session.user.id);
         } else {
           setCurrentUser(null);
