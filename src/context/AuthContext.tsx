@@ -141,9 +141,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (activeSession?.user) {
           console.log('Sessão ativa encontrada (initializeSession):', activeSession.user.id);
           setUser(activeSession.user);
-          configureRlsForUser(activeSession.user);
-          await fetchUserProfile(activeSession.user.id); // fetchUserProfile agora não mexe no loading global
-          // Lógica de refresh de token pode ser adicionada aqui se necessário
+          // Configurações que tocam no Supabase devem ser adiadas para evitar deadlocks
+          setTimeout(() => {
+            configureRlsForUser(activeSession.user);
+            fetchUserProfile(activeSession.user.id);
+          }, 0);
           return activeSession.user;
         } else {
           console.log('Nenhuma sessão ativa ou usuário na sessão (initializeSession).');
@@ -161,31 +163,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!isMounted) return;
       console.log('Evento de autenticação:', event, session?.user?.id);
 
       // INITIAL_SESSION é tratado pela chamada inicial a initializeSession().
-      // O listener aqui principalmente reage a mudanças *após* a inicialização.
+      // O listener aqui reage somente a mudanças após a inicialização.
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setUser(session?.user ?? null);
         if (session?.user) {
-          configureRlsForUser(session.user);
-          await fetchUserProfile(session.user.id);
+          // Evitar chamadas ao Supabase dentro do callback para não travar o app
+          setTimeout(() => {
+            configureRlsForUser(session.user);
+            fetchUserProfile(session.user.id);
+          }, 0);
         } else {
           setCurrentUser(null);
         }
-        // O loading principal é tratado por initializeSession
-        // Se uma sessão é estabelecida DEPOIS do load inicial, setLoading(false) pode ser necessário
-        // mas geralmente o fluxo de login/refresh já implica uma interface de usuário ativa.
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setCurrentUser(null);
-        setLoading(false); // Importante para indicar que o estado de não autenticado é final.
+        setLoading(false); // Estado final quando desloga
       } else if (event === 'USER_UPDATED') {
         setUser(session?.user ?? null);
         if (session?.user) {
-          await fetchUserProfile(session.user.id);
+          setTimeout(() => {
+            fetchUserProfile(session.user.id);
+          }, 0);
         } else {
           setCurrentUser(null);
         }
