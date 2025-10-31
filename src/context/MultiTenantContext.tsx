@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode, useCallback, useRef } from 'react';
 import { useSubdomain } from '@/hooks/useSubdomain';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, TENANT_HEADER_KEYS } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 
 const NO_TEAM_SENTINEL = '00000000-0000-0000-0000-000000000000';
@@ -84,6 +84,12 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
         console.warn('Falha ao configurar app.current_team via set_app_config:', legacyTeamVarError);
       }
 
+      // Persistir também em headers para visitantes (e usuários) via fetch global
+      try {
+        localStorage.setItem(TENANT_HEADER_KEYS.role, roleValue);
+        localStorage.setItem(TENANT_HEADER_KEYS.tenantId, teamId ?? NO_TEAM_SENTINEL);
+      } catch {}
+
       console.log('[MultiTenant] applyRlsConfig', { roleValue, teamId, roleError, teamError, legacyTeamVarError });
     } catch (error) {
       console.warn('Erro ao configurar RLS no MultiTenantContext:', error);
@@ -123,6 +129,8 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
           restaurantValue = String(restaurants[0].id);
         }
       }
+      
+      // Configurar via RPC
       const { error: restaurantErr } = await supabase.rpc('set_app_config', {
         config_name: 'jwt.claims.restaurant_id',
         config_value: restaurantValue,
@@ -130,6 +138,9 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
       if (restaurantErr) {
         console.warn('Falha ao configurar restaurant_id via set_app_config:', restaurantErr);
       }
+      
+      // Salvar nos headers para visitantes
+      localStorage.setItem(TENANT_HEADER_KEYS.restaurantId, restaurantValue);
     } catch (error) {
       console.warn('Erro ao configurar restaurant_id:', error);
     }

@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, TENANT_HEADER_KEYS } from '@/integrations/supabase/client';
 import { useMultiTenant } from '@/context/MultiTenantContext';
 import { useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
@@ -473,8 +473,8 @@ export const useSupabaseWithMultiTenant = () => {
       }
     }
 
+    let restaurantId = '0';
     try {
-      let restaurantId = '0';
       const { data: restaurants } = await supabase
         .from('restaurants')
         .select('id')
@@ -490,6 +490,13 @@ export const useSupabaseWithMultiTenant = () => {
     } catch (error) {
       console.warn('Falha ao configurar restaurant_id para visitante:', error);
     }
+
+    // Persistir em headers para todas as requisições
+    try {
+      localStorage.setItem(TENANT_HEADER_KEYS.role, 'visitor');
+      localStorage.setItem(TENANT_HEADER_KEYS.tenantId, teamId);
+      localStorage.setItem(TENANT_HEADER_KEYS.restaurantId, restaurantId);
+    } catch {}
 
     console.log('[Visitante] RLS configurado para teamId:', teamId);
     return teamId;
