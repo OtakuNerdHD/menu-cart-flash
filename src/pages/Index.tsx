@@ -26,11 +26,11 @@ const Index = () => {
   useEffect(() => {
     let cancelled = false;
 
-    // Evite travar em loading: só aguarde autenticação. Multi-tenant pode ser resolvido pelo próprio hook MT.
-    const shouldWait = authLoading;
+    // Aguardar apenas carregamento de autenticação e multi-tenant
+    const shouldWait = authLoading || multiTenantLoading;
 
     if (shouldWait) {
-      console.log('Index aguardando contextos', { authLoading, teamLoading, multiTenantLoading, user: user?.id });
+      console.log('Index aguardando contextos', { authLoading, multiTenantLoading });
       setLoading(true);
       return () => {
         cancelled = true;
@@ -43,55 +43,46 @@ const Index = () => {
       try {
         console.log('Carregando produtos...');
         console.log('teamId:', teamId);
-        console.log('authLoading:', authLoading);
-        console.log('multiTenantLoading:', multiTenantLoading);
-        console.log('isSuperAdmin:', isSuperAdmin);
-        console.log('isAdminMode:', isAdminMode);
         console.log('user:', user?.id);
+        console.log('isAdminMode:', isAdminMode);
         
-        // Usar hook multi-tenant que garante RLS e membership
-        if (teamId) {
-          console.log(`Carregando produtos (MT) para team_id: ${teamId}`);
-          const data = await getProductsMT();
+        // Carregar produtos usando o hook multi-tenant que lida com visitantes
+        const data = await getProductsMT();
 
-          if (!cancelled) {
-            if (data && data.length > 0) {
-              console.log(`${data.length} produtos encontrados:`, data);
-              
-              const productsWithAllFields = data.map((product: any): Product => ({
-                id: product.id,
-                name: product.name || '',
-                description: product.description || '',
-                price: product.price || 0,
-                category: product.category || '',
-                available: product.available !== false,
-                team_id: product.team_id || '',
-                restaurant_id: product.restaurant_id || 1,
-                created_at: product.created_at || new Date().toISOString(),
-                updated_at: product.updated_at || new Date().toISOString(),
-                featured: product.featured || false,
-                gallery: product.gallery || [],
-                ingredients: product.ingredients || '',
-                note_hint: product.note_hint || '',
-                rating: product.rating || 0,
-                review_count: product.review_count || 0,
-                image_url: product.image_url || '',
-                images: Array.isArray(product.images) && product.images.length > 0
-                  ? product.images
-                  : (product.image_url ? [product.image_url] : []),
-                nutritional_info: product.nutritional_info || {}
-              }));
-              
-              setProducts(productsWithAllFields);
-              console.log(`${productsWithAllFields.length} produtos carregados do Supabase para team_id: ${teamId}`);
-            } else {
-              console.log(`Nenhum produto encontrado para team_id: ${teamId}.`);
-              setProducts([]);
-            }
+        if (!cancelled) {
+          if (data && data.length > 0) {
+            console.log(`${data.length} produtos encontrados`);
+            
+            const productsWithAllFields = data.map((product: any): Product => ({
+              id: product.id,
+              name: product.name || '',
+              description: product.description || '',
+              price: product.price || 0,
+              category: product.category || '',
+              available: product.available !== false,
+              team_id: product.team_id || '',
+              restaurant_id: product.restaurant_id || 1,
+              created_at: product.created_at || new Date().toISOString(),
+              updated_at: product.updated_at || new Date().toISOString(),
+              featured: product.featured || false,
+              gallery: product.gallery || [],
+              ingredients: product.ingredients || '',
+              note_hint: product.note_hint || '',
+              rating: product.rating || 0,
+              review_count: product.review_count || 0,
+              image_url: product.image_url || '',
+              images: Array.isArray(product.images) && product.images.length > 0
+                ? product.images
+                : (product.image_url ? [product.image_url] : []),
+              nutritional_info: product.nutritional_info || {}
+            }));
+            
+            setProducts(productsWithAllFields);
+            console.log(`${productsWithAllFields.length} produtos carregados`);
+          } else {
+            console.log('Nenhum produto encontrado');
+            setProducts([]);
           }
-        } else {
-          console.log('Sem team atual. Não exibindo produtos para evitar vazamento entre tenants.');
-          setProducts([]);
         }
       } catch (err) {
         if (!cancelled) {
@@ -107,20 +98,13 @@ const Index = () => {
 
     const fetchHighlightedCombos = async () => {
       try {
-        if (teamId) {
-          const combos = await getCombos({ onlyHighlightedHomepage: true });
-          if (!cancelled) setHighlightCombos(Array.isArray(combos) ? combos : []);
-        } else {
-          if (!cancelled) setHighlightCombos([]);
-        }
+        const combos = await getCombos({ onlyHighlightedHomepage: true });
+        if (!cancelled) setHighlightCombos(Array.isArray(combos) ? combos : []);
       } catch (e) {
         console.warn('Erro ao carregar combos em destaque:', e);
         if (!cancelled) setHighlightCombos([]);
       }
     };
-
-    fetchProducts();
-    fetchHighlightedCombos();
 
     const fetchCategories = async () => {
       try {
@@ -130,12 +114,15 @@ const Index = () => {
         if (!cancelled) setCategoryNames([]);
       }
     };
+
+    fetchProducts();
+    fetchHighlightedCombos();
     fetchCategories();
 
     return () => {
       cancelled = true;
     };
-  }, [authLoading, teamLoading, multiTenantLoading, teamId, isAdminMode, isSuperAdmin, user?.id, getNonEmptyCategories, getProductsMT, getCombos]);
+  }, [authLoading, multiTenantLoading, user?.id, isAdminMode, getNonEmptyCategories, getProductsMT, getCombos]);
 
   const filteredItems = selectedCategory === 'todos'
     ? products
