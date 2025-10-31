@@ -20,15 +20,8 @@ export const useSupabaseWithTeam = () => {
       getProducts: async (filters?: { available?: boolean; category?: string }) => {
         let query = supabase
           .from('products')
-          .select(`
-            *,
-            restaurants!inner(
-              id,
-              name,
-              team_id
-            )
-          `)
-          .eq('restaurants.team_id', teamId);
+          .select('*')
+          .eq('team_id', teamId);
 
         if (filters?.available !== undefined) {
           query = query.eq('available', filters.available);

@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
-import { supabase } from "@/integrations/supabase/client";
+import { useMultiTenant } from '@/context/MultiTenantContext';
+import { uploadMedia } from '@/lib/media';
 
 interface ImageUploadProps {
   onImageUpload: (url: string) => void;
@@ -16,11 +17,12 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   onImageUpload,
   value,
   label = "Selecionar imagem",
-  maxSizeInMB = 5,
+  maxSizeInMB = 3,
   acceptedFileTypes = "image/*"
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(value || null);
+  const { currentTeam } = useMultiTenant();
   
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -37,45 +39,23 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       return;
     }
     
-    // Mostrar preview local
+    // Preview local (não será persistido)
     const objectUrl = URL.createObjectURL(file);
     setPreview(objectUrl);
     
     setIsUploading(true);
     
     try {
-      // Tentar fazer upload para o Supabase Storage se disponível
-      let imageUrl = '';
-      try {
-        // Criar um nome de arquivo único
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-        const filePath = `product-images/${fileName}`;
-        
-        // Upload para o Supabase Storage
-        const { data, error } = await supabase
-          .storage
-          .from('product-images')
-          .upload(filePath, file);
-          
-        if (error) {
-          throw new Error(error.message);
-        }
-        
-        // Obter URL pública da imagem
-        const { data: publicUrl } = supabase
-          .storage
-          .from('product-images')
-          .getPublicUrl(filePath);
-          
-        imageUrl = publicUrl?.publicUrl || '';
-      } catch (err) {
-        console.error('Erro no upload para o Supabase:', err);
-        // Fallback para URL local temporária (em produção, isso não funcionaria persistentemente)
-        imageUrl = objectUrl;
-      }
-      
-      onImageUpload(imageUrl);
+      const { url } = await uploadMedia(file, {
+        folder: 'products',
+        teamId: currentTeam?.id ?? null,
+        bucket: 'produtos',
+        maxWidth: 1280,
+        maxHeight: 1280,
+        maxBytes: 3 * 1024 * 1024,
+        quality: 0.85,
+      });
+      onImageUpload(url);
       
       toast({
         title: "Upload concluído",
@@ -85,7 +65,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       console.error('Erro no upload:', error);
       toast({
         title: "Erro no upload",
-        description: "Não foi possível carregar a imagem",
+        description: "Não foi possível carregar a imagem. Verifique o bucket 'produtos' e permissões públicas.",
         variant: "destructive"
       });
     } finally {

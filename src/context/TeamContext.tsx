@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useMultiTenant } from '@/context/MultiTenantContext';
+import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
 
 interface TeamContextType {
   teamId: string | null;
@@ -18,7 +19,10 @@ interface TeamProviderProps {
 export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
   const [teamId, setTeamIdState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { subdomain, isLoading: tenantLoading, isAdminMode, currentTeam } = useMultiTenant();
+  const { subdomain, isLoading: tenantLoading, isAdminMode, currentTeam, resolvedTeamId } = useMultiTenant();
+  const { ensureRls: ensureRlsFromHook } = useSupabaseWithMultiTenant();
+  const ensureRlsRef = useRef(ensureRlsFromHook);
+  useEffect(() => { ensureRlsRef.current = ensureRlsFromHook; }, [ensureRlsFromHook]);
 
   useEffect(() => {
     const initializeTeamId = async () => {
@@ -50,29 +54,38 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
           return;
         }
 
-        // 4. Se houver subdomínio, buscar o team correspondente
+        // 4. Se houver subdomínio, tentar resolver via contexto multi-tenant (visitante ou usuário)
         if (subdomain) {
+          try {
+            await ensureRlsRef.current();
+          } catch (error) {
+            console.warn('ensureRls (TeamProvider) falhou, tentando resolver direto:', error);
+          }
+
           const { data: team, error } = await supabase
             .from('teams')
             .select('id')
             .eq('slug', subdomain)
-            .single();
+            .maybeSingle();
 
           if (team && !error) {
             setTeamIdState(team.id);
             localStorage.setItem('current_team_id', team.id);
             console.log(`Team ID definido via subdomínio ${subdomain}: ${team.id}`);
             return;
+          } else if (error) {
+            console.warn(`Falha ao buscar team para subdomínio ${subdomain}:`, error);
           } else {
             console.warn(`Nenhum team encontrado para o subdomínio: ${subdomain}`);
           }
         }
 
         // 5. Verificar localStorage como fallback
-        const savedTeamId = localStorage.getItem('current_team_id');
-        if (savedTeamId && savedTeamId !== 'default-team') {
-          setTeamIdState(savedTeamId);
-          console.log(`Team ID recuperado do localStorage: ${savedTeamId}`);
+        const candidateId = resolvedTeamId || localStorage.getItem('current_team_id');
+        if (candidateId && candidateId !== 'default-team') {
+          setTeamIdState(candidateId);
+          localStorage.setItem('current_team_id', candidateId);
+          console.log(`Team ID recuperado do contexto/localStorage: ${candidateId}`);
           return;
         }
 

@@ -6,6 +6,7 @@ import { useCart } from '@/context/CartContext';
 import { toast } from '@/hooks/use-toast';
 import { Product } from '@/types/supabase';
 import { useNavigate } from 'react-router-dom';
+import { getMediaUrl } from '@/lib/media';
 
 interface MenuItemProps {
   item: Product;
@@ -39,7 +40,7 @@ const MenuItem = ({ item }: MenuItemProps) => {
           <div className="flex items-start gap-3 p-3">
             <div className="relative h-[86px] w-[92px] flex-shrink-0 overflow-hidden rounded-xl border border-gray-100">
               <img
-                src={item.image_url || '/placeholder.svg'}
+                src={getMediaUrl(item.image_url || '/placeholder.svg')}
                 alt={item.name}
                 className="h-full w-full object-cover"
               />
@@ -88,7 +89,7 @@ const MenuItem = ({ item }: MenuItemProps) => {
         <div className="hidden md:block">
           <div className="aspect-video relative">
             <img
-              src={item.image_url || '/placeholder.svg'}
+              src={getMediaUrl(item.image_url || '/placeholder.svg')}
               alt={item.name}
               className="h-full w-full object-cover"
             />

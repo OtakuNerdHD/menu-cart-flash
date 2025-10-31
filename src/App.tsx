@@ -17,10 +17,13 @@ import Header from "@/components/Header";
 import Index from "./pages/Index";
 import OrderManagement from "./pages/OrderManagement";
 import OrderTracking from "./pages/OrderTracking";
+import OrdersTrackingList from "./pages/OrdersTrackingList";
+import OrderTrackingDetails from "./pages/OrderTrackingDetails";
 import KitchenManagement from "./pages/KitchenManagement";
 import ProductManagement from "./pages/ProductManagement";
 import ProductDetail from "./pages/ProductDetail";
 import Combos from "./pages/Combos";
+import ComboDetail from "./pages/ComboDetail";
 import UserManagement from "./pages/UserManagement";
 import ApiManagement from "./pages/ApiManagement";
 import Login from "./pages/Login";
@@ -29,6 +32,8 @@ import NotFound from "./pages/NotFound";
 import Cart from "./components/Cart";
 import DashboardSAAS from "./pages/DashboardSAAS";
 import MobileBottomNav from "@/components/navigation/MobileBottomNav";
+import ProductFormScreen from "./screens/ProductFormScreen";
+import ComboFormScreen from "./screens/ComboFormScreen";
 
 const queryClient = new QueryClient();
 
@@ -76,11 +81,18 @@ const AppRouter = () => {
           <>
             <Route path="/" element={<Index />} />
             <Route path="/order-management" element={<OrderManagement />} />
+            <Route path="/orders-tracking" element={<OrdersTrackingList />} />
+            <Route path="/orders-tracking/:orderId" element={<OrderTrackingDetails />} />
             <Route path="/kitchen-management" element={<KitchenManagement />} />
             <Route path="/order-tracking/:orderId?" element={<OrderTracking />} />
             <Route path="/combos" element={<Combos />} />
+            <Route path="/combos/:slug" element={<ComboDetail />} />
             <Route path="/products/:id" element={<ProductDetail />} />
             <Route path="/product-management" element={<ProductManagement />} />
+            <Route path="/products/manage/new" element={<ProductFormScreen />} />
+            <Route path="/products/manage/edit" element={<ProductFormScreen />} />
+            <Route path="/combos/manage/new" element={<ComboFormScreen />} />
+            <Route path="/combos/manage/edit" element={<ComboFormScreen />} />
             <Route path="/user-management" element={<UserManagement />} />
             <Route path="/api-management" element={<ApiManagement />} />
             <Route path="/dashboard-saas" element={<DashboardSAAS />} />
@@ -93,11 +105,18 @@ const AppRouter = () => {
           <>
             <Route path="/" element={<Index />} />
             <Route path="/order-management" element={<OrderManagement />} />
+            <Route path="/orders-tracking" element={<OrdersTrackingList />} />
+            <Route path="/orders-tracking/:orderId" element={<OrderTrackingDetails />} />
             <Route path="/kitchen-management" element={<KitchenManagement />} />
             <Route path="/order-tracking/:orderId?" element={<OrderTracking />} />
             <Route path="/combos" element={<Combos />} />
+            <Route path="/combos/:slug" element={<ComboDetail />} />
             <Route path="/products/:id" element={<ProductDetail />} />
             <Route path="/product-management" element={<ProductManagement />} />
+            <Route path="/products/manage/new" element={<ProductFormScreen />} />
+            <Route path="/products/manage/edit" element={<ProductFormScreen />} />
+            <Route path="/combos/manage/new" element={<ComboFormScreen />} />
+            <Route path="/combos/manage/edit" element={<ComboFormScreen />} />
             <Route path="/user-management" element={<UserManagement />} />
             <Route path="/api-management" element={<ApiManagement />} />
             <Route path="/login" element={<Login />} />

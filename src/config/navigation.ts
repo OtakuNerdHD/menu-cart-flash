@@ -41,7 +41,7 @@ const baseNavItems: AppNavItem[] = [
   {
     key: "order-tracking",
     label: "Acompanhar",
-    to: "/order-tracking",
+    to: "/orders-tracking",
     icon: Route,
     requiresAuth: true,
     showInBottomNav: true,

@@ -6,6 +6,7 @@ import { PlusCircle, MinusCircle, MessageSquarePlus } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { toast } from '@/hooks/use-toast';
 import { Product } from '@/types/supabase';
+import { getMediaUrl } from '@/lib/media';
 import { 
   Carousel, 
   CarouselContent, 
@@ -23,9 +24,9 @@ interface ProductDetailsDialogProps {
 // Lista real de imagens para o carrossel
 const getProductImages = (product: Product) => {
   if (Array.isArray(product.images) && product.images.length > 0) {
-    return product.images;
+    return product.images.map((u) => getMediaUrl(u));
   }
-  return [product.image_url || '/placeholder.svg'];
+  return [getMediaUrl(product.image_url || '/placeholder.svg')];
 };
 
 const ProductDetailsDialog: React.FC<ProductDetailsDialogProps> = ({ product, open, onOpenChange }) => {

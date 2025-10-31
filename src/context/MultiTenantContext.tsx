@@ -19,6 +19,7 @@ interface MultiTenantContextType {
   isAdminMode: boolean;
   isClientMode: boolean;
   subdomain: string | null;
+  resolvedTeamId: string | null;
   switchToClient: (clientSlug: string) => void;
   switchToAdmin: () => void;
   refreshTeam: () => Promise<void>;
@@ -53,7 +54,7 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
     return subdomain;
   }, [effectiveAdminMode, subdomain]);
 
-  const applyRlsConfig = useCallback(async (roleValue: 'general_admin' | 'admin' | 'user', teamId: string | null) => {
+  const applyRlsConfig = useCallback(async (roleValue: 'general_admin' | 'admin' | 'user' | 'visitor', teamId: string | null) => {
     try {
       const { error: roleError } = await supabase.rpc('set_app_config', {
         config_name: 'app.current_user_role',
@@ -109,6 +110,31 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
     }
   };
 
+  const setRestaurantContext = useCallback(async (teamId: string | null) => {
+    try {
+      let restaurantValue = '0';
+      if (teamId) {
+        const { data: restaurants, error } = await supabase
+          .from('restaurants')
+          .select('id')
+          .eq('team_id', teamId)
+          .limit(1);
+        if (!error && restaurants && restaurants.length > 0) {
+          restaurantValue = String(restaurants[0].id);
+        }
+      }
+      const { error: restaurantErr } = await supabase.rpc('set_app_config', {
+        config_name: 'jwt.claims.restaurant_id',
+        config_value: restaurantValue,
+      } as never);
+      if (restaurantErr) {
+        console.warn('Falha ao configurar restaurant_id via set_app_config:', restaurantErr);
+      }
+    } catch (error) {
+      console.warn('Erro ao configurar restaurant_id:', error);
+    }
+  }, []);
+
   const refreshTeam = async () => {
     setIsLoading(true);
 
@@ -123,23 +149,28 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
 
     // Modo cliente: primeiro garante associação e contexto pelo RPC
     let ensuredTeamId: string | null = null;
-    if (user) {
-      try {
-        const { data: ensured, error: ensureErr } = await supabase.rpc('ensure_membership' as never, { team_slug: effectiveSubdomain } as never);
-        if (!ensureErr && ensured) {
-          ensuredTeamId = String(ensured);
-          ensuredRef.current = ensuredTeamId;
-        } else if (ensureErr) {
-          console.warn('ensure_membership falhou:', ensureErr);
-        }
-      } catch (e) {
-        console.warn('Erro ensure_membership:', e);
+    if (!user) {
+      await applyRlsConfig('visitor', NO_TEAM_SENTINEL);
+      await setRestaurantContext(null);
+    }
+    try {
+      const { data: ensured, error: ensureErr } = await supabase.rpc('ensure_membership' as never, { team_slug: effectiveSubdomain } as never);
+      if (!ensureErr && ensured) {
+        ensuredTeamId = String(ensured);
+        ensuredRef.current = ensuredTeamId;
+      } else if (ensureErr) {
+        console.warn('ensure_membership falhou:', ensureErr);
       }
+    } catch (e) {
+      console.warn('Erro ensure_membership:', e);
     }
 
     if (ensuredTeamId) {
-      const roleValue: 'user' | 'admin' = isSuperAdmin ? 'admin' : 'user';
+      const roleValue: 'user' | 'admin' | 'general_admin' | 'visitor' = isSuperAdmin
+        ? 'admin'
+        : (user ? 'user' : 'visitor');
       await applyRlsConfig(roleValue, ensuredTeamId);
+      await setRestaurantContext(ensuredTeamId);
 
       const team = await loadTeamById(ensuredTeamId);
       if (team) {
@@ -150,8 +181,9 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
       }
     } else {
       // Não conseguiu garantir membership; cair para admin sentinel (sem acessar dados)
-      await applyRlsConfig(isSuperAdmin ? 'general_admin' : 'admin', NO_TEAM_SENTINEL);
-      setCurrentTeam(null);
+      const fallbackRole: 'general_admin' | 'admin' | 'visitor' = isSuperAdmin ? 'general_admin' : (user ? 'admin' : 'visitor');
+      await applyRlsConfig(fallbackRole, NO_TEAM_SENTINEL);
+      await setRestaurantContext(null);
     }
     
     setIsLoading(false);
@@ -189,6 +221,7 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
     isAdminMode: effectiveAdminMode,
     isClientMode: !effectiveAdminMode && !!effectiveSubdomain,
     subdomain: effectiveSubdomain,
+    resolvedTeamId: currentTeam?.id ?? ensuredRef.current,
     switchToClient,
     switchToAdmin,
     refreshTeam

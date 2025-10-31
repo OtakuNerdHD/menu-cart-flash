@@ -412,6 +412,111 @@ export type Database = {
           },
         ]
       }
+      combos: {
+        Row: {
+          id: number
+          team_id: string
+          title: string
+          description: string | null
+          price_label: string | null
+          serves: string | null
+          category: string | null
+          images: string[] | null
+          perks: string[] | null
+          combo_type: string
+          savings: string | null
+          highlight_homepage: boolean
+          highlight_combos: boolean
+          highlight_full: boolean
+          status: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          team_id: string
+          title: string
+          description?: string | null
+          price_label?: string | null
+          serves?: string | null
+          category?: string | null
+          images?: string[] | null
+          perks?: string[] | null
+          combo_type?: string
+          savings?: string | null
+          highlight_homepage?: boolean
+          highlight_combos?: boolean
+          highlight_full?: boolean
+          status?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          team_id?: string
+          title?: string
+          description?: string | null
+          price_label?: string | null
+          serves?: string | null
+          category?: string | null
+          images?: string[] | null
+          perks?: string[] | null
+          combo_type?: string
+          savings?: string | null
+          highlight_homepage?: boolean
+          highlight_combos?: boolean
+          highlight_full?: boolean
+          status?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      combo_products: {
+        Row: {
+          combo_id: number
+          product_id: number
+          position: number
+          team_id: string
+        }
+        Insert: {
+          combo_id: number
+          product_id: number
+          position?: number
+          team_id: string
+        }
+        Update: {
+          combo_id?: number
+          product_id?: number
+          position?: number
+          team_id?: string
+        }
+        Relationships: []
+      }
+      combo_items_custom: {
+        Row: {
+          id: number
+          combo_id: number
+          description: string
+          position: number
+          team_id: string
+        }
+        Insert: {
+          id?: number
+          combo_id: number
+          description: string
+          position?: number
+          team_id: string
+        }
+        Update: {
+          id?: number
+          combo_id?: number
+          description?: string
+          position?: number
+          team_id?: string
+        }
+        Relationships: []
+      }
       produtos: {
         Row: {
           categoria: string

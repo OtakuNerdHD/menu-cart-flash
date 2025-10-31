@@ -28,7 +28,7 @@ const KitchenManagement = () => {
   const { currentUser } = useUserSwitcher();
   const { isSuperAdmin, currentUser: authUser } = useAuth();
   const { currentTeam } = useMultiTenant();
-  const [membershipRole, setMembershipRole] = useState<string | null>(null);
+  const [membershipRole, setMembershipRole] = useState<string>('client');
   const { getOrders } = useSupabaseWithMultiTenant();
   const [orders, setOrders] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('preparing');
@@ -43,58 +43,35 @@ const KitchenManagement = () => {
   useEffect(() => {
     const fetchMembershipRole = async () => {
       try {
-        if (!authUser || !currentTeam) { setMembershipRole(null); return; }
-        const { data, error } = await supabase.rpc('get_membership_role_by_team' as never, { p_team_id: currentTeam.id } as never);
-        if (error) {
-          console.warn('Falha ao obter papel via RPC (cozinha):', error);
-          setMembershipRole('client');
+        if (isSuperAdmin) { setMembershipRole('admin'); return; }
+        if (currentTeam?.id) {
+          const { data, error } = await supabase.rpc('get_membership_role_by_team' as never, { p_team_id: currentTeam.id } as never);
+          if (error) { setMembershipRole('client'); return; }
+          setMembershipRole((data as string) || 'client');
           return;
         }
-        setMembershipRole((data as string) || 'client');
+        const host = window.location.hostname;
+        const parts = host.split('.');
+        const isDelli = parts.length >= 3 && parts[parts.length-3] === 'delliapp' && parts[parts.length-2] === 'com' && parts[parts.length-1] === 'br';
+        const slug = (isDelli && parts[0] !== 'app') ? parts[0] : null;
+        if (slug) {
+          const { data, error } = await supabase.rpc('get_membership_role_by_slug' as never, { p_team_slug: slug } as never);
+          if (error) { setMembershipRole('client'); return; }
+          setMembershipRole((data as string) || 'client');
+        } else {
+          setMembershipRole('client');
+        }
       } catch (e) {
         console.error('Erro ao buscar papel no tenant (RPC cozinha):', e);
         setMembershipRole('client');
       }
     };
     fetchMembershipRole();
-  }, [authUser?.id, currentTeam?.id]);
+  }, [isSuperAdmin, currentTeam?.id]);
 
   const isKitchenStaff = isSuperAdmin || ['admin', 'owner', 'restaurant_owner', 'chef', 'manager'].includes((membershipRole || '').toLowerCase());
 
-  // Evitar bloquear antes de resolver o papel no tenant
-  if (!isSuperAdmin && currentTeam && membershipRole === null) {
-    return (
-      <div className="min-h-screen bg-gray-50 pt-16">
-        <div className="container mx-auto px-4 py-8">Carregando permissões...</div>
-      </div>
-    );
-  }
-
-  // Se não for funcionário da cozinha, mostrar mensagem de acesso negado
-  if (!isKitchenStaff) {
-    return (
-      <div className="min-h-screen bg-gray-50 pt-16">
-        <div className="container mx-auto px-4 py-8">
-          <Card className="w-full max-w-md mx-auto">
-            <CardHeader>
-              <CardTitle>Acesso restrito</CardTitle>
-              <CardDescription>
-                Você não tem permissão para acessar esta página
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-500">
-                Esta página é destinada apenas para funcionários da cozinha.
-              </p>
-              <Button className="mt-4" onClick={() => navigate('/')}>
-                Voltar para o início
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+  // Sem bloqueio por carregamento: papel padrão 'client' e promove quando RPC resolver
   
   const handleStartPreparation = async (orderId: number) => {
     try {
@@ -310,17 +287,17 @@ const KitchenManagement = () => {
       
       setOrders(kitchenRelevantOrders.map(order => {
         // Os itens já vêm incluídos pela consulta com join
-        const orderItems = order.order_items?.map((item: any) => ({
+        const orderItems = (order.order_items?.map((item: any) => ({
           name: item.name || 'Produto Desconhecido',
           quantity: item.quantity,
           price: item.price,
           notes: item.notes || undefined,
           image: item.image_url
-        })) || [];
+        })) || []) as any[];
           
         return {
           ...order,
-          items: orderItems
+          items: Array.isArray(order.items) ? order.items : orderItems
         };
       }));
     } catch (e) {
@@ -329,7 +306,11 @@ const KitchenManagement = () => {
       
       // Fallback para localStorage se houver erro
       const kitchenOrders = JSON.parse(localStorage.getItem('kitchenOrders') || '[]');
-      setOrders(kitchenOrders);
+      const normalized = Array.isArray(kitchenOrders) ? kitchenOrders.map((o: any) => ({
+        ...o,
+        items: Array.isArray(o?.items) ? o.items : []
+      })) : [];
+      setOrders(normalized);
     }
   };
   
@@ -356,6 +337,32 @@ const KitchenManagement = () => {
     
     fetchOrders();
   }, [currentUser?.id]);
+  
+  // Se não for funcionário da cozinha, mostrar mensagem de acesso negado
+  if (!isKitchenStaff) {
+    return (
+      <div className="min-h-screen bg-gray-50 pt-16">
+        <div className="container mx-auto px-4 py-8">
+          <Card className="w-full max-w-md mx-auto">
+            <CardHeader>
+              <CardTitle>Acesso restrito</CardTitle>
+              <CardDescription>
+                Você não tem permissão para acessar esta página
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-500">
+                Esta página é destinada apenas para funcionários da cozinha.
+              </p>
+              <Button className="mt-4" onClick={() => navigate('/')}> 
+                Voltar para o início
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
   
   // Função para salvar um estado de filtro no localStorage
   const saveFilterState = (tabName: string, filterValue: 'all' | 'store' | 'delivery') => {
@@ -427,7 +434,7 @@ const KitchenManagement = () => {
         </div>
         <CardDescription className="flex items-center gap-1">
           <Clock className="w-4 h-4" />
-          {new Date(order.createdAt).toLocaleTimeString('pt-BR', { 
+          {new Date(order.created_at ?? order.createdAt ?? Date.now()).toLocaleTimeString('pt-BR', { 
             hour: '2-digit', 
             minute: '2-digit' 
           })}
@@ -439,7 +446,7 @@ const KitchenManagement = () => {
           <div>
             <h4 className="text-sm font-medium text-gray-500 mb-2">Itens</h4>
             <ul className="space-y-2">
-              {order.items.map((item, index) => (
+              {(order.items || []).map((item, index) => (
                 <li key={index} className="flex flex-col">
                   <div className="flex justify-between text-sm">
                     <span>{item.quantity}x {item.name}</span>
@@ -457,7 +464,7 @@ const KitchenManagement = () => {
           
           <div className="pt-2 space-y-2">
             <div className="flex justify-between items-center">
-              <span className="font-semibold">Total: R$ {order.total.toFixed(2)}</span>
+              <span className="font-semibold">Total: R$ {Number(order.total ?? order.order_total ?? 0).toFixed(2)}</span>
               <Button 
                 variant="outline" 
                 size="sm" 

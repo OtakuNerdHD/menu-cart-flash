@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { Upload, X, Image as ImageIcon, Plus } from 'lucide-react';
-import { supabase } from "@/integrations/supabase/client";
+import { uploadMedia } from '@/lib/media';
+import { useMultiTenant } from '@/context/MultiTenantContext';
 
 interface MultipleImageUploadProps {
   onImagesUpload: (urls: string[]) => void;
@@ -11,19 +12,22 @@ interface MultipleImageUploadProps {
   maxSizeInMB?: number;
   maxImages?: number;
   acceptedFileTypes?: string;
+  folder?: string;
 }
 
 const MultipleImageUpload: React.FC<MultipleImageUploadProps> = ({
   onImagesUpload,
   values = [],
   label = "Selecionar imagens",
-  maxSizeInMB = 5,
+  maxSizeInMB = 3,
   maxImages = 5,
-  acceptedFileTypes = "image/*"
+  acceptedFileTypes = "image/*",
+  folder = 'gallery'
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [previews, setPreviews] = useState<string[]>(values);
   const [tempPreviews, setTempPreviews] = useState<string[]>([]);
+  const { currentTeam } = useMultiTenant();
   
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -41,19 +45,28 @@ const MultipleImageUpload: React.FC<MultipleImageUploadProps> = ({
     
     setIsUploading(true);
     const uploadPromises = Array.from(files).map(async (file) => {
+      // Validação rápida de tamanho original (antes da compressão)
+      const maxBytes = (maxSizeInMB ?? 3) * 1024 * 1024;
+      if (file.size > 20 * 1024 * 1024) { // proteção contra arquivos gigantes
+        toast({ title: 'Arquivo muito grande', description: `${file.name} é muito grande`, variant: 'destructive' });
+        return null;
+      }
+
       // Preview local temporário
       const objectUrl = URL.createObjectURL(file);
       setTempPreviews((prev) => [...prev, objectUrl]);
-      
+
       try {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-        const filePath = `${fileName}`;
-        const { error } = await supabase.storage.from('produtos').upload(filePath, file);
-        if (error) throw error;
-        const { data: publicUrl } = supabase.storage.from('produtos').getPublicUrl(filePath);
-        if (!publicUrl?.publicUrl) throw new Error('URL pública não gerada');
-        return publicUrl.publicUrl;
+        const { url } = await uploadMedia(file, {
+          folder,
+          teamId: currentTeam?.id ?? null,
+          bucket: 'produtos',
+          maxWidth: 1280,
+          maxHeight: 1280,
+          maxBytes,
+          quality: 0.85,
+        });
+        return url;
       } catch (err) {
         toast({ title: 'Erro no upload', description: `Não foi possível carregar a imagem ${file.name}`, variant: 'destructive' });
         return null;

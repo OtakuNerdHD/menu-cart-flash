@@ -20,14 +20,14 @@ const ApiManagement = () => {
   const navigate = useNavigate();
   const { currentTeam } = useMultiTenant();
   const { currentUser: authUser, isSuperAdmin } = useAuth();
-  const [membershipRole, setMembershipRole] = useState<string | null>(null);
-  const isTenantAdmin = ['admin','restaurant_owner','owner','manager'].includes((membershipRole || '').toLowerCase());
+  const [membershipRole, setMembershipRole] = useState<string>('client');
+  const isTenantAdmin = ['admin','restaurant_owner','owner','manager'].includes((membershipRole || 'client').toLowerCase());
   const isAdmin = isSuperAdmin || isTenantAdmin;
 
   useEffect(() => {
     const fetchMembershipRole = async () => {
       try {
-        if (!authUser) { setMembershipRole(null); return; }
+        if (isSuperAdmin) { setMembershipRole('admin'); return; }
         if (currentTeam?.id) {
           const { data, error } = await supabase.rpc('get_membership_role_by_team' as never, { p_team_id: currentTeam.id } as never);
           if (error) { setMembershipRole('client'); return; }
@@ -51,7 +51,7 @@ const ApiManagement = () => {
       }
     };
     fetchMembershipRole();
-  }, [authUser?.id, currentTeam?.id]);
+  }, [isSuperAdmin, currentTeam?.id]);
   
   const [apiUrl, setApiUrl] = useState('');
   const [apiToken, setApiToken] = useState('');
@@ -124,14 +124,7 @@ const ApiManagement = () => {
     }, 1000);
   };
 
-  // Evitar bloquear antes de resolver o papel no tenant
-  if (!isSuperAdmin && currentTeam && membershipRole === null) {
-    return (
-      <div className="min-h-screen bg-gray-50 pt-16">
-        <div className="container mx-auto px-4 py-8">Carregando permissões...</div>
-      </div>
-    );
-  }
+  // Sem bloqueio por carregamento: papel padrão 'client' e promove quando RPC resolver
 
   if (!isAdmin) {
     return (

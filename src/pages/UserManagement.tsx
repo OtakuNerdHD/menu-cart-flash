@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ImageUpload from '@/components/ImageUpload';
 import { useAuth } from '@/context/AuthContext';
 import { useMultiTenant } from '@/context/MultiTenantContext';
+import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
 
 // Interface para perfil do Supabase
 interface SupabaseProfile {
@@ -42,15 +43,16 @@ interface AppUser {
 
 const UserManagement = () => {
   const { currentUser } = useUserSwitcher();
-  const { currentUser: authUser } = useAuth();
+  const { currentUser: authUser, isSuperAdmin } = useAuth();
   const { isAdminMode, currentTeam } = useMultiTenant();
+  const { ensureRls } = useSupabaseWithMultiTenant();
   const [users, setUsers] = useState<AppUser[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const navigate = useNavigate();
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [currentUser2Edit, setCurrentUser2Edit] = useState<any>(null);
-  const [membershipRole, setMembershipRole] = useState<string | null>(null);
+  const [membershipRole, setMembershipRole] = useState<string>('member');
   const [newUser, setNewUser] = useState<Omit<AppUser, 'id'> & { password: string }>({
     full_name: '',
     email: '',
@@ -62,24 +64,17 @@ const UserManagement = () => {
   
   // Verificar se é admin do tenant baseado em team_members
   const isTenantAdmin = ['admin','restaurant_owner','owner','manager'].includes((membershipRole || '').toLowerCase());
-  const isAdminOrOwner = isAdminMode || isTenantAdmin;
-
-  if (!isAdminMode && currentTeam && membershipRole === null) {
-    return (
-      <div className="min-h-screen bg-gray-50 pt-16">
-        <div className="container mx-auto px-4 py-8">Carregando permissões...</div>
-      </div>
-    );
-  }
+  const isAdminOrOwner = isAdminMode || isTenantAdmin || isSuperAdmin;
 
   useEffect(() => {
     const fetchMembershipRole = async () => {
       try {
-        if (!authUser || isAdminMode) { setMembershipRole(null); return; }
+        if (isAdminMode || isSuperAdmin) { setMembershipRole('admin'); return; }
         if (currentTeam?.id) {
           const { data, error } = await supabase.rpc('get_membership_role_by_team' as never, { p_team_id: currentTeam.id } as never);
-          if (error) { setMembershipRole('client'); return; }
-          setMembershipRole((data as string) || 'client');
+          if (error) { setMembershipRole('member'); return; }
+          const role = (data as string) || 'member';
+          setMembershipRole(role === 'client' ? 'member' : role);
           return;
         }
         // Fallback: resolver por slug quando o currentTeam ainda não carregou
@@ -89,25 +84,29 @@ const UserManagement = () => {
         const slug = (isDelli && parts[0] !== 'app') ? parts[0] : null;
         if (slug) {
           const { data, error } = await supabase.rpc('get_membership_role_by_slug' as never, { p_team_slug: slug } as never);
-          if (error) { setMembershipRole('client'); return; }
-          setMembershipRole((data as string) || 'client');
+          if (error) { setMembershipRole('member'); return; }
+          const role = (data as string) || 'member';
+          setMembershipRole(role === 'client' ? 'member' : role);
         } else {
-          setMembershipRole('client');
+          setMembershipRole('member');
         }
       } catch (e) {
         console.error('Erro ao buscar papel no tenant (RPC):', e);
-        setMembershipRole('client');
+        setMembershipRole('member');
       }
     };
     fetchMembershipRole();
-  }, [authUser?.id, currentTeam?.id, isAdminMode]);
+  }, [isAdminMode, isSuperAdmin, currentTeam?.id]);
 
   useEffect(() => {
     fetchUsersFromSupabase();
   }, [currentTeam?.id, isAdminMode]);
   
+  // Sem bloqueio de carregamento: papel padrão 'client' e promove quando RPC resolver
+
   const fetchUsersFromSupabase = async () => {
     try {
+      await ensureRls();
       if (isAdminMode) {
         const { data, error } = await supabase
           .from('profiles')
@@ -127,13 +126,22 @@ const UserManagement = () => {
         }));
         setUsers(supabaseUsers);
       } else {
-        // Modo cliente: confiar na RLS de profiles para restringir ao tenant atual
-        const { data, error } = await supabase
+        // Modo cliente: buscar membros do tenant e depois perfis dos respectivos user_ids
+        if (!currentTeam?.id) { setUsers([]); return; }
+        const { data: members, error: memErr } = await (supabase as any)
+          .from('team_members')
+          .select('user_id, role')
+          .eq('team_id', currentTeam.id);
+        if (memErr) { console.error('Erro ao buscar membros do tenant:', memErr); setUsers([]); return; }
+        const ids = (members || []).map((m: any) => m.user_id).filter(Boolean);
+        if (ids.length === 0) { setUsers([]); return; }
+        const { data: profilesData, error: profErr } = await (supabase as any)
           .from('profiles')
           .select('*')
+          .in('id', ids)
           .order('created_at', { ascending: false });
-        if (error) { console.error('Erro ao buscar perfis do tenant:', error); setUsers([]); return; }
-        const supabaseUsers: AppUser[] = (data || []).map((user: any) => ({
+        if (profErr) { console.error('Erro ao buscar perfis do tenant:', profErr); setUsers([]); return; }
+        const supabaseUsers: AppUser[] = (profilesData || []).map((user: any) => ({
           id: user.id,
           full_name: user.full_name || user.email || 'Nome não disponível',
           email: user.email || 'Email não disponível',
@@ -299,11 +307,11 @@ const UserManagement = () => {
           }
         }
 
-        // Vincular o usuário ao tenant atual como 'client' por padrão
+        // Vincular o usuário ao tenant atual como 'member' por padrão
         if (currentTeam?.id) {
           const { error: memErr } = await (supabase as any)
             .from('team_members')
-            .upsert({ team_id: currentTeam.id, user_id: authData.user.id, role: 'client' }, { onConflict: 'team_id,user_id' })
+            .upsert({ team_id: currentTeam.id, user_id: authData.user.id, role: 'member' }, { onConflict: 'team_id,user_id' })
             .select();
           if (memErr) {
             console.warn('Falha ao vincular usuário ao tenant atual:', memErr);

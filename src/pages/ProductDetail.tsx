@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Minus, Plus, MessageSquarePlus, Loader2 } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
+import { getMediaUrl } from "@/lib/media";
 import { Product } from "@/types/supabase";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
+import { useSupabaseWithMultiTenant } from "@/hooks/useSupabaseWithMultiTenant";
 import {
   Carousel,
   CarouselContent,
@@ -22,6 +23,11 @@ const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const { getProductById, ensureRls } = useSupabaseWithMultiTenant();
+  const getProductByIdRef = useRef(getProductById);
+  const ensureRlsRef = useRef(ensureRls);
+  useEffect(() => { getProductByIdRef.current = getProductById; }, [getProductById]);
+  useEffect(() => { ensureRlsRef.current = ensureRls; }, [ensureRls]);
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,17 +54,12 @@ const ProductDetail = () => {
     const fetchProduct = async () => {
       setLoading(true);
       try {
-        const { data, error: fetchError } = await supabase
-          .from("products")
-          .select("*")
-          .eq("id", productId)
-          .maybeSingle<Product>();
-
-        if (fetchError) throw fetchError;
+        await ensureRlsRef.current();
+        const data = await getProductByIdRef.current(productId);
 
         if (!cancelled) {
           if (data) {
-            setProduct(data);
+            setProduct(data as Product);
             setError(null);
           } else {
             setError("Produto não encontrado");
@@ -86,10 +87,10 @@ const ProductDetail = () => {
   const images = useMemo(() => {
     if (!product) return [fallbackImage];
     if (Array.isArray(product.images) && product.images.length > 0) {
-      return product.images;
+      return product.images.map((u) => getMediaUrl(u));
     }
     if (product.image_url) {
-      return [product.image_url];
+      return [getMediaUrl(product.image_url)];
     }
     return [fallbackImage];
   }, [product]);

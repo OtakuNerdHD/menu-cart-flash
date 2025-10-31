@@ -5,29 +5,29 @@ import MenuGrid from '@/components/MenuGrid';
 import CategoryFilter from '@/components/CategoryFilter';
 import { Product } from '@/types/supabase';
 import { menuItems as fallbackMenuItems } from '@/data/menuItems';
-import { categories } from '@/data/menuItems';
-import { comboHighlights } from '@/data/combos';
 import { useTeam } from '@/context/TeamContext';
-import { useSupabaseWithTeam } from '@/hooks/useSupabaseWithTeam';
-import { supabase } from '@/integrations/supabase/client';
+// import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useMultiTenant } from '@/context/MultiTenantContext';
-
-const comboMocks = comboHighlights;
+import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
+import { getMediaUrl } from '@/lib/media';
 
 const Index = () => {
   const [selectedCategory, setSelectedCategory] = useState('todos');
-  const [products, setProducts] = useState<Product[]>(fallbackMenuItems);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const { teamId, isLoading: teamLoading } = useTeam();
-  const { teamSupabase, isReady } = useSupabaseWithTeam();
   const { loading: authLoading, isSuperAdmin, user } = useAuth();
   const { isLoading: multiTenantLoading, isAdminMode } = useMultiTenant();
+  const { getCombos, getNonEmptyCategories, getProducts: getProductsMT } = useSupabaseWithMultiTenant();
+  const [highlightCombos, setHighlightCombos] = useState<any[]>([]);
+  const [categoryNames, setCategoryNames] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
 
-    const shouldWait = authLoading || teamLoading || multiTenantLoading;
+    // Evite travar em loading: só aguarde autenticação. Multi-tenant pode ser resolvido pelo próprio hook MT.
+    const shouldWait = authLoading;
 
     if (shouldWait) {
       console.log('Index aguardando contextos', { authLoading, teamLoading, multiTenantLoading, user: user?.id });
@@ -43,17 +43,16 @@ const Index = () => {
       try {
         console.log('Carregando produtos...');
         console.log('teamId:', teamId);
-        console.log('isReady:', isReady);
         console.log('authLoading:', authLoading);
         console.log('multiTenantLoading:', multiTenantLoading);
         console.log('isSuperAdmin:', isSuperAdmin);
         console.log('isAdminMode:', isAdminMode);
         console.log('user:', user?.id);
         
-        // Se há team_id configurado, usar o teamSupabase com filtros
-        if (teamId && isReady && teamSupabase) {
-          console.log(`Carregando produtos para team_id: ${teamId}`);
-          const data = await teamSupabase.getProducts({ available: true });
+        // Usar hook multi-tenant que garante RLS e membership
+        if (teamId) {
+          console.log(`Carregando produtos (MT) para team_id: ${teamId}`);
+          const data = await getProductsMT();
 
           if (!cancelled) {
             if (data && data.length > 0) {
@@ -86,91 +85,18 @@ const Index = () => {
               setProducts(productsWithAllFields);
               console.log(`${productsWithAllFields.length} produtos carregados do Supabase para team_id: ${teamId}`);
             } else {
-              console.log(`Nenhum produto encontrado para team_id: ${teamId}, buscando produtos gerais`);
-              const { data: generalData } = await supabase
-                .from('products')
-                .select('*')
-                .eq('available', true);
-
-              if (generalData && generalData.length > 0) {
-                const productsWithAllFields = generalData.map((product: any): Product => ({
-                  id: product.id,
-                  name: product.name || '',
-                  description: product.description || '',
-                  price: product.price || 0,
-                  category: product.category || '',
-                  available: product.available !== false,
-                  team_id: product.team_id || '',
-                  restaurant_id: product.restaurant_id || 1,
-                  created_at: product.created_at || new Date().toISOString(),
-                  updated_at: product.updated_at || new Date().toISOString(),
-                  featured: product.featured || false,
-                  gallery: product.gallery || [],
-                  ingredients: product.ingredients || '',
-                  note_hint: product.note_hint || '',
-                  rating: product.rating || 0,
-                  review_count: product.review_count || 0,
-                  image_url: product.image_url || '',
-                  images: Array.isArray(product.images) && product.images.length > 0
-                    ? product.images
-                    : (product.image_url ? [product.image_url] : []),
-                  nutritional_info: product.nutritional_info || {}
-                }));
-                
-                setProducts(productsWithAllFields);
-                console.log(`${generalData.length} produtos gerais carregados como fallback`);
-              } else {
-                console.log('Usando dados mockados como último recurso');
-                setProducts(fallbackMenuItems);
-              }
+              console.log(`Nenhum produto encontrado para team_id: ${teamId}.`);
+              setProducts([]);
             }
           }
         } else {
-          console.log('Carregando todos os produtos (sem filtro de team)');
-          const { data } = await supabase
-            .from('products')
-            .select('*')
-            .eq('available', true);
-
-          if (!cancelled) {
-            if (data && data.length > 0) {
-              const productsWithAllFields = data.map((product: any): Product => ({
-                id: product.id,
-                name: product.name || '',
-                description: product.description || '',
-                price: product.price || 0,
-                category: product.category || '',
-                available: product.available !== false,
-                team_id: product.team_id || '',
-                restaurant_id: product.restaurant_id || 1,
-                created_at: product.created_at || new Date().toISOString(),
-                updated_at: product.updated_at || new Date().toISOString(),
-                featured: product.featured || false,
-                gallery: product.gallery || [],
-                ingredients: product.ingredients || '',
-                note_hint: product.note_hint || '',
-                rating: product.rating || 0,
-                review_count: product.review_count || 0,
-                image_url: product.image_url || '',
-                images: Array.isArray(product.images) && product.images.length > 0
-                  ? product.images
-                  : (product.image_url ? [product.image_url] : []),
-                nutritional_info: product.nutritional_info || {}
-              }));
-              
-              setProducts(productsWithAllFields);
-              console.log(`${data.length} produtos carregados do Supabase (modo geral)`);
-            } else {
-              console.log('Nenhum produto encontrado no Supabase, usando dados mockados');
-              setProducts(fallbackMenuItems);
-            }
-          }
+          console.log('Sem team atual. Não exibindo produtos para evitar vazamento entre tenants.');
+          setProducts([]);
         }
       } catch (err) {
         if (!cancelled) {
           console.error('Erro ao buscar produtos:', err);
-          console.log('Usando dados mockados devido ao erro');
-          setProducts(fallbackMenuItems);
+          setProducts([]);
         }
       } finally {
         if (!cancelled) {
@@ -179,12 +105,37 @@ const Index = () => {
       }
     };
 
+    const fetchHighlightedCombos = async () => {
+      try {
+        if (teamId) {
+          const combos = await getCombos({ onlyHighlightedHomepage: true });
+          if (!cancelled) setHighlightCombos(Array.isArray(combos) ? combos : []);
+        } else {
+          if (!cancelled) setHighlightCombos([]);
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar combos em destaque:', e);
+        if (!cancelled) setHighlightCombos([]);
+      }
+    };
+
     fetchProducts();
+    fetchHighlightedCombos();
+
+    const fetchCategories = async () => {
+      try {
+        const cats = await getNonEmptyCategories('products');
+        if (!cancelled) setCategoryNames(Array.isArray(cats) ? cats : []);
+      } catch {
+        if (!cancelled) setCategoryNames([]);
+      }
+    };
+    fetchCategories();
 
     return () => {
       cancelled = true;
     };
-  }, [authLoading, teamLoading, multiTenantLoading, isReady, teamSupabase, teamId, isAdminMode, isSuperAdmin, user?.id]);
+  }, [authLoading, teamLoading, multiTenantLoading, teamId, isAdminMode, isSuperAdmin, user?.id, getNonEmptyCategories, getProductsMT, getCombos]);
 
   const filteredItems = selectedCategory === 'todos'
     ? products
@@ -193,38 +144,41 @@ const Index = () => {
   return (
     <div className="min-h-screen flex flex-col pt-16">
       <main className="flex-grow container mx-auto px-4 py-4 sm:py-7">
-        <section className="mb-5 sm:mb-8">
-          <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-menu-primary">Combos em destaque</span>
-          </div>
-          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 scrollbar-hide">
-            {comboMocks.map((combo, index) => (
-              <div
-                key={index}
-                className="min-w-[160px] max-w-[180px] flex-shrink-0 snap-center overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-transform hover:-translate-y-1"
-              >
-                <div className="h-32 w-full overflow-hidden">
-                  <img
-                    src={combo.image}
-                    alt={combo.title}
-                    className="h-full w-full object-cover"
-                  />
+        {highlightCombos.length > 0 && (
+          <section className="mb-5 sm:mb-8">
+            <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-menu-primary">Combos em destaque</span>
+            </div>
+            <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 scrollbar-hide">
+              {highlightCombos.map((combo: any) => (
+                <div
+                  key={combo.id}
+                  className="min-w-[160px] max-w-[180px] flex-shrink-0 snap-center overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-transform hover:-translate-y-1"
+                >
+                  <div className="h-32 w-full overflow-hidden">
+                    <img
+                      src={getMediaUrl((combo.images && combo.images[0]) || '/placeholder.svg')}
+                      alt={combo.title}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <div className="p-3">
+                    <h3 className="text-sm font-semibold text-gray-900 line-clamp-2">
+                      {combo.title}
+                    </h3>
+                  </div>
                 </div>
-                <div className="p-3">
-                  <h3 className="text-sm font-semibold text-gray-900 line-clamp-2">
-                    {combo.title}
-                  </h3>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="mb-4 sm:mb-7">
           <h2 className="hidden text-2xl font-bold mb-3 text-menu-secondary sm:block">Categorias</h2>
-          <CategoryFilter 
-            selectedCategory={selectedCategory} 
-            onCategoryChange={setSelectedCategory} 
+          <CategoryFilter
+            selectedCategory={selectedCategory}
+            onCategoryChange={setSelectedCategory}
+            categories={categoryNames}
           />
         </section>
         
@@ -241,7 +195,7 @@ const Index = () => {
             )}
           </div>
           
-          {(loading || teamLoading || authLoading || multiTenantLoading) ? (
+          {loading ? (
             <div className="py-10 text-center">
               <p className="text-gray-500">Carregando produtos...</p>
             </div>
