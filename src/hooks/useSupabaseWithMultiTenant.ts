@@ -96,10 +96,18 @@ export const useSupabaseWithMultiTenant = () => {
   }, [isAdminMode, currentTeam, authLoading, authUser, isSuperAdmin]);
 
   const resolveTeamIdBySlug = useCallback(async (): Promise<string | null> => {
-    if (!subdomain) return null;
+    if (!subdomain) {
+      console.log('[resolveTeamIdBySlug] Sem subdomain');
+      return null;
+    }
+    
+    // Retornar do cache se já temos o teamId para este subdomain
     if (teamIdCacheRef.current.slug === subdomain && teamIdCacheRef.current.teamId) {
+      console.log('[resolveTeamIdBySlug] Retornando do cache:', teamIdCacheRef.current.teamId);
       return teamIdCacheRef.current.teamId;
     }
+    
+    console.log('[resolveTeamIdBySlug] Buscando team para subdomain:', subdomain);
     try {
       const { data, error } = await supabase
         .from('teams')
@@ -111,6 +119,9 @@ export const useSupabaseWithMultiTenant = () => {
         return null;
       }
       const teamId = data?.id ? String(data.id) : null;
+      console.log('[resolveTeamIdBySlug] Team encontrado:', teamId);
+      
+      // Armazenar em cache
       teamIdCacheRef.current = { slug: subdomain, teamId };
       return teamId;
     } catch (error) {
@@ -447,11 +458,19 @@ export const useSupabaseWithMultiTenant = () => {
 
   // Garante que visitantes (não autenticados) tenham RLS configurado
   const ensureRlsVisitorInternal = async (): Promise<string | null> => {
+    // Verificar se já temos teamId em cache antes de resolver
+    if (teamIdCacheRef.current.slug === subdomain && teamIdCacheRef.current.teamId) {
+      console.log('[ensureRlsVisitorInternal] Usando teamId do cache:', teamIdCacheRef.current.teamId);
+      return teamIdCacheRef.current.teamId;
+    }
+    
     const teamId = await resolveTeamIdBySlug();
     if (!teamId) {
       console.warn('Não foi possível determinar o team do visitante.');
       return null;
     }
+    
+    console.log('[ensureRlsVisitorInternal] Configurando RLS para visitante, teamId:', teamId);
 
     try {
       await supabase.rpc('set_app_config', {
@@ -496,7 +515,10 @@ export const useSupabaseWithMultiTenant = () => {
       localStorage.setItem(TENANT_HEADER_KEYS.role, 'visitor');
       localStorage.setItem(TENANT_HEADER_KEYS.tenantId, teamId);
       localStorage.setItem(TENANT_HEADER_KEYS.restaurantId, restaurantId);
-    } catch {}
+      console.log('[ensureRlsVisitorInternal] Headers persistidos:', { role: 'visitor', teamId, restaurantId });
+    } catch (e) {
+      console.warn('[ensureRlsVisitorInternal] Erro ao persistir headers:', e);
+    }
 
     console.log('[Visitante] RLS configurado para teamId:', teamId);
     return teamId;
