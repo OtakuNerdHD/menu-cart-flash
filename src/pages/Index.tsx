@@ -27,7 +27,6 @@ const Index = () => {
     let cancelled = false;
 
     // Aguardar apenas carregamento de autenticação e multi-tenant
-<<<<<<< HEAD
     const shouldWait = authLoading || multiTenantLoading || teamLoading || !teamReady;
 
     if (shouldWait) {
@@ -37,12 +36,6 @@ const Index = () => {
         teamLoading,
         isAdminMode,
       });
-=======
-    const shouldWait = authLoading || multiTenantLoading;
-
-    if (shouldWait) {
-      console.log('Index aguardando contextos', { authLoading, multiTenantLoading });
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
       setLoading(true);
       return () => {
         cancelled = true;
@@ -58,7 +51,6 @@ const Index = () => {
         console.log('user:', user?.id);
         console.log('isAdminMode:', isAdminMode);
         
-<<<<<<< HEAD
         // Removido ensureRls(); o hook já garante RLS
         // Aguardar teamId resolvido para evitar flicker
         if (!teamId) {
@@ -75,16 +67,10 @@ const Index = () => {
 
         if (error) throw error;
 
-=======
-        // Carregar produtos usando o hook multi-tenant que lida com visitantes
-        const data = await getProductsMT();
-
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
         if (!cancelled) {
           if (data && data.length > 0) {
             console.log(`${data.length} produtos encontrados`);
             
-<<<<<<< HEAD
             const productsWithAllFields = data.map((product: any): Product => {
               const priceNumber = Number(product.price ?? 0);
               const restaurantIdNumber = Number(product.restaurant_id ?? 0);
@@ -113,31 +99,6 @@ const Index = () => {
                 nutritional_info: product.nutritional_info || {}
               };
             });
-=======
-            const productsWithAllFields = data.map((product: any): Product => ({
-              id: product.id,
-              name: product.name || '',
-              description: product.description || '',
-              price: product.price || 0,
-              category: product.category || '',
-              available: product.available !== false,
-              team_id: product.team_id || '',
-              restaurant_id: product.restaurant_id || 1,
-              created_at: product.created_at || new Date().toISOString(),
-              updated_at: product.updated_at || new Date().toISOString(),
-              featured: product.featured || false,
-              gallery: product.gallery || [],
-              ingredients: product.ingredients || '',
-              note_hint: product.note_hint || '',
-              rating: product.rating || 0,
-              review_count: product.review_count || 0,
-              image_url: product.image_url || '',
-              images: Array.isArray(product.images) && product.images.length > 0
-                ? product.images
-                : (product.image_url ? [product.image_url] : []),
-              nutritional_info: product.nutritional_info || {}
-            }));
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
             
             setProducts(productsWithAllFields);
             console.log(`${productsWithAllFields.length} produtos carregados`);
@@ -160,7 +121,6 @@ const Index = () => {
 
     const fetchHighlightedCombos = async () => {
       try {
-<<<<<<< HEAD
         if (!teamId) {
           console.log('Sem teamId disponível para combos.');
           if (!cancelled) setHighlightCombos([]);
@@ -177,10 +137,6 @@ const Index = () => {
         const { data, error } = await query.order('created_at', { ascending: false });
         if (error) throw error;
         if (!cancelled) setHighlightCombos(Array.isArray(data) ? data : []);
-=======
-        const combos = await getCombos({ onlyHighlightedHomepage: true });
-        if (!cancelled) setHighlightCombos(Array.isArray(combos) ? combos : []);
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
       } catch (e) {
         console.warn('Erro ao carregar combos em destaque:', e);
         if (!cancelled) setHighlightCombos([]);
@@ -213,7 +169,6 @@ const Index = () => {
     return () => {
       cancelled = true;
     };
-<<<<<<< HEAD
   }, [
     authLoading,
     multiTenantLoading,
@@ -223,9 +178,6 @@ const Index = () => {
     teamLoading,
     teamReady,
   ]);
-=======
-  }, [authLoading, multiTenantLoading, user?.id, isAdminMode, getNonEmptyCategories, getProductsMT, getCombos]);
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
 
   const filteredItems = selectedCategory === 'todos'
     ? products

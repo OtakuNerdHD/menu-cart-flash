@@ -14,33 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      app_config: {
-        Row: {
-          name: string
-          value: string | null
-        }
-        Insert: {
-          name: string
-          value?: string | null
-        }
-        Update: {
-          name?: string
-          value?: string | null
-        }
-        Relationships: []
-      }
-      app_super_admins: {
-        Row: {
-          email: string
-        }
-        Insert: {
-          email: string
-        }
-        Update: {
-          email?: string
-        }
-        Relationships: []
-      }
       backups: {
         Row: {
           available: boolean | null
@@ -68,194 +41,6 @@ export type Database = {
           id?: number
           name?: string
           size?: number | null
-        }
-        Relationships: []
-      }
-      categories: {
-        Row: {
-          created_at: string
-          id: number
-          is_default: boolean
-          name: string
-          team_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: number
-          is_default?: boolean
-          name: string
-          team_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: number
-          is_default?: boolean
-          name?: string
-          team_id?: string
-        }
-        Relationships: []
-      }
-      combo_categories: {
-        Row: {
-          category_id: number
-          combo_id: number
-          created_at: string
-          team_id: string
-        }
-        Insert: {
-          category_id: number
-          combo_id: number
-          created_at?: string
-          team_id: string
-        }
-        Update: {
-          category_id?: number
-          combo_id?: number
-          created_at?: string
-          team_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "combo_categories_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "combo_categories_combo_id_fkey"
-            columns: ["combo_id"]
-            isOneToOne: false
-            referencedRelation: "combos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      combo_items_custom: {
-        Row: {
-          combo_id: number
-          description: string
-          id: number
-          position: number
-          team_id: string
-        }
-        Insert: {
-          combo_id: number
-          description: string
-          id?: number
-          position?: number
-          team_id: string
-        }
-        Update: {
-          combo_id?: number
-          description?: string
-          id?: number
-          position?: number
-          team_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "combo_items_custom_combo_id_fkey"
-            columns: ["combo_id"]
-            isOneToOne: false
-            referencedRelation: "combos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      combo_products: {
-        Row: {
-          combo_id: number
-          position: number
-          product_id: number
-          team_id: string
-        }
-        Insert: {
-          combo_id: number
-          position?: number
-          product_id: number
-          team_id: string
-        }
-        Update: {
-          combo_id?: number
-          position?: number
-          product_id?: number
-          team_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "combo_products_combo_id_fkey"
-            columns: ["combo_id"]
-            isOneToOne: false
-            referencedRelation: "combos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "combo_products_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      combos: {
-        Row: {
-          category: string | null
-          combo_type: string
-          created_at: string
-          description: string | null
-          highlight_combos: boolean
-          highlight_full: boolean
-          highlight_homepage: boolean
-          id: number
-          images: string[] | null
-          perks: string[] | null
-          price_label: string | null
-          savings: string | null
-          serves: string | null
-          status: string | null
-          team_id: string
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          category?: string | null
-          combo_type?: string
-          created_at?: string
-          description?: string | null
-          highlight_combos?: boolean
-          highlight_full?: boolean
-          highlight_homepage?: boolean
-          id?: number
-          images?: string[] | null
-          perks?: string[] | null
-          price_label?: string | null
-          savings?: string | null
-          serves?: string | null
-          status?: string | null
-          team_id: string
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          category?: string | null
-          combo_type?: string
-          created_at?: string
-          description?: string | null
-          highlight_combos?: boolean
-          highlight_full?: boolean
-          highlight_homepage?: boolean
-          id?: number
-          images?: string[] | null
-          perks?: string[] | null
-          price_label?: string | null
-          savings?: string | null
-          serves?: string | null
-          status?: string | null
-          team_id?: string
-          title?: string
-          updated_at?: string
         }
         Relationships: []
       }
@@ -467,38 +252,6 @@ export type Database = {
           },
         ]
       }
-      payment_events: {
-        Row: {
-          created_at: string
-          event_type: string | null
-          id: string
-          payload: Json
-          team_id: string
-        }
-        Insert: {
-          created_at?: string
-          event_type?: string | null
-          id?: string
-          payload: Json
-          team_id: string
-        }
-        Update: {
-          created_at?: string
-          event_type?: string | null
-          id?: string
-          payload?: Json
-          team_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "payment_events_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       payment_methods: {
         Row: {
           card_brand: string | null
@@ -537,74 +290,6 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
-      }
-      payment_preferences: {
-        Row: {
-          created_at: string
-          external_reference: string | null
-          init_point: string | null
-          preference_id: string
-          team_id: string
-        }
-        Insert: {
-          created_at?: string
-          external_reference?: string | null
-          init_point?: string | null
-          preference_id: string
-          team_id: string
-        }
-        Update: {
-          created_at?: string
-          external_reference?: string | null
-          init_point?: string | null
-          preference_id?: string
-          team_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "payment_preferences_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      product_categories: {
-        Row: {
-          category_id: number
-          created_at: string
-          product_id: number
-          team_id: string
-        }
-        Insert: {
-          category_id: number
-          created_at?: string
-          product_id: number
-          team_id: string
-        }
-        Update: {
-          category_id?: number
-          created_at?: string
-          product_id?: number
-          team_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_categories_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_categories_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       product_images: {
         Row: {
@@ -727,6 +412,111 @@ export type Database = {
           },
         ]
       }
+      combos: {
+        Row: {
+          id: number
+          team_id: string
+          title: string
+          description: string | null
+          price_label: string | null
+          serves: string | null
+          category: string | null
+          images: string[] | null
+          perks: string[] | null
+          combo_type: string
+          savings: string | null
+          highlight_homepage: boolean
+          highlight_combos: boolean
+          highlight_full: boolean
+          status: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          team_id: string
+          title: string
+          description?: string | null
+          price_label?: string | null
+          serves?: string | null
+          category?: string | null
+          images?: string[] | null
+          perks?: string[] | null
+          combo_type?: string
+          savings?: string | null
+          highlight_homepage?: boolean
+          highlight_combos?: boolean
+          highlight_full?: boolean
+          status?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          team_id?: string
+          title?: string
+          description?: string | null
+          price_label?: string | null
+          serves?: string | null
+          category?: string | null
+          images?: string[] | null
+          perks?: string[] | null
+          combo_type?: string
+          savings?: string | null
+          highlight_homepage?: boolean
+          highlight_combos?: boolean
+          highlight_full?: boolean
+          status?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      combo_products: {
+        Row: {
+          combo_id: number
+          product_id: number
+          position: number
+          team_id: string
+        }
+        Insert: {
+          combo_id: number
+          product_id: number
+          position?: number
+          team_id: string
+        }
+        Update: {
+          combo_id?: number
+          product_id?: number
+          position?: number
+          team_id?: string
+        }
+        Relationships: []
+      }
+      combo_items_custom: {
+        Row: {
+          id: number
+          combo_id: number
+          description: string
+          position: number
+          team_id: string
+        }
+        Insert: {
+          id?: number
+          combo_id: number
+          description: string
+          position?: number
+          team_id: string
+        }
+        Update: {
+          id?: number
+          combo_id?: number
+          description?: string
+          position?: number
+          team_id?: string
+        }
+        Relationships: []
+      }
       produtos: {
         Row: {
           categoria: string
@@ -765,48 +555,33 @@ export type Database = {
           avatar_url: string | null
           created_at: string | null
           email: string
-          first_name: string | null
           full_name: string | null
           id: string
           is_admin: boolean | null
-          last_name: string | null
-          phone1: string | null
-          phone2: string | null
           role: string | null
           status: string | null
-          tax_id: string | null
           updated_at: string | null
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
           email: string
-          first_name?: string | null
           full_name?: string | null
           id?: string
           is_admin?: boolean | null
-          last_name?: string | null
-          phone1?: string | null
-          phone2?: string | null
           role?: string | null
           status?: string | null
-          tax_id?: string | null
           updated_at?: string | null
         }
         Update: {
           avatar_url?: string | null
           created_at?: string | null
           email?: string
-          first_name?: string | null
           full_name?: string | null
           id?: string
           is_admin?: boolean | null
-          last_name?: string | null
-          phone1?: string | null
-          phone2?: string | null
           role?: string | null
           status?: string | null
-          tax_id?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -967,85 +742,6 @@ export type Database = {
         }
         Relationships: []
       }
-      team_members: {
-        Row: {
-          created_at: string
-          role: string
-          team_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          role?: string
-          team_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          role?: string
-          team_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "team_members_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      team_payment_credentials: {
-        Row: {
-          access_token_cipher: string | null
-          access_token_iv: string | null
-          created_at: string
-          id: string
-          last_validated_at: string | null
-          provider: string
-          public_key: string | null
-          status: string
-          team_id: string
-          test_mode: boolean
-          updated_at: string
-        }
-        Insert: {
-          access_token_cipher?: string | null
-          access_token_iv?: string | null
-          created_at?: string
-          id?: string
-          last_validated_at?: string | null
-          provider: string
-          public_key?: string | null
-          status?: string
-          team_id: string
-          test_mode?: boolean
-          updated_at?: string
-        }
-        Update: {
-          access_token_cipher?: string | null
-          access_token_iv?: string | null
-          created_at?: string
-          id?: string
-          last_validated_at?: string | null
-          provider?: string
-          public_key?: string | null
-          status?: string
-          team_id?: string
-          test_mode?: boolean
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "team_payment_credentials_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       teams: {
         Row: {
           created_at: string | null
@@ -1055,7 +751,6 @@ export type Database = {
           is_active: boolean | null
           logo_url: string | null
           name: string
-          owner_id: string | null
           settings: Json | null
           slug: string
           updated_at: string | null
@@ -1068,7 +763,6 @@ export type Database = {
           is_active?: boolean | null
           logo_url?: string | null
           name: string
-          owner_id?: string | null
           settings?: Json | null
           slug: string
           updated_at?: string | null
@@ -1081,7 +775,6 @@ export type Database = {
           is_active?: boolean | null
           logo_url?: string | null
           name?: string
-          owner_id?: string | null
           settings?: Json | null
           slug?: string
           updated_at?: string | null
@@ -1426,7 +1119,6 @@ export type Database = {
             }
             Returns: string
           }
-      assert_super_admin: { Args: never; Returns: undefined }
       assign_table_to_user: {
         Args: { p_table_id: number; p_user_id: string }
         Returns: {
@@ -1447,19 +1139,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      assign_team_admin: {
-        Args: {
-          p_first_name?: string
-          p_last_name?: string
-          p_phone1?: string
-          p_phone2?: string
-          p_tax_id?: string
-          set_role?: string
-          team_slug: string
-          user_email: string
-        }
-        Returns: Json
-      }
       create_table: {
         Args: { table_name: string }
         Returns: {
@@ -1478,32 +1157,6 @@ export type Database = {
           to: "tables"
           isOneToOne: false
           isSetofReturn: true
-        }
-      }
-      create_team_as_admin: {
-        Args: {
-          team_description?: string
-          team_name: string
-          team_slug: string
-        }
-        Returns: {
-          created_at: string | null
-          description: string | null
-          domain: string | null
-          id: string
-          is_active: boolean | null
-          logo_url: string | null
-          name: string
-          owner_id: string | null
-          settings: Json | null
-          slug: string
-          updated_at: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "teams"
-          isOneToOne: true
-          isSetofReturn: false
         }
       }
       delete_user_safely: { Args: { user_uuid: string }; Returns: string }
@@ -1539,11 +1192,6 @@ export type Database = {
             Returns: string
           }
       enablelongtransactions: { Args: never; Returns: string }
-      ensure_default_categories: {
-        Args: { p_team_id: string }
-        Returns: undefined
-      }
-      ensure_membership: { Args: { team_slug: string }; Returns: string }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
       geometry: { Args: { "": string }; Returns: unknown }
       geometry_above: {
@@ -1644,36 +1292,7 @@ export type Database = {
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
       get_jwt_claims: { Args: never; Returns: Json }
-      get_membership_role_by_slug: {
-        Args: { p_team_slug: string }
-        Returns: string
-      }
-      get_membership_role_by_team: {
-        Args: { p_team_id: string }
-        Returns: string
-      }
-      get_team_admin_profile: {
-        Args: { team_slug: string }
-        Returns: {
-          email: string
-          first_name: string
-          last_name: string
-          phone1: string
-          phone2: string
-          role: string
-          tax_id: string
-          user_id: string
-        }[]
-      }
       gettransactionid: { Args: never; Returns: unknown }
-      grant_membership: {
-        Args: { p_role?: string; p_user_id: string; team_slug: string }
-        Returns: undefined
-      }
-      grant_membership_by_email: {
-        Args: { owner_email: string; p_role?: string; team_slug: string }
-        Returns: undefined
-      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1682,25 +1301,6 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
-      is_admin_ctx: { Args: never; Returns: boolean }
-      is_member_of_current_team: {
-        Args: { p_user_id: string }
-        Returns: boolean
-      }
-      is_member_of_team:
-        | {
-            Args: { p_team_id: string }
-            Returns: {
-              error: true
-            } & "Could not choose the best candidate function between: public.is_member_of_team(p_team_id => text), public.is_member_of_team(p_team_id => uuid). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
-          }
-        | {
-            Args: { p_team_id: string }
-            Returns: {
-              error: true
-            } & "Could not choose the best candidate function between: public.is_member_of_team(p_team_id => text), public.is_member_of_team(p_team_id => uuid). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
-          }
-      is_same_team: { Args: { p_team_id: string }; Returns: boolean }
       longtransactionsenabled: { Args: never; Returns: boolean }
       populate_geometry_columns:
         | { Args: { use_typmod?: boolean }; Returns: string }
@@ -1742,165 +1342,6 @@ export type Database = {
       }
       postgis_version: { Args: never; Returns: string }
       postgis_wagyu_version: { Args: never; Returns: string }
-      public_get_combo_by_slug_and_id: {
-        Args: { p_id: number; p_slug: string }
-        Returns: {
-          category: string | null
-          combo_type: string
-          created_at: string
-          description: string | null
-          highlight_combos: boolean
-          highlight_full: boolean
-          highlight_homepage: boolean
-          id: number
-          images: string[] | null
-          perks: string[] | null
-          price_label: string | null
-          savings: string | null
-          serves: string | null
-          status: string | null
-          team_id: string
-          title: string
-          updated_at: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "combos"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      public_get_product_by_slug_and_id: {
-        Args: { p_id: number; p_slug: string }
-        Returns: {
-          available: boolean
-          category: string | null
-          description: string | null
-          featured: boolean
-          gallery: string[] | null
-          id: number
-          image_url: string | null
-          images: string[] | null
-          ingredients: string | null
-          name: string | null
-          note_hint: string | null
-          nutritional_info: Json | null
-          price: number | null
-          restaurant_id: number | null
-          team_id: string | null
-          thumbnail: string | null
-          updated_at: string | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "products"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      public_list_categories_by_slug: {
-        Args: { p_slug: string }
-        Returns: {
-          created_at: string
-          id: number
-          is_default: boolean
-          name: string
-          team_id: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "categories"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      public_list_combo_items_custom_by_slug: {
-        Args: { p_combo_id: number; p_slug: string }
-        Returns: {
-          description: string
-          pos: number
-        }[]
-      }
-      public_list_combo_products_by_slug: {
-        Args: { p_combo_id: number; p_slug: string }
-        Returns: {
-          pos: number
-          product_id: number
-        }[]
-      }
-      public_list_combos_by_slug: {
-        Args: { p_only_combos?: boolean; p_only_home?: boolean; p_slug: string }
-        Returns: {
-          category: string | null
-          combo_type: string
-          created_at: string
-          description: string | null
-          highlight_combos: boolean
-          highlight_full: boolean
-          highlight_homepage: boolean
-          id: number
-          images: string[] | null
-          perks: string[] | null
-          price_label: string | null
-          savings: string | null
-          serves: string | null
-          status: string | null
-          team_id: string
-          title: string
-          updated_at: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "combos"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      public_list_nonempty_categories_by_slug: {
-        Args: { p_kind: string; p_slug: string }
-        Returns: {
-          name: string
-        }[]
-      }
-      public_list_products_by_slug: {
-        Args: { p_category?: string; p_restaurant_id?: number; p_slug: string }
-        Returns: {
-          available: boolean
-          category: string | null
-          description: string | null
-          featured: boolean
-          gallery: string[] | null
-          id: number
-          image_url: string | null
-          images: string[] | null
-          ingredients: string | null
-          name: string | null
-          note_hint: string | null
-          nutritional_info: Json | null
-          price: number | null
-          restaurant_id: number | null
-          team_id: string | null
-          thumbnail: string | null
-          updated_at: string | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "products"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      public_list_products_min_by_ids_slug: {
-        Args: { p_ids: number[]; p_slug: string }
-        Returns: {
-          id: number
-          name: string
-        }[]
-      }
-      saas_register_owner: {
-        Args: { owner_email: string; team_slug: string }
-        Returns: string
-      }
       set_app_config: {
         Args: { config_name: string; config_value: string }
         Returns: undefined
@@ -1910,7 +1351,6 @@ export type Database = {
         Returns: undefined
       }
       set_current_team_id: { Args: { team_id: string }; Returns: undefined }
-      share_team_with: { Args: { p_target_user_id: string }; Returns: boolean }
       st_3dclosestpoint: {
         Args: { geom1: unknown; geom2: unknown }
         Returns: unknown
@@ -2513,19 +1953,6 @@ export type Database = {
         }
       }
       unlockrows: { Args: { "": string }; Returns: number }
-      update_team_admin_profile: {
-        Args: {
-          p_first_name: string
-          p_last_name: string
-          p_phone1: string
-          p_phone2: string
-          p_tax_id: string
-          p_user_id: string
-          set_role?: string
-          team_slug: string
-        }
-        Returns: Json
-      }
       updategeometrysrid: {
         Args: {
           catalogn_name: string
