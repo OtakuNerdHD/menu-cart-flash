@@ -16,7 +16,7 @@ import { useMultiTenant } from '@/context/MultiTenantContext';
 import { useAuth } from '@/context/AuthContext';
 
 // Payment method type
-type PaymentMethod = 'card' | 'pix' | 'cash' | 'card_delivery';
+type PaymentMethod = 'credit' | 'debit' | 'pix' | 'cash' | 'card_delivery';
 
 const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
   const { subtotal, cartItems, clearCart } = useCart();
@@ -27,7 +27,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
   const { user } = useAuth();
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'address' | 'payment'>('address');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('credit');
   const [paymentTab, setPaymentTab] = useState<'online' | 'delivery'>('online');
   const [needChange, setNeedChange] = useState(false);
   const [changeAmount, setChangeAmount] = useState('');
@@ -204,7 +204,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
     const mountCardForm = async () => {
       if (!mpLoaded || !publicKey) return;
       if (paymentStep !== 'payment' || paymentTab !== 'online') return;
-      if (paymentMethod !== 'card') return;
+      if (paymentMethod !== 'credit' && paymentMethod !== 'debit') return;
       if (brickMountedRef.current) return; // evita remontagem
 
       if (!(window as any).MercadoPago) {
@@ -341,7 +341,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
 
   // Desmonta o CardForm ao sair da aba online, do passo de pagamento ou ao trocar do cartão
   useEffect(() => {
-    if (paymentTab !== 'online' || paymentStep !== 'payment' || paymentMethod !== 'card') {
+    if (paymentTab !== 'online' || paymentStep !== 'payment' || (paymentMethod !== 'credit' && paymentMethod !== 'debit')) {
       if (brickInstance) {
         setBrickInstance(null);
         brickMountedRef.current = false;
@@ -456,7 +456,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
     
     // Atualizar método de pagamento com base na aba selecionada
     if (value === 'online') {
-      setPaymentMethod('card');
+      setPaymentMethod('credit');
     } else {
       setPaymentMethod('card_delivery');
     }
@@ -589,34 +589,44 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
               <TabsTrigger value="delivery">Pagar na entrega</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="online" className="mt-4 space-y-4">
-              <RadioGroup 
-                value={paymentMethod} 
-                onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
-                className="space-y-3"
-              >
-                <Card className={`p-4 cursor-pointer ${paymentMethod === 'card' ? 'border-menu-primary ring-2 ring-menu-primary' : ''}`}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="card" id="card" />
-                    <Label htmlFor="card" className="flex items-center cursor-pointer">
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      <span>Cartão de Crédito/Débito</span>
-                    </Label>
-                  </div>
-                </Card>
-                
-                <Card className={`p-4 cursor-pointer ${paymentMethod === 'pix' ? 'border-menu-primary ring-2 ring-menu-primary' : ''}`}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="pix" id="pix" />
-                    <Label htmlFor="pix" className="flex items-center cursor-pointer">
-                      <QrCode className="h-4 w-4 mr-2" />
-                      <span>PIX</span>
-                    </Label>
-                  </div>
-                </Card>
-              </RadioGroup>
+             <TabsContent value="online" className="mt-4 space-y-4">
+               <RadioGroup 
+                 value={paymentMethod} 
+                 onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
+                 className="flex space-x-2"
+               >
+                 <Card className={`flex-1 p-4 cursor-pointer ${paymentMethod === 'credit' ? 'border-menu-primary ring-2 ring-menu-primary' : ''}`}>
+                   <div className="flex flex-col items-center space-y-2">
+                     <RadioGroupItem value="credit" id="credit" />
+                     <Label htmlFor="credit" className="flex flex-col items-center cursor-pointer text-center">
+                       <CreditCard className="h-6 w-6 mb-1" />
+                       <span className="text-sm">Crédito</span>
+                     </Label>
+                   </div>
+                 </Card>
+                 
+                 <Card className={`flex-1 p-4 cursor-pointer ${paymentMethod === 'debit' ? 'border-menu-primary ring-2 ring-menu-primary' : ''}`}>
+                   <div className="flex flex-col items-center space-y-2">
+                     <RadioGroupItem value="debit" id="debit" />
+                     <Label htmlFor="debit" className="flex flex-col items-center cursor-pointer text-center">
+                       <CreditCard className="h-6 w-6 mb-1" />
+                       <span className="text-sm">Débito</span>
+                     </Label>
+                   </div>
+                 </Card>
+                 
+                 <Card className={`flex-1 p-4 cursor-pointer ${paymentMethod === 'pix' ? 'border-menu-primary ring-2 ring-menu-primary' : ''}`}>
+                   <div className="flex flex-col items-center space-y-2">
+                     <RadioGroupItem value="pix" id="pix" />
+                     <Label htmlFor="pix" className="flex flex-col items-center cursor-pointer text-center">
+                       <QrCode className="h-6 w-6 mb-1" />
+                       <span className="text-sm">PIX</span>
+                     </Label>
+                   </div>
+                 </Card>
+               </RadioGroup>
               
-              {paymentMethod === 'card' && (
+              {(paymentMethod === 'credit' || paymentMethod === 'debit') && (
                 <form id="custom-card-form" className="mt-4 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-2 md:col-span-2">
@@ -648,7 +658,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
                       <input id="custom-email" type="email" className="border rounded-md p-3 h-12 w-full" placeholder="Email" />
                     </div>
                   </div>
-                  <Button type="submit" className="bg-menu-primary hover:bg-menu-primary/90">Pagar com Cartão</Button>
+                  <Button type="submit" className="bg-menu-primary hover:bg-menu-primary/90">Pagar com {paymentMethod === 'credit' ? 'Crédito' : 'Débito'}</Button>
                 </form>
               )}
               {paymentMethod === 'pix' && pixPayment && (
@@ -771,7 +781,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
             <Button
               onClick={handlePayment}
               className="flex-1 bg-menu-primary hover:bg-menu-primary/90"
-              disabled={isLoading || (paymentTab === 'online' && paymentMethod === 'card')}
+              disabled={isLoading || (paymentTab === 'online' && (paymentMethod === 'credit' || paymentMethod === 'debit'))}
             >
               {isLoading ? (
                 <>
@@ -779,7 +789,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
                   Processando...
                 </>
               ) : (
-                (paymentTab === 'online' && paymentMethod === 'card' ? 'Use o formulário acima' : 'Finalizar Pedido')
+                (paymentTab === 'online' && (paymentMethod === 'credit' || paymentMethod === 'debit') ? 'Use o formulário acima' : 'Finalizar Pedido')
               )}
             </Button>
           </div>

@@ -1,7 +1,7 @@
 export const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-app-role, x-tenant-id, x-restaurant-id, x-requested-with",
 };
 
 export function withCors(res: Response): Response {

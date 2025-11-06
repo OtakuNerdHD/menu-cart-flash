@@ -106,10 +106,19 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log('[create-payment] Enviando para Mercado Pago:', JSON.stringify(payBody));
+    
+    // Gera chave de idempotência obrigatória pelo Mercado Pago
+    const idempotencyKey = String(
+      (metadata && ((metadata as any).client_token || (metadata as any).order_id)) || `${team.slug}-${Date.now()}`
+    );
 
     const res = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      headers: { 
+        Authorization: `Bearer ${accessToken}`, 
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": idempotencyKey,
+      },
       body: JSON.stringify(payBody),
     });
 
