@@ -1,23 +1,20 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Clock, MapPin, Package, CheckCircle2, Timer, ChevronRight } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
-const mockOrder = {
-  id: 'PED-1042',
-  placedAt: '28/10/2025 19:45',
-  summary: '2x Smash Burger, 1x Batata Rústica, 2x Refrigerante 350ml',
-  address: 'Rua das Laranjeiras, 125 - Jardim Paulista',
-  thumbnail: 'https://images.unsplash.com/photo-1612874742237-6526221588e3',
-  trackingHistory: [
-    { id: 'step-1', title: 'Pedido recebido', description: 'Estamos aguardando o estabelecimento aceitar o pedido.', status: 'done', timestamp: '19:45' },
-    { id: 'step-2', title: 'Preparando', description: 'O estabelecimento começou a preparar seu pedido.', status: 'active', timestamp: '19:52' },
-    { id: 'step-3', title: 'A caminho', description: 'Seu pedido saiu para entrega.', status: 'pending', timestamp: null },
-    { id: 'step-4', title: 'Entregue', description: 'Pedido concluído e entregue ao cliente.', status: 'pending', timestamp: null },
-  ],
+const KITCHEN_TO_CLIENT_STATUS: Record<string, 'aguardando' | 'preparando' | 'a caminho' | 'entregue'> = {
+  'pending': 'aguardando',
+  'queued': 'aguardando',
+  'preparing': 'aguardando',
+  'in_progress': 'preparando',
+  'ready': 'a caminho',
+  'picked_up': 'entregue',
+  'delivered': 'entregue',
 };
 
 const stepIcon = {
@@ -32,12 +29,103 @@ const statusColors: Record<string, string> = {
   pending: 'bg-gray-100 text-gray-500 border-gray-200',
 };
 
+type TrackingStep = 'done' | 'active' | 'pending';
+
 const OrderTrackingDetails = () => {
   const navigate = useNavigate();
   const { orderId } = useParams<{ orderId: string }>();
   const [showTimelineDetails, setShowTimelineDetails] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [order, setOrder] = useState<{
+    id: string;
+    rawId: number;
+    placedAt: string;
+    summary: string;
+    address: string;
+    thumbnail: string;
+    trackingHistory: Array<{ id: string; title: string; description: string; status: TrackingStep; timestamp: string | null }>;
+  } | null>(null);
 
-  const order = { ...mockOrder, id: orderId || mockOrder.id };
+  const computeSteps = (statusInput: string) => {
+    const clientStatus = (KITCHEN_TO_CLIENT_STATUS[(statusInput || '').toLowerCase()] || 'aguardando');
+    const stepIndex = clientStatus === 'aguardando' ? 0 : clientStatus === 'preparando' ? 1 : clientStatus === 'a caminho' ? 2 : 3;
+    const statuses: TrackingStep[] = [0,1,2,3].map((i) => (i < stepIndex ? 'done' : i === stepIndex ? 'active' : 'pending')) as TrackingStep[];
+    return [
+      { id: 'step-1', title: 'Pedido recebido', description: 'Estamos aguardando o estabelecimento aceitar o pedido.', status: statuses[0], timestamp: null },
+      { id: 'step-2', title: 'Preparando', description: 'O estabelecimento começou a preparar seu pedido.', status: statuses[1], timestamp: null },
+      { id: 'step-3', title: 'A caminho', description: 'Seu pedido saiu para entrega.', status: statuses[2], timestamp: null },
+      { id: 'step-4', title: 'Entregue', description: 'Pedido concluído e entregue ao cliente.', status: statuses[3], timestamp: null },
+    ];
+  };
+
+  useEffect(() => {
+    const idNum = Number(orderId);
+    if (!orderId || Number.isNaN(idNum)) { setLoading(false); return; }
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { data: orderRow } = await supabase.from('orders').select('*').eq('id', idNum).maybeSingle();
+        if (!orderRow) { setOrder(null); return; }
+
+        const { data: itemsData } = await supabase
+          .from('order_items')
+          .select('order_id, quantity, price, notes, product_id')
+          .eq('order_id', idNum);
+        const items = Array.isArray(itemsData) ? itemsData : [];
+        const prodIds = Array.from(new Set(items.map((i: any) => i.product_id)));
+        let products: any[] = [];
+        if (prodIds.length > 0) {
+          const { data: prods } = await supabase
+            .from('products')
+            .select('id, name, image_url')
+            .in('id', prodIds);
+          products = Array.isArray(prods) ? prods : [];
+        }
+        const pmap: Record<number, { name: string; image_url?: string | null }> = {};
+        products.forEach((p: any) => { pmap[p.id] = { name: p.name, image_url: p.image_url ?? null }; });
+
+        const its = items.map((i) => ({
+          name: pmap[i.product_id]?.name || 'Produto',
+          image: pmap[i.product_id]?.image_url || '',
+          quantity: i.quantity,
+          price: i.price,
+          notes: i.notes || undefined,
+        }));
+        const summary = its.map((i) => `${i.quantity}x ${i.name}`).join(', ');
+        const addrObj = (orderRow.address || null) as any;
+        const addr = addrObj
+          ? [addrObj.street, addrObj.number].filter(Boolean).join(', ') + (addrObj.neighborhood ? ` - ${addrObj.neighborhood}` : '')
+          : '';
+        const placedAt = orderRow.created_at ? new Date(orderRow.created_at).toLocaleString('pt-BR', { hour12: false }) : '';
+        const thumbnail = its[0]?.image || 'https://images.unsplash.com/photo-1612874742237-6526221588e3';
+
+        setOrder({
+          id: `PED-${orderRow.id}`,
+          rawId: orderRow.id,
+          placedAt,
+          summary,
+          address: addr,
+          thumbnail,
+          trackingHistory: computeSteps(orderRow.status || ''),
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+
+    const channel = supabase.channel(`orders-tracking-details-${idNum}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
+        const updated = payload.new as any;
+        if (updated.id !== idNum) return;
+        setOrder((prev) => prev ? { ...prev, placedAt: updated.created_at ? new Date(updated.created_at).toLocaleString('pt-BR', { hour12: false }) : prev.placedAt, trackingHistory: computeSteps(updated.status || '') } : prev);
+      })
+      .subscribe();
+
+    return () => { try { supabase.removeChannel(channel); } catch {} };
+  }, [orderId]);
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
@@ -50,15 +138,15 @@ const OrderTrackingDetails = () => {
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <CardHeader className="flex flex-row items-center gap-4">
-              <img src={order.thumbnail} alt={order.id} className="h-16 w-16 rounded-lg object-cover" />
+              <img src={order?.thumbnail || 'https://images.unsplash.com/photo-1612874742237-6526221588e3'} alt={order?.id || ''} className="h-16 w-16 rounded-lg object-cover" />
               <div className="flex-1">
-                <CardTitle className="text-xl">Pedido {order.id}</CardTitle>
+                <CardTitle className="text-xl">Pedido {order?.id || ''}</CardTitle>
                 <CardDescription className="flex items-center gap-2 text-sm">
                   <Clock className="h-4 w-4" />
-                  {order.placedAt}
+                  {order?.placedAt || ''}
                 </CardDescription>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {order.summary.split(',').map((item, idx) => (
+                  {(order?.summary || '').split(',').map((item, idx) => (
                     <Badge key={`${order.id}-summary-${idx}`} variant="outline" className="text-[11px] font-medium px-2 py-0.5">
                       {item.trim()}
                     </Badge>
@@ -86,10 +174,10 @@ const OrderTrackingDetails = () => {
                   <div className="mt-4 relative" id="timeline-details">
                     <div className="absolute left-5 top-1 bottom-1 w-px bg-gray-200" aria-hidden="true" />
                     <div className="space-y-6">
-                      {order.trackingHistory.map((step, index) => {
+                      {(order?.trackingHistory || []).map((step, index) => {
                         const Icon = stepIcon[step.status];
                         const statusColor = statusColors[step.status];
-                        const isLast = index === order.trackingHistory.length - 1;
+                        const isLast = index === (order?.trackingHistory?.length || 0) - 1;
                         return (
                           <div key={step.id} className="relative flex gap-4">
                             <div className="flex flex-col items-center">
@@ -113,7 +201,7 @@ const OrderTrackingDetails = () => {
                 ) : (
                   <div className="mt-3">
                     <div className="flex flex-wrap gap-3 md:flex-nowrap md:overflow-x-auto md:pb-2">
-                      {order.trackingHistory.map((step) => {
+                      {(order?.trackingHistory || []).map((step) => {
                         const Icon = stepIcon[step.status];
                         const statusColor = statusColors[step.status];
                         const label = step.title.length > 18 ? `${step.title.slice(0, 16)}…` : step.title;
@@ -158,7 +246,7 @@ const OrderTrackingDetails = () => {
                 <MapPin className="h-5 w-5 text-gray-500 mt-0.5" />
                 <div>
                   <h4 className="text-sm font-semibold text-gray-700">Endereço</h4>
-                  <p className="text-sm text-gray-600">{order.address}</p>
+                  <p className="text-sm text-gray-600">{order?.address || 'Retirada no balcão'}</p>
                 </div>
               </div>
 
@@ -166,7 +254,7 @@ const OrderTrackingDetails = () => {
                 <Clock className="h-5 w-5 text-gray-500 mt-0.5" />
                 <div>
                   <h4 className="text-sm font-semibold text-gray-700">Pedido realizado</h4>
-                  <p className="text-sm text-gray-600">{order.placedAt}</p>
+                  <p className="text-sm text-gray-600">{order?.placedAt || ''}</p>
                 </div>
               </div>
 

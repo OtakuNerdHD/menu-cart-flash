@@ -35,6 +35,7 @@ const ProductDetail = () => {
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
   const [showNotesField, setShowNotesField] = useState(false);
+  const [removedIngredients, setRemovedIngredients] = useState<string[]>([]);
 
   const productId = useMemo(() => {
     if (!id) return null;
@@ -113,8 +114,20 @@ const ProductDetail = () => {
     }
   };
 
+  const toggleIngredient = (ingredient: string) => {
+    setRemovedIngredients((prev) =>
+      prev.includes(ingredient)
+        ? prev.filter((i) => i !== ingredient)
+        : [...prev, ingredient]
+    );
+  };
+
   const handleAddToCart = () => {
     if (!product) return;
+
+    const baseNote = notes.trim() || undefined;
+    const removedNote = removedIngredients.length > 0 ? `Sem: ${removedIngredients.join(', ')}` : undefined;
+    const combinedNotes = [baseNote, removedNote].filter(Boolean).join(' | ');
 
     addToCart({
       id: product.id,
@@ -125,7 +138,7 @@ const ProductDetail = () => {
       description: product.description,
       category: product.category,
       quantity,
-      notes: notes.trim() || undefined,
+      notes: combinedNotes || undefined,
     });
 
     toast({
@@ -205,10 +218,20 @@ const ProductDetail = () => {
                 {ingredients.length > 0 && (
                   <section>
                     <h2 className="text-base font-semibold text-menu-secondary">Ingredientes</h2>
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-600">
-                      {ingredients.map((ingredient, idx) => (
-                        <li key={`${ingredient}-${idx}`}>{ingredient}</li>
-                      ))}
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                      {ingredients.map((ingredient, idx) => {
+                        const removed = removedIngredients.includes(ingredient);
+                        return (
+                          <li
+                            key={`${ingredient}-${idx}`}
+                            onClick={() => toggleIngredient(ingredient)}
+                            className={`cursor-pointer ${removed ? 'line-through text-gray-400' : 'text-gray-600'}`}
+                            aria-pressed={removed}
+                          >
+                            {ingredient}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </section>
                 )}

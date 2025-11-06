@@ -16,21 +16,26 @@ const Index = () => {
   const [selectedCategory, setSelectedCategory] = useState('todos');
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const { teamId, isLoading: teamLoading } = useTeam();
+  const { teamId, isLoading: teamLoading, isReady: teamReady } = useTeam();
   const { loading: authLoading, isSuperAdmin, user } = useAuth();
   const { isLoading: multiTenantLoading, isAdminMode } = useMultiTenant();
-  const { getCombos, getNonEmptyCategories, getProducts: getProductsMT } = useSupabaseWithMultiTenant();
+  const { ensureRls, supabase } = useSupabaseWithMultiTenant();
   const [highlightCombos, setHighlightCombos] = useState<any[]>([]);
   const [categoryNames, setCategoryNames] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
 
-    // Evite travar em loading: só aguarde autenticação. Multi-tenant pode ser resolvido pelo próprio hook MT.
-    const shouldWait = authLoading;
+    // Aguardar apenas carregamento de autenticação e multi-tenant
+    const shouldWait = authLoading || multiTenantLoading || teamLoading || !teamReady;
 
     if (shouldWait) {
-      console.log('Index aguardando contextos', { authLoading, teamLoading, multiTenantLoading, user: user?.id });
+      console.log('Index aguardando contextos', {
+        authLoading,
+        multiTenantLoading,
+        teamLoading,
+        isAdminMode,
+      });
       setLoading(true);
       return () => {
         cancelled = true;
@@ -43,30 +48,42 @@ const Index = () => {
       try {
         console.log('Carregando produtos...');
         console.log('teamId:', teamId);
-        console.log('authLoading:', authLoading);
-        console.log('multiTenantLoading:', multiTenantLoading);
-        console.log('isSuperAdmin:', isSuperAdmin);
-        console.log('isAdminMode:', isAdminMode);
         console.log('user:', user?.id);
+        console.log('isAdminMode:', isAdminMode);
         
-        // Usar hook multi-tenant que garante RLS e membership
-        if (teamId) {
-          console.log(`Carregando produtos (MT) para team_id: ${teamId}`);
-          const data = await getProductsMT();
+        // Removido ensureRls(); o hook já garante RLS
+        // Aguardar teamId resolvido para evitar flicker
+        if (!teamId) {
+          console.log('Sem teamId disponível para produtos. Aguardando resolução...');
+          return;
+        }
 
-          if (!cancelled) {
-            if (data && data.length > 0) {
-              console.log(`${data.length} produtos encontrados:`, data);
-              
-              const productsWithAllFields = data.map((product: any): Product => ({
-                id: product.id,
+        // Consulta direta com filtro explícito de team_id e is_published
+        const { data, error } = await (supabase as any)
+          .from('products')
+          .select('*')
+          .eq('team_id', teamId)
+          .eq('is_published', true);
+
+        if (error) throw error;
+
+        if (!cancelled) {
+          if (data && data.length > 0) {
+            console.log(`${data.length} produtos encontrados`);
+            
+            const productsWithAllFields = data.map((product: any): Product => {
+              const priceNumber = Number(product.price ?? 0);
+              const restaurantIdNumber = Number(product.restaurant_id ?? 0);
+
+              return {
+                id: Number(product.id),
                 name: product.name || '',
                 description: product.description || '',
-                price: product.price || 0,
+                price: Number.isFinite(priceNumber) ? priceNumber : 0,
                 category: product.category || '',
                 available: product.available !== false,
                 team_id: product.team_id || '',
-                restaurant_id: product.restaurant_id || 1,
+                restaurant_id: Number.isFinite(restaurantIdNumber) ? restaurantIdNumber : 0,
                 created_at: product.created_at || new Date().toISOString(),
                 updated_at: product.updated_at || new Date().toISOString(),
                 featured: product.featured || false,
@@ -80,18 +97,15 @@ const Index = () => {
                   ? product.images
                   : (product.image_url ? [product.image_url] : []),
                 nutritional_info: product.nutritional_info || {}
-              }));
-              
-              setProducts(productsWithAllFields);
-              console.log(`${productsWithAllFields.length} produtos carregados do Supabase para team_id: ${teamId}`);
-            } else {
-              console.log(`Nenhum produto encontrado para team_id: ${teamId}.`);
-              setProducts([]);
-            }
+              };
+            });
+            
+            setProducts(productsWithAllFields);
+            console.log(`${productsWithAllFields.length} produtos carregados`);
+          } else {
+            console.log('Nenhum produto encontrado');
+            setProducts([]);
           }
-        } else {
-          console.log('Sem team atual. Não exibindo produtos para evitar vazamento entre tenants.');
-          setProducts([]);
         }
       } catch (err) {
         if (!cancelled) {
@@ -107,35 +121,63 @@ const Index = () => {
 
     const fetchHighlightedCombos = async () => {
       try {
-        if (teamId) {
-          const combos = await getCombos({ onlyHighlightedHomepage: true });
-          if (!cancelled) setHighlightCombos(Array.isArray(combos) ? combos : []);
-        } else {
+        if (!teamId) {
+          console.log('Sem teamId disponível para combos.');
           if (!cancelled) setHighlightCombos([]);
+          return;
         }
+
+        let query = (supabase as any)
+          .from('combos')
+          .select('*')
+          .eq('team_id', teamId)
+          .eq('is_published', true)
+          .or('highlight_full.eq.true,highlight_homepage.eq.true');
+
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (error) throw error;
+        if (!cancelled) setHighlightCombos(Array.isArray(data) ? data : []);
       } catch (e) {
         console.warn('Erro ao carregar combos em destaque:', e);
         if (!cancelled) setHighlightCombos([]);
       }
     };
 
-    fetchProducts();
-    fetchHighlightedCombos();
-
     const fetchCategories = async () => {
       try {
-        const cats = await getNonEmptyCategories('products');
-        if (!cancelled) setCategoryNames(Array.isArray(cats) ? cats : []);
+        if (!teamId) {
+          if (!cancelled) setCategoryNames([]);
+          return;
+        }
+        // Filtro explícito por team_id para categorias
+        const { data: cats, error: catErr } = await (supabase as any)
+          .from('categories')
+          .select('name')
+          .eq('team_id', teamId)
+          .order('name', { ascending: true });
+        if (catErr) throw catErr;
+        if (!cancelled) setCategoryNames(Array.isArray(cats) ? cats.map((c: any) => c.name) : []);
       } catch {
         if (!cancelled) setCategoryNames([]);
       }
     };
+
+    fetchProducts();
+    fetchHighlightedCombos();
     fetchCategories();
 
     return () => {
       cancelled = true;
     };
-  }, [authLoading, teamLoading, multiTenantLoading, teamId, isAdminMode, isSuperAdmin, user?.id, getNonEmptyCategories, getProductsMT, getCombos]);
+  }, [
+    authLoading,
+    multiTenantLoading,
+    teamId,
+    user?.id,
+    isAdminMode,
+    teamLoading,
+    teamReady,
+  ]);
 
   const filteredItems = selectedCategory === 'todos'
     ? products

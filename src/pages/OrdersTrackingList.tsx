@@ -1,39 +1,22 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { Clock, MapPin, Timer, ArrowRight } from 'lucide-react';
+import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 
-const mockOrders = [
-  {
-    id: 'PED-1042',
-    placedAt: '28/10/2025 19:45',
-    status: 'Em preparo',
-    eta: '20-30 min',
-    summary: '2x Smash Burger, 1x Batata Rústica, 2x Refrigerante 350ml',
-    address: 'Rua das Laranjeiras, 125 - Jardim Paulista',
-    thumbnail: 'https://images.unsplash.com/photo-1612874742237-6526221588e3',
-  },
-  {
-    id: 'PED-1039',
-    placedAt: '27/10/2025 12:20',
-    status: 'Entregue',
-    eta: null,
-    summary: '1x Bowl Mediterrâneo, 1x Suco Natural 300ml',
-    address: 'Av. Central, 980 - Sala 402',
-    thumbnail: 'https://images.unsplash.com/photo-1617118296160-7b6a11b437b6',
-  },
-  {
-    id: 'PED-1035',
-    placedAt: '26/10/2025 21:10',
-    status: 'A caminho',
-    eta: 'Chegando em 8 min',
-    summary: 'Combo Família: 3x Burgers especiais + acompanhamentos',
-    address: 'Rua do Sol, 432 - Condomínio Solar das Águas',
-    thumbnail: 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe',
-  },
-];
+const KITCHEN_TO_CLIENT_STATUS: Record<string, 'aguardando' | 'em preparo' | 'a caminho' | 'entregue'> = {
+  'pending': 'aguardando',
+  'queued': 'aguardando',
+  'preparing': 'aguardando',
+  'in_progress': 'em preparo',
+  'ready': 'a caminho',
+  'picked_up': 'entregue',
+  'delivered': 'entregue',
+};
 
 const statusVariants: Record<string, { label: string; color: string }> = {
   'aguardando': { label: 'Aguardando confirmação', color: 'bg-yellow-100 text-yellow-800' },
@@ -44,6 +27,178 @@ const statusVariants: Record<string, { label: string; color: string }> = {
 
 const OrdersTrackingList = () => {
   const navigate = useNavigate();
+  const { getOrders } = useSupabaseWithMultiTenant();
+  const { user } = useAuth();
+  const [orders, setOrders] = useState<Array<{
+    rawId: number;
+    id: string;
+    placedAt: string;
+    status: string;
+    eta: string | null;
+    summary: string;
+    address: string;
+    thumbnail: string;
+  }>>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      setLoading(true);
+      try {
+        let list: any[] = await getOrders({});
+        if (!Array.isArray(list)) list = [];
+
+        if (user?.id) {
+          list = list.filter((o) => (o.created_by === user.id));
+        } else {
+          try {
+            const key = 'my_order_ids';
+            const saved = JSON.parse(localStorage.getItem(key) || '[]');
+            const ids = Array.isArray(saved) ? saved : [];
+            let clientToken = '';
+            try { clientToken = localStorage.getItem('delliapp_client_token') || ''; } catch {}
+            list = list.filter((o) => ids.includes(o.id) || (!!clientToken && o.client_token === clientToken));
+          } catch {
+            list = [];
+          }
+        }
+
+        const orderIds = list.map((o) => o.id);
+        let items: any[] = [];
+        if (orderIds.length > 0) {
+          const { data: itemsData } = await supabase
+            .from('order_items')
+            .select('order_id, quantity, price, notes, product_id')
+            .in('order_id', orderIds);
+          items = Array.isArray(itemsData) ? itemsData : [];
+        }
+        const prodIds = Array.from(new Set(items.map((i: any) => i.product_id)));
+        let products: any[] = [];
+        if (prodIds.length > 0) {
+          const { data: prods } = await supabase
+            .from('products')
+            .select('id, name, image_url')
+            .in('id', prodIds);
+          products = Array.isArray(prods) ? prods : [];
+        }
+        const pmap: Record<number, { name: string; image_url?: string | null }> = {};
+        products.forEach((p: any) => { pmap[p.id] = { name: p.name, image_url: p.image_url ?? null }; });
+
+        const ui = list.map((o) => {
+          const its = items.filter((i) => i.order_id === o.id).map((i) => ({
+            name: pmap[i.product_id]?.name || 'Produto',
+            image: pmap[i.product_id]?.image_url || '',
+            quantity: i.quantity,
+            price: i.price,
+            notes: i.notes || undefined,
+          }));
+          const summary = its.map((i) => `${i.quantity}x ${i.name}`).join(', ');
+          const addrObj = (o.address || null) as any;
+          const addr = addrObj
+            ? [addrObj.street, addrObj.number].filter(Boolean).join(', ') + (addrObj.neighborhood ? ` - ${addrObj.neighborhood}` : '')
+            : '';
+          const statusKey = (KITCHEN_TO_CLIENT_STATUS[(o.status || '').toLowerCase()] || 'aguardando');
+          const placedAt = o.created_at ? new Date(o.created_at).toLocaleString('pt-BR', { hour12: false }) : '';
+          const thumbnail = its[0]?.image || 'https://images.unsplash.com/photo-1612874742237-6526221588e3';
+          return {
+            rawId: o.id,
+            id: `PED-${o.id}`,
+            placedAt,
+            status: statusKey,
+            eta: null,
+            summary,
+            address: addr,
+            thumbnail,
+          };
+        });
+
+        setOrders(ui);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+
+    const channel = supabase.channel('orders-tracking-list')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
+        const updated = payload.new as any;
+        setOrders((prev) => prev.map((o) => {
+          if (o.rawId === updated.id) {
+            const statusKey = (KITCHEN_TO_CLIENT_STATUS[(updated.status || '').toLowerCase()] || 'aguardando');
+            return { ...o, status: statusKey, placedAt: updated.created_at ? new Date(updated.created_at).toLocaleString('pt-BR', { hour12: false }) : o.placedAt };
+          }
+          return o;
+        }));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, async (payload) => {
+        const row = payload.new as any;
+        // Verificar se pertence ao usuário atual ou visitante via client_token
+        let allow = false;
+        if (user?.id && row.created_by === user.id) allow = true;
+        if (!allow) {
+          try {
+            const key = 'my_order_ids';
+            const saved = JSON.parse(localStorage.getItem(key) || '[]');
+            const ids = Array.isArray(saved) ? saved : [];
+            let clientToken = '';
+            try { clientToken = localStorage.getItem('delliapp_client_token') || ''; } catch {}
+            if (ids.includes(row.id) || (!!clientToken && row.client_token === clientToken)) allow = true;
+          } catch {}
+        }
+        if (!allow) return;
+        // Buscar itens e produtos para compor resumo
+        const { data: itemsData } = await supabase
+          .from('order_items')
+          .select('order_id, quantity, price, notes, product_id')
+          .eq('order_id', row.id);
+        const items = Array.isArray(itemsData) ? itemsData : [];
+        const prodIds = Array.from(new Set(items.map((i: any) => i.product_id)));
+        let products: any[] = [];
+        if (prodIds.length > 0) {
+          const { data: prods } = await supabase
+            .from('products')
+            .select('id, name, image_url')
+            .in('id', prodIds);
+          products = Array.isArray(prods) ? prods : [];
+        }
+        const pmap: Record<number, { name: string; image_url?: string | null }> = {};
+        products.forEach((p: any) => { pmap[p.id] = { name: p.name, image_url: p.image_url ?? null }; });
+        const its = items.map((i) => ({
+          name: pmap[i.product_id]?.name || 'Produto',
+          image: pmap[i.product_id]?.image_url || '',
+          quantity: i.quantity,
+          price: i.price,
+          notes: i.notes || undefined,
+        }));
+        const summary = its.map((i) => `${i.quantity}x ${i.name}`).join(', ');
+        const addrObj = (row.address || null) as any;
+        const addr = addrObj ? [addrObj.street, addrObj.number].filter(Boolean).join(', ') + (addrObj.neighborhood ? ` - ${addrObj.neighborhood}` : '') : '';
+        const statusKey = (KITCHEN_TO_CLIENT_STATUS[(row.status || '').toLowerCase()] || 'aguardando');
+        const placedAt = row.created_at ? new Date(row.created_at).toLocaleString('pt-BR', { hour12: false }) : '';
+        const thumbnail = its[0]?.image || 'https://images.unsplash.com/photo-1612874742237-6526221588e3';
+        const uiRow = {
+          rawId: row.id,
+          id: `PED-${row.id}`,
+          placedAt,
+          status: statusKey,
+          eta: null as string | null,
+          summary,
+          address: addr,
+          thumbnail,
+        };
+        setOrders((prev) => {
+          const exists = prev.some((o) => o.rawId === row.id);
+          if (exists) return prev;
+          return [uiRow, ...prev];
+        });
+      })
+      .subscribe();
+
+    return () => {
+      try { supabase.removeChannel(channel); } catch {}
+    };
+  }, [user?.id]);
 
   const getStatusVariant = (status: string) => {
     const normalized = status.trim().toLowerCase();
@@ -69,7 +224,7 @@ const OrdersTrackingList = () => {
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {mockOrders.map((order) => {
+          {orders.map((order) => {
             const statusInfo = getStatusVariant(order.status);
             const summaryTags = getSummaryTags(order.summary);
             const shortAddress = formatAddress(order.address);
@@ -100,7 +255,7 @@ const OrdersTrackingList = () => {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => navigate(`/orders-tracking/${order.id}`)}
+                        onClick={() => navigate(`/orders-tracking/${order.rawId}`)}
                         aria-label={`Ver pedido ${order.id}`}
                       >
                         <ArrowRight className="h-4 w-4" />
@@ -133,7 +288,7 @@ const OrdersTrackingList = () => {
             );
           })}
 
-          {mockOrders.length === 0 && (
+          {orders.length === 0 && (
             <Card className="col-span-full text-center py-12">
               <CardContent className="space-y-3">
                 <h2 className="text-lg font-semibold">Nenhum pedido recente</h2>

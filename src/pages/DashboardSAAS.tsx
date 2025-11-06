@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
+import { useMultiTenant } from '@/context/MultiTenantContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,6 +65,7 @@ interface SupabaseProduct {
 
 const DashboardSAAS = () => {
   const { getTeams, createTeam, updateTeam, deleteTeam, getProducts, isAdminMode } = useSupabaseWithMultiTenant();
+  const { currentTeam } = useMultiTenant();
   const [teams, setTeams] = useState<Team[]>([]);
   const [products, setProducts] = useState<SupabaseProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,8 +108,9 @@ const DashboardSAAS = () => {
     provider: 'mercadopago',
     public_key: '',
     access_token: '',
-    test_mode: true,
+    test_mode: false,
   });
+  const [paymentInfo, setPaymentInfo] = useState<{ exists: boolean; status?: string; updated_at?: string } | null>(null);
 
   // Verificar se está no modo admin
   if (!isAdminMode) {
@@ -144,7 +147,44 @@ const DashboardSAAS = () => {
   const openPaymentDialog = (team: Team) => {
     setPaymentTeam(team);
     setIsPaymentDialogOpen(true);
-    setPaymentForm({ provider: 'mercadopago', public_key: '', access_token: '', test_mode: true });
+    setPaymentForm({ provider: 'mercadopago', public_key: '', access_token: '', test_mode: false });
+    setPaymentInfo(null);
+    try {
+      (async () => {
+        // 1) Tenta via função Edge (contorna RLS)
+        try {
+          const { data: fndata, error: fnerr } = await supabase.functions.invoke('get-mercadopago-credentials-status' as never, {
+            body: { team_slug: team.slug } as never,
+          });
+          if (!fnerr && fndata) {
+            const exists = !!(fndata as any).exists;
+            const status = (fndata as any).status || undefined;
+            const updated_at = (fndata as any).updated_at || undefined;
+            const test_mode = (fndata as any).test_mode ?? false;
+            setPaymentForm(prev => ({ ...prev, public_key: (fndata as any).public_key || '', test_mode, access_token: '' }));
+            setPaymentInfo({ exists, status, updated_at });
+            return;
+          }
+        } catch {}
+        // 2) Fallback direto (pode falhar por RLS)
+        try {
+          const { data } = await (supabase as any)
+            .from('team_payment_credentials')
+            .select('public_key, test_mode, status, updated_at')
+            .eq('team_id', team.id)
+            .eq('provider', 'mercadopago')
+            .maybeSingle();
+          if (data) {
+            setPaymentForm(prev => ({ ...prev, public_key: data.public_key || '', test_mode: data.test_mode ?? false, access_token: '' }));
+            setPaymentInfo({ exists: true, status: (data as any).status, updated_at: (data as any).updated_at });
+          } else {
+            setPaymentInfo({ exists: false });
+          }
+        } catch {
+          setPaymentInfo({ exists: false });
+        }
+      })();
+    } catch {}
   };
 
   const handleSavePayment = async (e: React.FormEvent) => {
@@ -159,9 +199,12 @@ const DashboardSAAS = () => {
         access_token: paymentForm.access_token,
         test_mode: paymentForm.test_mode,
       } as never;
+      try { console.debug('[saas] set-mercadopago-credentials payload', payload); } catch {}
       const { error, data } = await supabase.functions.invoke('set-mercadopago-credentials' as never, { body: payload });
       if (error) {
-        toast({ title: 'Erro ao salvar credenciais', description: error.message, variant: 'destructive' });
+        const msg = (data as any)?.error || (data as any)?.details || error.message || 'Falha ao salvar credenciais';
+        try { console.error('[saas] set-mercadopago-credentials error', { error, data }); } catch {}
+        toast({ title: 'Erro ao salvar credenciais', description: msg, variant: 'destructive' });
       } else {
         toast({ title: 'Credenciais salvas', description: 'Mercado Pago validado e salvo para este cliente.' });
         setIsPaymentDialogOpen(false);
@@ -175,9 +218,21 @@ const DashboardSAAS = () => {
 
   const fetchProducts = async () => {
     try {
-      const data = await getProducts();
-      // Mapear os dados para garantir que todos os campos necessários estejam presentes
-      const mappedProducts: SupabaseProduct[] = (data || []).map((product: any) => ({
+      let rows: any[] = [];
+      if (currentTeam?.id) {
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('team_id', currentTeam.id)
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        rows = Array.isArray(data) ? data : [];
+      } else {
+        // Sem tenant selecionado no modo admin: não listar produtos
+        rows = [];
+      }
+
+      const mappedProducts: SupabaseProduct[] = rows.map((product: any) => ({
         id: product.id,
         name: product.name || '',
         description: product.description || '',
@@ -456,7 +511,7 @@ const DashboardSAAS = () => {
     };
 
     loadData();
-  }, []);
+  }, [currentTeam?.id]);
 
   if (loading) {
     return (
@@ -776,13 +831,30 @@ const DashboardSAAS = () => {
             <DialogTitle>Configurar Pagamentos {paymentTeam ? `(${paymentTeam.name})` : ''}</DialogTitle>
             <DialogDescription>Informe as credenciais do Mercado Pago deste cliente. As chaves serão validadas e armazenadas com criptografia.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSavePayment} className="space-y-4">
+          <form onSubmit={handleSavePayment} className="space-y-4" autoComplete="off">
+            {paymentInfo && (
+              <div className="text-sm text-gray-600">
+                <div>
+                  Estado atual: <span className="font-medium">{paymentInfo.status || 'desconhecido'}</span>
+                  {typeof paymentForm.test_mode === 'boolean' && (
+                    <span> • modo: <span className="font-medium">{paymentForm.test_mode ? 'teste' : 'produção'}</span></span>
+                  )}
+                </div>
+                {paymentInfo.updated_at && (
+                  <div>Atualizado em: {new Date(paymentInfo.updated_at).toLocaleString('pt-BR', { hour12: false })}</div>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Public Key</Label>
               <Input
                 value={paymentForm.public_key}
                 onChange={(e) => setPaymentForm(prev => ({ ...prev, public_key: e.target.value }))}
                 placeholder="APP_USR-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                name="mp_public_key"
                 required
               />
             </div>
@@ -792,8 +864,12 @@ const DashboardSAAS = () => {
                 type="password"
                 value={paymentForm.access_token}
                 onChange={(e) => setPaymentForm(prev => ({ ...prev, access_token: e.target.value }))}
-                placeholder="APP_USR-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                required
+                placeholder={paymentInfo?.exists ? 'Deixe em branco para não alterar' : 'APP_USR-xxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                name="mp_access_token"
+                required={!paymentInfo?.exists}
               />
             </div>
             <div className="flex items-center gap-2">

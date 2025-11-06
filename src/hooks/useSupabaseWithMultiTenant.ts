@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, TENANT_HEADER_KEYS } from '@/integrations/supabase/client';
 import { useMultiTenant } from '@/context/MultiTenantContext';
 import { useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
@@ -26,74 +26,72 @@ const normalizeSlug = (input: string): string => {
  * Filtra automaticamente os dados baseado no team atual
  */
 export const useSupabaseWithMultiTenant = () => {
-  const { currentTeam, isAdminMode, subdomain } = useMultiTenant();
+  const { currentTeam, isAdminMode, subdomain, resolvedTeamId } = useMultiTenant();
   const { loading: authLoading, user: authUser, isSuperAdmin } = useAuth();
   const teamIdCacheRef = useRef<{ slug: string | null; teamId: string | null }>({ slug: null, teamId: null });
 
   // Configurar o team_id no Supabase para RLS
   useEffect(() => {
     const configureSupabase = async () => {
-      // Não configurar RLS se a autenticação ainda estiver carregando ou não houver usuário
-      if (authLoading || !authUser) {
-        console.log('Aguardando autenticação ou usuário não encontrado para configurar RLS.');
-        return;
+      // Se houver usuário autenticado, configurar RLS
+      if (authUser && !authLoading) {
+        try {
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError || !session) {
+            console.log('Nenhuma sessão ativa encontrada');
+            return;
+          }
+          
+          console.log('Configurando RLS para usuário autenticado:', authUser.id);
+          
+          if (isAdminMode) {
+            const roleValue = isSuperAdmin ? 'general_admin' : 'admin';
+
+            await supabase.rpc('set_app_config', {
+              config_name: 'app.current_user_role',
+              config_value: roleValue
+            });
+
+            await supabase.rpc('set_app_config', {
+              config_name: 'app.current_team_id',
+              config_value: NO_TEAM_SENTINEL
+            });
+
+            await supabase.rpc('set_app_config', {
+              config_name: 'app.current_team',
+              config_value: NO_TEAM_SENTINEL
+            });
+
+            console.log(`RLS configurado para ${roleValue}`);
+          } else if (currentTeam?.id) {
+            await supabase.rpc('set_app_config', {
+              config_name: 'app.current_user_role',
+              config_value: 'user'
+            });
+            
+            await supabase.rpc('set_app_config', {
+              config_name: 'app.current_team_id',
+              config_value: currentTeam.id.toString()
+            });
+
+            await supabase.rpc('set_app_config', {
+              config_name: 'app.current_team',
+              config_value: currentTeam.id.toString()
+            });
+            
+            console.log('RLS configurado para team:', currentTeam.id);
+          }
+        } catch (error) {
+          console.warn('Erro ao configurar RLS para usuário:', error);
+        }
       }
-
-      try {
-        // Verificar se há uma sessão ativa antes de configurar RLS
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError || !session) {
-          console.log('Nenhuma sessão ativa encontrada, não configurando RLS:', sessionError);
-          return;
-        }
-        
-        console.log('Sessão ativa confirmada, configurando RLS para:', authUser.id);
-        
-        if (isAdminMode) {
-          const roleValue = isSuperAdmin ? 'general_admin' : 'admin';
-
-          const result1 = await supabase.rpc('set_app_config', {
-            config_name: 'app.current_user_role',
-            config_value: roleValue
-          });
-
-          const result2 = await supabase.rpc('set_app_config', {
-            config_name: 'app.current_team_id',
-            config_value: NO_TEAM_SENTINEL
-          });
-
-          const result3 = await supabase.rpc('set_app_config', {
-            config_name: 'app.current_team',
-            config_value: NO_TEAM_SENTINEL
-          });
-
-          console.log(`Configurações RLS aplicadas para ${roleValue}:`, result1, result2, result3);
-        } else if (currentTeam?.id) {
-          // Configurar modo team específico
-          const result1 = await supabase.rpc('set_app_config', {
-            config_name: 'app.current_user_role',
-            config_value: 'user'
-          });
-          
-          const result2 = await supabase.rpc('set_app_config', {
-               config_name: 'app.current_team_id',
-               config_value: currentTeam.id.toString()
-             });
-
-          const result3 = await supabase.rpc('set_app_config', {
-            config_name: 'app.current_team',
-            config_value: currentTeam.id.toString()
-          });
-          
-          console.log('Configurações RLS aplicadas para team:', currentTeam.id, result1, result2, result3);
-        }
-      } catch (error) {
-        console.warn('Erro ao configurar RLS:', error);
+      // Se não houver usuário (visitante), o RLS será configurado no momento da primeira chamada
+      else if (!authLoading) {
+        console.log('Visitante detectado - RLS será configurado na primeira consulta');
       }
     };
 
-  // fim do configureSupabase dentro do useEffect
     configureSupabase();
   }, [isAdminMode, currentTeam, authLoading, authUser, isSuperAdmin]);
 
@@ -294,7 +292,13 @@ export const useSupabaseWithMultiTenant = () => {
 
   // Lista categorias existentes com pelo menos 1 item
   const getNonEmptyCategories = useCallback(async (kind: 'products' | 'combos'): Promise<string[]> => {
-    await ensureRlsRef.current?.();
+    // Para visitantes, configurar RLS antes de consultar
+    if (!authUser && !authLoading) {
+      await ensureRlsVisitor();
+    } else {
+      await ensureRlsRef.current?.();
+    }
+    
     if (kind === 'products') {
       const { data, error } = await (supabase as any)
         .from('product_categories')
@@ -326,7 +330,7 @@ export const useSupabaseWithMultiTenant = () => {
       if (cerr) throw cerr;
       return (cats || []).map((c: any) => c.name);
     }
-  }, [ensureRls, isAdminMode, currentTeam, subdomain]);
+  }, [authUser, authLoading, ensureRlsVisitor, ensureRls, isAdminMode, currentTeam, subdomain]);
 
   const getProductById = async (id: string | number) => {
     let teamIdForFilter: string | null = null;
@@ -441,6 +445,63 @@ export const useSupabaseWithMultiTenant = () => {
     } catch {}
   };
 
+  // Garante que visitantes (não autenticados) tenham RLS configurado
+  const ensureRlsVisitorInternal = async (): Promise<string | null> => {
+    const teamId = await resolveTeamIdBySlug();
+    if (!teamId) {
+      console.warn('Não foi possível determinar o team do visitante.');
+      return null;
+    }
+
+    try {
+      await supabase.rpc('set_app_config', {
+        config_name: 'app.current_user_role',
+        config_value: 'visitor'
+      });
+    } catch (error) {
+      console.warn('Falha ao configurar papel de visitante:', error);
+    }
+
+    for (const configName of ['app.current_team_id', 'app.current_team']) {
+      try {
+        await supabase.rpc('set_app_config', {
+          config_name: configName,
+          config_value: teamId
+        });
+      } catch (error) {
+        console.warn(`Falha ao configurar ${configName} para visitante:`, error);
+      }
+    }
+
+    let restaurantId = '0';
+    try {
+      const { data: restaurants } = await supabase
+        .from('restaurants')
+        .select('id')
+        .eq('team_id', teamId)
+        .limit(1);
+      if (restaurants && restaurants.length > 0) {
+        restaurantId = String(restaurants[0].id);
+      }
+      await supabase.rpc('set_app_config', {
+        config_name: 'jwt.claims.restaurant_id',
+        config_value: restaurantId
+      } as never);
+    } catch (error) {
+      console.warn('Falha ao configurar restaurant_id para visitante:', error);
+    }
+
+    // Persistir em headers para todas as requisições
+    try {
+      localStorage.setItem(TENANT_HEADER_KEYS.role, 'visitor');
+      localStorage.setItem(TENANT_HEADER_KEYS.tenantId, teamId);
+      localStorage.setItem(TENANT_HEADER_KEYS.restaurantId, restaurantId);
+    } catch {}
+
+    console.log('[Visitante] RLS configurado para teamId:', teamId);
+    return teamId;
+  };
+
   // Garante contexto RLS para usuário de um team específico
   const ensureRlsUserTeam = async () => {
     const { data: { session }, error } = await supabase.auth.getSession();
@@ -532,8 +593,13 @@ export const useSupabaseWithMultiTenant = () => {
 
   // Função para adicionar filtro de team automaticamente
   const addTeamFilter = (query: any) => {
-    if (!isAdminMode && currentTeam) {
-      return query.eq('team_id', currentTeam.id);
+    if (isAdminMode) {
+      return query;
+    }
+
+    const effectiveTeamId = currentTeam?.id ?? resolvedTeamId ?? null;
+    if (effectiveTeamId) {
+      return query.eq('team_id', effectiveTeamId);
     }
     return query;
   };
@@ -543,7 +609,13 @@ export const useSupabaseWithMultiTenant = () => {
     onlyHighlightedHomepage?: boolean;
     onlyHighlightedCombos?: boolean;
   }) => {
-    await ensureRlsRef.current?.();
+    // Para visitantes não logados, garantir RLS antes de consultar
+    if (!authUser && !authLoading) {
+      await ensureRlsVisitorInternal();
+    } else {
+      await ensureRlsRef.current?.();
+    }
+    
     let query = supabase.from('combos').select('*');
     query = addTeamFilter(query);
     if (filters?.onlyHighlightedHomepage) {
@@ -555,7 +627,7 @@ export const useSupabaseWithMultiTenant = () => {
     const { data, error } = await query.order('created_at', { ascending: false });
     if (error) throw error;
     return data;
-  }, [isAdminMode, currentTeam, subdomain]);
+  }, [authUser, authLoading, isAdminMode, currentTeam, resolvedTeamId, subdomain]);
 
   const getComboById = async (id: string | number) => {
     let teamIdForFilter: string | null = null;
@@ -728,7 +800,7 @@ export const useSupabaseWithMultiTenant = () => {
       return;
     }
 
-    if (authUser) {
+    if (authUser && !authLoading) {
       try {
         await ensureRlsUserTeam();
         if (subdomain) {
@@ -740,7 +812,10 @@ export const useSupabaseWithMultiTenant = () => {
       }
     }
 
-    await ensureRlsVisitor();
+    // Se não há usuário ou ainda está carregando, configurar como visitante
+    if (!authUser && !authLoading) {
+      await ensureRlsVisitorInternal();
+    }
   }
 
   const ensureRlsRef = useRef(ensureRls);
@@ -750,7 +825,13 @@ export const useSupabaseWithMultiTenant = () => {
 
   // Produtos
   const getProducts = useCallback(async (filters?: { category?: string; restaurant_id?: string }) => {
-    await ensureRlsRef.current?.();
+    // Para visitantes não logados, garantir RLS antes de consultar
+    if (!authUser && !authLoading) {
+      await ensureRlsVisitorInternal();
+    } else {
+      await ensureRlsRef.current?.();
+    }
+    
     let query = supabase.from('products').select('*');
     
     // Aplicar filtro de team automaticamente
@@ -766,7 +847,7 @@ export const useSupabaseWithMultiTenant = () => {
     const { data, error } = await query;
     if (error) throw error;
     return data;
-  }, [isAdminMode, currentTeam, subdomain]);
+  }, [authUser, authLoading, isAdminMode, currentTeam, resolvedTeamId, subdomain]);
 
   const createProduct = async (product: any) => {
     // Garantir contexto RLS e membership
@@ -838,8 +919,11 @@ export const useSupabaseWithMultiTenant = () => {
     let query = supabase.from('products').update(restUpdates).eq('id', Number(id));
     
     // Aplicar filtro de team para segurança
-    if (!isAdminMode && currentTeam) {
-      query = query.eq('team_id', currentTeam.id);
+    if (!isAdminMode) {
+      const effectiveTeamId = currentTeam?.id ?? resolvedTeamId ?? null;
+      if (effectiveTeamId) {
+        query = query.eq('team_id', effectiveTeamId);
+      }
     }
     
     const { data, error } = await query.select().single();
@@ -864,8 +948,11 @@ export const useSupabaseWithMultiTenant = () => {
     }
 
     let query = supabase.from('products').delete().eq('id', Number(id));
-    if (!isAdminMode && currentTeam) {
-      query = query.eq('team_id', currentTeam.id);
+    if (!isAdminMode) {
+      const effectiveTeamId = currentTeam?.id ?? resolvedTeamId ?? null;
+      if (effectiveTeamId) {
+        query = query.eq('team_id', effectiveTeamId);
+      }
     }
     const { error } = await query;
     if (error) throw error;
