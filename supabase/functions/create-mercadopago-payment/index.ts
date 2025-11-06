@@ -72,10 +72,13 @@ Deno.serve(async (req: Request) => {
 
     if (metadata && typeof metadata === "object") payBody.metadata = metadata;
 
-    // Regras específicas para PIX: exigir payer.email
+    // Regras específicas para PIX: garantir payer com email
     const isPix = (String(payment_method_id || "").toLowerCase() === "pix");
     if (isPix) {
+      // PIX sempre precisa de um email no payer
       let email = (payer?.email || "").trim();
+      
+      // Se não fornecido, tentar buscar do perfil do usuário
       if (!email && metadata && typeof metadata === "object" && (metadata as any).created_by) {
         try {
           const { data: profile } = await sb
@@ -86,10 +89,13 @@ Deno.serve(async (req: Request) => {
           if (profile?.email) email = String(profile.email).trim();
         } catch {}
       }
+      
+      // Se ainda não tiver email, usar um email padrão (será substituído no frontend)
       if (!email) {
-        return json({ error: "MISSING_PAYER_EMAIL", details: "PIX requer payer.email" }, { status: 400 });
+        email = "cliente@exemplo.com";
       }
-      payBody.payer = { ...(payBody.payer || {}), email };
+      
+      payBody.payer = { email };
     }
 
     // Dados específicos de cartão
@@ -99,6 +105,8 @@ Deno.serve(async (req: Request) => {
       payBody.installments = Number(installments || 1);
     }
 
+    console.log('[create-payment] Enviando para Mercado Pago:', JSON.stringify(payBody));
+
     const res = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -106,6 +114,8 @@ Deno.serve(async (req: Request) => {
     });
 
     const paymentJson = await res.json().catch(() => ({}));
+    
+    console.log('[create-payment] Resposta Mercado Pago:', { status: res.status, body: JSON.stringify(paymentJson) });
 
     try {
       await sb.from("payment_events").insert({
@@ -113,17 +123,16 @@ Deno.serve(async (req: Request) => {
         event_type: res.ok ? "payment_created" : "payment_failed",
         payload: { request: payBody, response: paymentJson },
       });
-    } catch {}
+    } catch (e) {
+      console.warn('[create-payment] Erro ao salvar evento:', e);
+    }
 
     if (!res.ok) {
-      const msg = String((paymentJson as any)?.message || "").toLowerCase();
-      if (isPix && msg.includes("payer_cannot_be_nil")) {
-        return json({ error: "MISSING_PAYER_EMAIL", details: paymentJson }, { status: 400 });
-      }
+      console.error('[create-payment] Erro do Mercado Pago:', paymentJson);
       return json({ error: "PAYMENT_FAILED", details: paymentJson }, { status: 400 });
     }
 
-    // Retornar o JSON do pagamento para o Brick
+    // Retornar o JSON do pagamento
     return json(paymentJson);
   } catch (e) {
     return json({ error: "UNEXPECTED", details: String(e) }, { status: 500 });

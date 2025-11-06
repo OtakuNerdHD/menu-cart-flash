@@ -19,7 +19,7 @@ const Index = () => {
   const { teamId, isLoading: teamLoading, isReady: teamReady } = useTeam();
   const { loading: authLoading, isSuperAdmin, user } = useAuth();
   const { isLoading: multiTenantLoading, isAdminMode } = useMultiTenant();
-  const { ensureRls, supabase } = useSupabaseWithMultiTenant();
+  const { ensureRls, supabase, getProducts, getCombos, getNonEmptyCategories } = useSupabaseWithMultiTenant();
   const [highlightCombos, setHighlightCombos] = useState<any[]>([]);
   const [categoryNames, setCategoryNames] = useState<string[]>([]);
 
@@ -27,22 +27,10 @@ const Index = () => {
     let cancelled = false;
 
     // Aguardar apenas carregamento de autenticação e multi-tenant
-<<<<<<< HEAD
-    const shouldWait = authLoading || multiTenantLoading || teamLoading || !teamReady;
-
-    if (shouldWait) {
-      console.log('Index aguardando contextos', {
-        authLoading,
-        multiTenantLoading,
-        teamLoading,
-        isAdminMode,
-      });
-=======
     const shouldWait = authLoading || multiTenantLoading;
 
     if (shouldWait) {
       console.log('Index aguardando contextos', { authLoading, multiTenantLoading });
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
       setLoading(true);
       return () => {
         cancelled = true;
@@ -58,62 +46,13 @@ const Index = () => {
         console.log('user:', user?.id);
         console.log('isAdminMode:', isAdminMode);
         
-<<<<<<< HEAD
-        // Removido ensureRls(); o hook já garante RLS
-        // Aguardar teamId resolvido para evitar flicker
-        if (!teamId) {
-          console.log('Sem teamId disponível para produtos. Aguardando resolução...');
-          return;
-        }
-
-        // Consulta direta com filtro explícito de team_id e is_published
-        const { data, error } = await (supabase as any)
-          .from('products')
-          .select('*')
-          .eq('team_id', teamId)
-          .eq('is_published', true);
-
-        if (error) throw error;
-
-=======
         // Carregar produtos usando o hook multi-tenant que lida com visitantes
-        const data = await getProductsMT();
+        const data = await getProducts({});
 
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
         if (!cancelled) {
           if (data && data.length > 0) {
             console.log(`${data.length} produtos encontrados`);
             
-<<<<<<< HEAD
-            const productsWithAllFields = data.map((product: any): Product => {
-              const priceNumber = Number(product.price ?? 0);
-              const restaurantIdNumber = Number(product.restaurant_id ?? 0);
-
-              return {
-                id: Number(product.id),
-                name: product.name || '',
-                description: product.description || '',
-                price: Number.isFinite(priceNumber) ? priceNumber : 0,
-                category: product.category || '',
-                available: product.available !== false,
-                team_id: product.team_id || '',
-                restaurant_id: Number.isFinite(restaurantIdNumber) ? restaurantIdNumber : 0,
-                created_at: product.created_at || new Date().toISOString(),
-                updated_at: product.updated_at || new Date().toISOString(),
-                featured: product.featured || false,
-                gallery: product.gallery || [],
-                ingredients: product.ingredients || '',
-                note_hint: product.note_hint || '',
-                rating: product.rating || 0,
-                review_count: product.review_count || 0,
-                image_url: product.image_url || '',
-                images: Array.isArray(product.images) && product.images.length > 0
-                  ? product.images
-                  : (product.image_url ? [product.image_url] : []),
-                nutritional_info: product.nutritional_info || {}
-              };
-            });
-=======
             const productsWithAllFields = data.map((product: any): Product => ({
               id: product.id,
               name: product.name || '',
@@ -137,7 +76,6 @@ const Index = () => {
                 : (product.image_url ? [product.image_url] : []),
               nutritional_info: product.nutritional_info || {}
             }));
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
             
             setProducts(productsWithAllFields);
             console.log(`${productsWithAllFields.length} produtos carregados`);
@@ -160,27 +98,8 @@ const Index = () => {
 
     const fetchHighlightedCombos = async () => {
       try {
-<<<<<<< HEAD
-        if (!teamId) {
-          console.log('Sem teamId disponível para combos.');
-          if (!cancelled) setHighlightCombos([]);
-          return;
-        }
-
-        let query = (supabase as any)
-          .from('combos')
-          .select('*')
-          .eq('team_id', teamId)
-          .eq('is_published', true)
-          .or('highlight_full.eq.true,highlight_homepage.eq.true');
-
-        const { data, error } = await query.order('created_at', { ascending: false });
-        if (error) throw error;
-        if (!cancelled) setHighlightCombos(Array.isArray(data) ? data : []);
-=======
         const combos = await getCombos({ onlyHighlightedHomepage: true });
         if (!cancelled) setHighlightCombos(Array.isArray(combos) ? combos : []);
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
       } catch (e) {
         console.warn('Erro ao carregar combos em destaque:', e);
         if (!cancelled) setHighlightCombos([]);
@@ -189,17 +108,7 @@ const Index = () => {
 
     const fetchCategories = async () => {
       try {
-        if (!teamId) {
-          if (!cancelled) setCategoryNames([]);
-          return;
-        }
-        // Filtro explícito por team_id para categorias
-        const { data: cats, error: catErr } = await (supabase as any)
-          .from('categories')
-          .select('name')
-          .eq('team_id', teamId)
-          .order('name', { ascending: true });
-        if (catErr) throw catErr;
+        const cats = await getNonEmptyCategories('products');
         if (!cancelled) setCategoryNames(Array.isArray(cats) ? cats.map((c: any) => c.name) : []);
       } catch {
         if (!cancelled) setCategoryNames([]);
@@ -213,19 +122,7 @@ const Index = () => {
     return () => {
       cancelled = true;
     };
-<<<<<<< HEAD
-  }, [
-    authLoading,
-    multiTenantLoading,
-    teamId,
-    user?.id,
-    isAdminMode,
-    teamLoading,
-    teamReady,
-  ]);
-=======
-  }, [authLoading, multiTenantLoading, user?.id, isAdminMode, getNonEmptyCategories, getProductsMT, getCombos]);
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
+  }, [authLoading, multiTenantLoading, user?.id, isAdminMode, getNonEmptyCategories, getProducts, getCombos]);
 
   const filteredItems = selectedCategory === 'todos'
     ? products

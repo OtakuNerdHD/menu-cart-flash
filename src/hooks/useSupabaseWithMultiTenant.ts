@@ -458,25 +458,11 @@ export const useSupabaseWithMultiTenant = () => {
 
   // Garante que visitantes (não autenticados) tenham RLS configurado
   const ensureRlsVisitorInternal = async (): Promise<string | null> => {
-<<<<<<< HEAD
-=======
-    // Verificar se já temos teamId em cache antes de resolver
-    if (teamIdCacheRef.current.slug === subdomain && teamIdCacheRef.current.teamId) {
-      console.log('[ensureRlsVisitorInternal] Usando teamId do cache:', teamIdCacheRef.current.teamId);
-      return teamIdCacheRef.current.teamId;
-    }
-    
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
     const teamId = await resolveTeamIdBySlug();
     if (!teamId) {
       console.warn('Não foi possível determinar o team do visitante.');
       return null;
     }
-<<<<<<< HEAD
-=======
-    
-    console.log('[ensureRlsVisitorInternal] Configurando RLS para visitante, teamId:', teamId);
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
 
     try {
       await supabase.rpc('set_app_config', {
@@ -521,14 +507,7 @@ export const useSupabaseWithMultiTenant = () => {
       localStorage.setItem(TENANT_HEADER_KEYS.role, 'visitor');
       localStorage.setItem(TENANT_HEADER_KEYS.tenantId, teamId);
       localStorage.setItem(TENANT_HEADER_KEYS.restaurantId, restaurantId);
-<<<<<<< HEAD
     } catch {}
-=======
-      console.log('[ensureRlsVisitorInternal] Headers persistidos:', { role: 'visitor', teamId, restaurantId });
-    } catch (e) {
-      console.warn('[ensureRlsVisitorInternal] Erro ao persistir headers:', e);
-    }
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
 
     console.log('[Visitante] RLS configurado para teamId:', teamId);
     return teamId;
@@ -659,11 +638,7 @@ export const useSupabaseWithMultiTenant = () => {
     const { data, error } = await query.order('created_at', { ascending: false });
     if (error) throw error;
     return data;
-<<<<<<< HEAD
-  }, [authUser, authLoading, isAdminMode, currentTeam, resolvedTeamId, subdomain]);
-=======
   }, [authUser, authLoading, isAdminMode, currentTeam, subdomain]);
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
 
   const getComboById = async (id: string | number) => {
     let teamIdForFilter: string | null = null;
@@ -883,11 +858,7 @@ export const useSupabaseWithMultiTenant = () => {
     const { data, error } = await query;
     if (error) throw error;
     return data;
-<<<<<<< HEAD
-  }, [authUser, authLoading, isAdminMode, currentTeam, resolvedTeamId, subdomain]);
-=======
   }, [authUser, authLoading, isAdminMode, currentTeam, subdomain]);
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
 
   const createProduct = async (product: any) => {
     // Garantir contexto RLS e membership
