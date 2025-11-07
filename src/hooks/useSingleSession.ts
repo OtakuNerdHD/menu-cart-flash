@@ -26,17 +26,31 @@ function getSubdomainFromHost(): string | null {
 export async function start(roleAtLogin: string) {
   try {
     const scope = currentScope(getSubdomainFromHost());
+    console.log('[SingleSession] Iniciando sessão', { scope, roleAtLogin });
+    
+    // CRÍTICO: usar start_session (wrapper público) que revoga anterior
     const { data, error } = await (supabase as any).rpc('start_session', {
       p_role_at_login: (roleAtLogin || 'cliente').toLowerCase().trim(),
       p_fingerprint: undefined,
       p_user_agent: navigator.userAgent,
       p_ip: null
-    } as any);
-    if (error) throw error;
+    });
+    
+    if (error) {
+      console.error('[SingleSession] Erro ao iniciar sessão:', error);
+      throw error;
+    }
+    
     const newId = (data as string) || null;
-    if (newId) localStorage.setItem(KEY(scope), newId);
+    if (newId) {
+      localStorage.setItem(KEY(scope), newId);
+      console.log('[SingleSession] Sessão criada:', newId);
+    }
+    
+    return newId;
   } catch (e) {
-    console.error('start_session error', e);
+    console.error('[SingleSession] start_session error', e);
+    throw e;
   }
 }
 
@@ -45,30 +59,58 @@ export function useSingleSession(roleAtLogin: string | null) {
   const scope = currentScope(subdomain);
   const sessionIdRef = useRef<string | null>(null);
 
-  // Heartbeat e sincronização de sessionId do storage
+  // Iniciar sessão automaticamente quando role resolver
   useEffect(() => {
-    // precisa de papel resolvido por tenant para manter heartbeat
     if (!roleAtLogin && !currentTenantRole) return;
-
-    const prev = localStorage.getItem(KEY(scope));
-    sessionIdRef.current = prev || null;
-
+    
+    const role = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
+    let sessionStarted = false;
+    
+    const initSession = async () => {
+      try {
+        console.log('[SingleSession] Iniciando nova sessão automaticamente', { scope, role });
+        const { data, error } = await (supabase as any).rpc('start_session', {
+          p_role_at_login: role,
+          p_fingerprint: undefined,
+          p_user_agent: navigator.userAgent,
+          p_ip: null
+        });
+        
+        if (error) throw error;
+        
+        const newId = (data as string) || null;
+        sessionIdRef.current = newId;
+        if (newId) {
+          localStorage.setItem(KEY(scope), newId);
+          sessionStarted = true;
+          console.log('[SingleSession] Sessão iniciada:', newId);
+        }
+      } catch (e) {
+        console.error('[SingleSession] Erro ao iniciar sessão:', e);
+      }
+    };
+    
+    // Iniciar sessão
+    initSession();
+    
     // heartbeat: a cada 5 minutos
     const iv = setInterval(async () => {
       const sid = sessionIdRef.current;
       if (!sid) return;
       try {
-        await (supabase as any).rpc('touch_session', { p_session_id: sid } as any);
+        console.log('[SingleSession] Heartbeat para sessão:', sid);
+        await (supabase as any).rpc('touch_session', { p_session_id: sid });
       } catch (e) {
-        console.warn('touch_session error', e);
-        try { await (supabase as any).auth.signOut(); } catch {}
+        console.warn('[SingleSession] touch_session error, deslogando:', e);
+        try { await supabase.auth.signOut(); } catch {}
         localStorage.removeItem(KEY(scope));
         sessionIdRef.current = null;
       }
     }, 5 * 60 * 1000);
 
-    return () => clearInterval(iv);
-    // role e scope determinam a sessão
+    return () => {
+      clearInterval(iv);
+    };
   }, [roleAtLogin, currentTenantRole, scope]);
 
   // helper logout
@@ -76,9 +118,12 @@ export function useSingleSession(roleAtLogin: string | null) {
     try {
       const sid = sessionIdRef.current || localStorage.getItem(KEY(scope));
       if (sid) {
-        await (supabase as any).rpc('end_session', { p_session_id: sid } as any);
+        console.log('[SingleSession] Encerrando sessão:', sid);
+        await (supabase as any).rpc('end_session', { p_session_id: sid });
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[SingleSession] Erro ao encerrar sessão:', e);
+    }
     localStorage.removeItem(KEY(scope));
     sessionIdRef.current = null;
   };
@@ -87,18 +132,25 @@ export function useSingleSession(roleAtLogin: string | null) {
   const startBound = async () => {
     try {
       const role = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
+      console.log('[SingleSession] startBound chamado', { scope, role });
+      
       const { data, error } = await (supabase as any).rpc('start_session', {
         p_role_at_login: role,
         p_fingerprint: undefined,
         p_user_agent: navigator.userAgent,
         p_ip: null
-      } as any);
+      });
+      
       if (error) throw error;
+      
       const newId = (data as string) || null;
       sessionIdRef.current = newId;
-      if (newId) localStorage.setItem(KEY(scope), newId);
+      if (newId) {
+        localStorage.setItem(KEY(scope), newId);
+        console.log('[SingleSession] startBound: sessão criada:', newId);
+      }
     } catch (e) {
-      console.error('start_session error', e);
+      console.error('[SingleSession] start_session error', e);
     }
   };
 

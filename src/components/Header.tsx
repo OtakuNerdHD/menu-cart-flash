@@ -100,19 +100,19 @@ const Header = () => {
       // Encerrar sessão atual antes do signOut
       await endSession();
       await signOut();
+      
       toast({
-        title: "Logout realizado com sucesso",
-        description: "Você foi desconectado do sistema.",
+        title: 'Logout realizado',
+        description: 'Você foi desconectado com sucesso.',
       });
       
-      // Redirecionar para a homepage após logout
-      navigate('/');
+      navigate('/login');
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
       toast({
-        title: "Erro ao fazer logout",
-        description: "Houve um problema ao desconectar. Tente novamente.",
-        variant: "destructive"
+        title: 'Erro ao fazer logout',
+        description: 'Ocorreu um erro ao tentar desconectar.',
+        variant: 'destructive',
       });
     }
   };

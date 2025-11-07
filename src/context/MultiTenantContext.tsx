@@ -40,7 +40,7 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
   const [isLoading, setIsLoading] = useState(true);
   const [currentTenantRole, setCurrentTenantRole] = useState<string | null>(null);
   const ensuredRef = useRef<string | null>(null);
-  const startedRef = useRef(false);
+  const startedRef = useRef<string | null>(null); // Armazena scopeKey da sessão iniciada
 
   // Verificar se está em ambiente local
   const isLocalEnvironment = useMemo(() => {
@@ -226,18 +226,32 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
       try {
         // Apenas em modo cliente com usuário e team resolvido
         if (effectiveAdminMode || !user || !currentTeam?.id) {
-          if (!cancelled) setCurrentTenantRole(null);
+          if (!cancelled) {
+            setCurrentTenantRole(null);
+            console.log('[MultiTenant] currentTenantRole resetado (sem user ou team)');
+          }
           return;
         }
+
+        console.log('[MultiTenant] Buscando papel real do tenant', { 
+          userId: user.id, 
+          teamId: currentTeam.id 
+        });
 
         // Preferir RPC canônica se disponível
         try {
           const { data, error } = await supabase.rpc('get_membership_role_by_team' as never, { p_team_id: currentTeam.id } as never);
           if (!error && data) {
-            if (!cancelled) setCurrentTenantRole(String(data));
+            if (!cancelled) {
+              const role = String(data);
+              setCurrentTenantRole(role);
+              console.log('[MultiTenant] currentTenantRole definida via RPC:', role);
+            }
             return;
           }
-        } catch {}
+        } catch (e) {
+          console.warn('[MultiTenant] Erro ao buscar via RPC:', e);
+        }
 
         // Fallback: consulta direta na tabela de membership
         try {
@@ -248,15 +262,24 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
             .eq('user_id', user.id)
             .maybeSingle();
           if (!qErr && row && (row as any).role) {
-            if (!cancelled) setCurrentTenantRole(String((row as any).role));
+            if (!cancelled) {
+              const role = String((row as any).role);
+              setCurrentTenantRole(role);
+              console.log('[MultiTenant] currentTenantRole definida via query:', role);
+            }
             return;
           }
-        } catch {}
+        } catch (e) {
+          console.warn('[MultiTenant] Erro ao buscar via query:', e);
+        }
 
         // Sem papel encontrado
-        if (!cancelled) setCurrentTenantRole(null);
+        if (!cancelled) {
+          setCurrentTenantRole(null);
+          console.log('[MultiTenant] Nenhum papel encontrado para o tenant');
+        }
       } catch (e) {
-        console.warn('Falha ao carregar papel real do tenant:', e);
+        console.warn('[MultiTenant] Falha ao carregar papel real do tenant:', e);
         if (!cancelled) setCurrentTenantRole(null);
       }
     };
@@ -266,12 +289,39 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
 
   // Iniciar sessão única após currentTenantRole ser resolvida
   useEffect(() => {
-    if (!user || !currentTenantRole || startedRef.current) return;
-    startedRef.current = true;
-    startSingleSession(String(currentTenantRole)).catch(() => {
-      startedRef.current = false;
+    // Somente iniciar se houver usuário E role resolvida
+    if (!user || !currentTenantRole) {
+      console.log('[MultiTenant] Aguardando user e currentTenantRole para iniciar sessão', { 
+        hasUser: !!user, 
+        currentTenantRole 
+      });
+      return;
+    }
+    
+    // Se já iniciou a sessão para este escopo, não fazer de novo
+    const scopeKey = `${user.id}_${effectiveSubdomain || 'master'}`;
+    if (startedRef.current === scopeKey) {
+      console.log('[MultiTenant] Sessão já iniciada para este escopo:', scopeKey);
+      return;
+    }
+    
+    console.log('[MultiTenant] Iniciando sessão única', { 
+      userId: user.id, 
+      currentTenantRole,
+      subdomain: effectiveSubdomain 
     });
-  }, [user?.id, currentTenantRole]);
+    
+    startedRef.current = scopeKey;
+    
+    startSingleSession(String(currentTenantRole))
+      .then(() => {
+        console.log('[MultiTenant] Sessão única iniciada com sucesso');
+      })
+      .catch((err) => {
+        console.error('[MultiTenant] Erro ao iniciar sessão única:', err);
+        startedRef.current = null;
+      });
+  }, [user?.id, currentTenantRole, effectiveSubdomain]);
 
   // Garantir que o carregamento seja finalizado em ambiente local
   useEffect(() => {

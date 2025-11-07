@@ -408,25 +408,11 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
   // Desmonta Secure Fields e remove listeners ao sair da aba online, do passo de pagamento ou ao trocar do cartão
   useEffect(() => {
     if (paymentTab !== 'online' || paymentStep !== 'payment' || (paymentMethod !== 'credit' && paymentMethod !== 'debit')) {
-<<<<<<< HEAD
-      try { cardNumberFieldRef.current?.unmount?.(); } catch {}
-      try { expirationFieldRef.current?.unmount?.(); } catch {}
-      try { securityCodeFieldRef.current?.unmount?.(); } catch {}
-      cardNumberFieldRef.current = null;
-      expirationFieldRef.current = null;
-      securityCodeFieldRef.current = null;
-      const form = document.getElementById('custom-card-form');
-      if (form && formListenerRef.current) {
-        try { form.removeEventListener('submit', formListenerRef.current); } catch {}
-=======
       if (brickInstance) {
         setBrickInstance(null);
         brickMountedRef.current = false;
->>>>>>> d25b33b431c73611ccee8a3d119fb19b2d1138d0
       }
       formListenerRef.current = null;
-      setBrickInstance(null);
-      brickMountedRef.current = false;
     }
   }, [paymentTab, paymentStep, paymentMethod]);
 
