@@ -28,8 +28,7 @@ export async function start(roleAtLogin: string) {
     const scope = currentScope(getSubdomainFromHost());
     console.log('[SingleSession] Iniciando sessão', { scope, roleAtLogin });
     
-    // CRÍTICO: usar start_session (wrapper público) que revoga anterior
-    const { data, error } = await (supabase as any).rpc('start_session', {
+    const { data, error } = await supabase.rpc('start_session', {
       p_role_at_login: (roleAtLogin || 'cliente').toLowerCase().trim(),
       p_fingerprint: undefined,
       p_user_agent: navigator.userAgent,
@@ -69,7 +68,7 @@ export function useSingleSession(roleAtLogin: string | null) {
     const initSession = async () => {
       try {
         console.log('[SingleSession] Iniciando nova sessão automaticamente', { scope, role });
-        const { data, error } = await (supabase as any).rpc('start_session', {
+        const { data, error } = await supabase.rpc('start_session', {
           p_role_at_login: role,
           p_fingerprint: undefined,
           p_user_agent: navigator.userAgent,
@@ -99,7 +98,7 @@ export function useSingleSession(roleAtLogin: string | null) {
       if (!sid) return;
       try {
         console.log('[SingleSession] Heartbeat para sessão:', sid);
-        await (supabase as any).rpc('touch_session', { p_session_id: sid });
+        await supabase.rpc('touch_session', { p_session_id: sid });
       } catch (e) {
         console.warn('[SingleSession] touch_session error, deslogando:', e);
         try { await supabase.auth.signOut(); } catch {}
@@ -119,7 +118,7 @@ export function useSingleSession(roleAtLogin: string | null) {
       const sid = sessionIdRef.current || localStorage.getItem(KEY(scope));
       if (sid) {
         console.log('[SingleSession] Encerrando sessão:', sid);
-        await (supabase as any).rpc('end_session', { p_session_id: sid });
+        await supabase.rpc('end_session', { p_session_id: sid });
       }
     } catch (e) {
       console.warn('[SingleSession] Erro ao encerrar sessão:', e);
@@ -134,7 +133,7 @@ export function useSingleSession(roleAtLogin: string | null) {
       const role = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
       console.log('[SingleSession] startBound chamado', { scope, role });
       
-      const { data, error } = await (supabase as any).rpc('start_session', {
+      const { data, error } = await supabase.rpc('start_session', {
         p_role_at_login: role,
         p_fingerprint: undefined,
         p_user_agent: navigator.userAgent,
