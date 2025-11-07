@@ -28,9 +28,10 @@ export async function start(roleAtLogin: string) {
     const scope = currentScope(getSubdomainFromHost());
     console.log('[SingleSession] Iniciando sessão', { scope, roleAtLogin });
     
+    // CRÍTICO: usar RPC público start_session com assinatura correta
     const { data, error } = await supabase.rpc('start_session', {
       p_role_at_login: (roleAtLogin || 'cliente').toLowerCase().trim(),
-      p_fingerprint: undefined,
+      p_fingerprint: null,
       p_user_agent: navigator.userAgent,
       p_ip: null
     });
@@ -70,7 +71,7 @@ export function useSingleSession(roleAtLogin: string | null) {
         console.log('[SingleSession] Iniciando nova sessão automaticamente', { scope, role });
         const { data, error } = await supabase.rpc('start_session', {
           p_role_at_login: role,
-          p_fingerprint: undefined,
+          p_fingerprint: null,
           p_user_agent: navigator.userAgent,
           p_ip: null
         });
@@ -135,7 +136,7 @@ export function useSingleSession(roleAtLogin: string | null) {
       
       const { data, error } = await supabase.rpc('start_session', {
         p_role_at_login: role,
-        p_fingerprint: undefined,
+        p_fingerprint: null,
         p_user_agent: navigator.userAgent,
         p_ip: null
       });
