@@ -32,6 +32,13 @@ const OrderTracking = () => {
     total: 42.30,
   };
 
+  const fixDate = (input: string | Date | null | undefined) => {
+    const s = typeof input === 'string' ? input : (input ? (input as Date).toISOString() : new Date().toISOString());
+    const hasTZ = /[zZ]|[+\-]\d{2}:?\d{2}/.test(s);
+    const iso = hasTZ ? s : s.replace(' ', 'T') + 'Z';
+    return new Date(iso);
+  };
+
   const getStatusStep = (status: string) => {
     switch (status) {
       case 'pending': return 0;
@@ -127,9 +134,10 @@ const OrderTracking = () => {
               </div>
               <CardDescription className="flex items-center gap-1">
                 <Clock className="h-4 w-4" />
-                {new Date(order.createdAt).toLocaleTimeString('pt-BR', {
+                {fixDate(order.createdAt).toLocaleTimeString('pt-BR', {
                   hour: '2-digit',
                   minute: '2-digit',
+                  timeZone: 'America/Sao_Paulo',
                 })}
               </CardDescription>
             </CardHeader>

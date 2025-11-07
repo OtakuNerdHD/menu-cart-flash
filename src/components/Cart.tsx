@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCart } from '@/context/CartContext';
 import { Button } from '@/components/ui/button';
 import { Minus, Plus, X, ShoppingBag } from 'lucide-react';
@@ -7,6 +7,8 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/components/ui/use-toast';
 import Checkout from './Checkout';
+import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
+import { useMultiTenant } from '@/context/MultiTenantContext';
 
 const Cart = () => {
   const [isCheckoutActive, setIsCheckoutActive] = useState(false);
@@ -20,6 +22,11 @@ const Cart = () => {
     subtotal,
     closeCart
   } = useCart();
+  const { supabase, addTeamFilter } = useSupabaseWithMultiTenant() as any;
+  const { currentTeam, resolvedTeamId, isLoading: tenantLoading } = useMultiTenant();
+
+  const [deliveryEnabled, setDeliveryEnabled] = useState<boolean>(false);
+  const [deliveryFee, setDeliveryFee] = useState<number>(0);
 
   const handleCheckout = () => {
     if (cartItems.length === 0) {
@@ -31,6 +38,35 @@ const Cart = () => {
     }
     setIsCheckoutActive(true);
   };
+
+  useEffect(() => {
+    const loadDeliverySettings = async () => {
+      try {
+        if (tenantLoading) return;
+        const teamId = currentTeam?.id ?? resolvedTeamId ?? null;
+        if (!teamId) return;
+
+        let query = supabase
+          .from('store_settings')
+          .select('allow_delivery, delivery_fee_per_km')
+          .limit(1);
+        // Aplicar filtro por tenant (evita depender apenas do estado de RLS)
+        query = query.eq('team_id', teamId) as any;
+        // Também aplicar helper de filtro automático para consistência
+        query = addTeamFilter(query);
+
+        const { data, error } = await (query as any).maybeSingle();
+        if (error) throw error;
+        const enabled = Boolean((data as any)?.allow_delivery ?? false);
+        const fee = Number((data as any)?.delivery_fee_per_km ?? 0);
+        setDeliveryEnabled(enabled);
+        setDeliveryFee(Number.isFinite(fee) ? fee : 0);
+      } catch (e) {
+        // Silencioso no carrinho; falhas não devem bloquear UI
+      }
+    };
+    loadDeliverySettings();
+  }, [tenantLoading, currentTeam?.id, resolvedTeamId]);
 
   const handleBackFromCheckout = () => {
     setIsCheckoutActive(false);
@@ -136,12 +172,12 @@ const Cart = () => {
                 </div>
                 <div className="flex justify-between mb-4">
                   <span className="text-gray-600">Taxa de entrega</span>
-                  <span className="font-medium">R$ 5.00</span>
+                  <span className="font-medium">{deliveryEnabled ? `R$ ${deliveryFee.toFixed(2)}` : 'Grátis'}</span>
                 </div>
                 <Separator className="my-3" />
                 <div className="flex justify-between mb-4">
                   <span className="font-bold text-lg">Total</span>
-                  <span className="font-bold text-lg">R$ {(subtotal + 5).toFixed(2)}</span>
+                  <span className="font-bold text-lg">R$ {(subtotal + (deliveryEnabled ? deliveryFee : 0)).toFixed(2)}</span>
                 </div>
                 <div className="space-y-2">
                   <Button className="w-full bg-menu-primary hover:bg-menu-primary/90" onClick={handleCheckout}>

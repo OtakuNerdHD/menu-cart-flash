@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import { supabase, TENANT_HEADER_KEYS } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
 
 export interface Profile { // Adicionado export
@@ -81,6 +81,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const NO_TEAM_SENTINEL = '00000000-0000-0000-0000-000000000000';
+  const startedSessionRef = useRef<boolean>(false);
+
+  const KEY = (scope: string) => `sess_${scope}`;
+  const currentScope = (subdomain?: string | null) => (subdomain && subdomain.trim() !== '' ? subdomain.trim() : 'master');
+  const getSubdomainFromHost = (): string | null => {
+    try {
+      const hostname = window.location.hostname;
+      if (hostname === 'localhost' || hostname === '127.0.0.1') return null;
+      const parts = hostname.split('.');
+      const isDelliappDomain = parts.length >= 3 && parts[parts.length - 3] === 'delliapp' && parts[parts.length - 2] === 'com' && parts[parts.length - 1] === 'br';
+      if (!isDelliappDomain) return null;
+      const sub = parts[0];
+      return sub === 'app' ? null : sub;
+    } catch {
+      return null;
+    }
+  };
+
 
   const configureRlsForUser = useCallback(async (sessionUser: User | null) => {
     try {
@@ -184,6 +202,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setCurrentUser(null);
+        startedSessionRef.current = false;
         setLoading(false); // Estado final quando desloga
       } else if (event === 'USER_UPDATED') {
         setUser(session?.user ?? null);

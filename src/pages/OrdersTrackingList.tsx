@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { Clock, MapPin, Timer, ArrowRight } from 'lucide-react';
 import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
+import { useMultiTenant } from '@/context/MultiTenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 
@@ -27,7 +28,8 @@ const statusVariants: Record<string, { label: string; color: string }> = {
 
 const OrdersTrackingList = () => {
   const navigate = useNavigate();
-  const { getOrders } = useSupabaseWithMultiTenant();
+  const { getOrders, addTeamFilter } = useSupabaseWithMultiTenant();
+  const { currentTeam, isAdminMode } = useMultiTenant();
   const { user } = useAuth();
   const [orders, setOrders] = useState<Array<{
     rawId: number;
@@ -40,6 +42,14 @@ const OrdersTrackingList = () => {
     thumbnail: string;
   }>>([]);
   const [loading, setLoading] = useState<boolean>(false);
+
+  const formatBrTime = (input: string | Date | null | undefined) => {
+    if (!input) return '';
+    const s = typeof input === 'string' ? input : (input as Date).toISOString();
+    const hasTZ = /[zZ]|[+\-]\d{2}:?\d{2}/.test(s);
+    const iso = hasTZ ? s : s.replace(' ', 'T') + 'Z';
+    return new Date(iso).toLocaleString('pt-BR', { hour12: false, timeZone: 'America/Sao_Paulo' });
+  };
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -66,19 +76,23 @@ const OrdersTrackingList = () => {
         const orderIds = list.map((o) => o.id);
         let items: any[] = [];
         if (orderIds.length > 0) {
-          const { data: itemsData } = await supabase
+          let itemsQuery = supabase
             .from('order_items')
             .select('order_id, quantity, price, notes, product_id')
             .in('order_id', orderIds);
+          itemsQuery = addTeamFilter(itemsQuery);
+          const { data: itemsData } = await itemsQuery;
           items = Array.isArray(itemsData) ? itemsData : [];
         }
         const prodIds = Array.from(new Set(items.map((i: any) => i.product_id)));
         let products: any[] = [];
         if (prodIds.length > 0) {
-          const { data: prods } = await supabase
+          let prodsQuery = supabase
             .from('products')
             .select('id, name, image_url')
             .in('id', prodIds);
+          prodsQuery = addTeamFilter(prodsQuery);
+          const { data: prods } = await prodsQuery;
           products = Array.isArray(prods) ? prods : [];
         }
         const pmap: Record<number, { name: string; image_url?: string | null }> = {};
@@ -98,7 +112,7 @@ const OrdersTrackingList = () => {
             ? [addrObj.street, addrObj.number].filter(Boolean).join(', ') + (addrObj.neighborhood ? ` - ${addrObj.neighborhood}` : '')
             : '';
           const statusKey = (KITCHEN_TO_CLIENT_STATUS[(o.status || '').toLowerCase()] || 'aguardando');
-          const placedAt = o.created_at ? new Date(o.created_at).toLocaleString('pt-BR', { hour12: false }) : '';
+          const placedAt = formatBrTime(o.created_at);
           const thumbnail = its[0]?.image || 'https://images.unsplash.com/photo-1612874742237-6526221588e3';
           return {
             rawId: o.id,
@@ -123,16 +137,18 @@ const OrdersTrackingList = () => {
     const channel = supabase.channel('orders-tracking-list')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
         const updated = payload.new as any;
+        if (!isAdminMode && currentTeam?.id && updated.team_id !== currentTeam.id) return;
         setOrders((prev) => prev.map((o) => {
           if (o.rawId === updated.id) {
             const statusKey = (KITCHEN_TO_CLIENT_STATUS[(updated.status || '').toLowerCase()] || 'aguardando');
-            return { ...o, status: statusKey, placedAt: updated.created_at ? new Date(updated.created_at).toLocaleString('pt-BR', { hour12: false }) : o.placedAt };
+            return { ...o, status: statusKey, placedAt: formatBrTime(updated.created_at) || o.placedAt };
           }
           return o;
         }));
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, async (payload) => {
         const row = payload.new as any;
+        if (!isAdminMode && currentTeam?.id && row.team_id !== currentTeam.id) return;
         // Verificar se pertence ao usuário atual ou visitante via client_token
         let allow = false;
         if (user?.id && row.created_by === user.id) allow = true;
@@ -148,18 +164,22 @@ const OrdersTrackingList = () => {
         }
         if (!allow) return;
         // Buscar itens e produtos para compor resumo
-        const { data: itemsData } = await supabase
+        let itemsQuery = supabase
           .from('order_items')
           .select('order_id, quantity, price, notes, product_id')
           .eq('order_id', row.id);
+        itemsQuery = addTeamFilter(itemsQuery);
+        const { data: itemsData } = await itemsQuery;
         const items = Array.isArray(itemsData) ? itemsData : [];
         const prodIds = Array.from(new Set(items.map((i: any) => i.product_id)));
         let products: any[] = [];
         if (prodIds.length > 0) {
-          const { data: prods } = await supabase
+          let prodsQuery = supabase
             .from('products')
             .select('id, name, image_url')
             .in('id', prodIds);
+          prodsQuery = addTeamFilter(prodsQuery);
+          const { data: prods } = await prodsQuery;
           products = Array.isArray(prods) ? prods : [];
         }
         const pmap: Record<number, { name: string; image_url?: string | null }> = {};
@@ -175,7 +195,7 @@ const OrdersTrackingList = () => {
         const addrObj = (row.address || null) as any;
         const addr = addrObj ? [addrObj.street, addrObj.number].filter(Boolean).join(', ') + (addrObj.neighborhood ? ` - ${addrObj.neighborhood}` : '') : '';
         const statusKey = (KITCHEN_TO_CLIENT_STATUS[(row.status || '').toLowerCase()] || 'aguardando');
-        const placedAt = row.created_at ? new Date(row.created_at).toLocaleString('pt-BR', { hour12: false }) : '';
+        const placedAt = formatBrTime(row.created_at);
         const thumbnail = its[0]?.image || 'https://images.unsplash.com/photo-1612874742237-6526221588e3';
         const uiRow = {
           rawId: row.id,

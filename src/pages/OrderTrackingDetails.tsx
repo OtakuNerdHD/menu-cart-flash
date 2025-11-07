@@ -6,6 +6,8 @@ import { Separator } from '@/components/ui/separator';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Clock, MapPin, Package, CheckCircle2, Timer, ChevronRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
+import { useMultiTenant } from '@/context/MultiTenantContext';
 
 const KITCHEN_TO_CLIENT_STATUS: Record<string, 'aguardando' | 'preparando' | 'a caminho' | 'entregue'> = {
   'pending': 'aguardando',
@@ -34,6 +36,8 @@ type TrackingStep = 'done' | 'active' | 'pending';
 const OrderTrackingDetails = () => {
   const navigate = useNavigate();
   const { orderId } = useParams<{ orderId: string }>();
+  const { addTeamFilter } = useSupabaseWithMultiTenant();
+  const { currentTeam, isAdminMode } = useMultiTenant();
   const [showTimelineDetails, setShowTimelineDetails] = useState(false);
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<{
@@ -58,6 +62,14 @@ const OrderTrackingDetails = () => {
     ];
   };
 
+  const formatBrTime = (input: string | Date | null | undefined) => {
+    if (!input) return '';
+    const s = typeof input === 'string' ? input : (input as Date).toISOString();
+    const hasTZ = /[zZ]|[+\-]\d{2}:?\d{2}/.test(s);
+    const iso = hasTZ ? s : s.replace(' ', 'T') + 'Z';
+    return new Date(iso).toLocaleString('pt-BR', { hour12: false, timeZone: 'America/Sao_Paulo' });
+  };
+
   useEffect(() => {
     const idNum = Number(orderId);
     if (!orderId || Number.isNaN(idNum)) { setLoading(false); return; }
@@ -65,21 +77,29 @@ const OrderTrackingDetails = () => {
     const load = async () => {
       setLoading(true);
       try {
-        const { data: orderRow } = await supabase.from('orders').select('*').eq('id', idNum).maybeSingle();
+        let orderQuery = supabase.from('orders').select('*').eq('id', idNum);
+        if (!isAdminMode && currentTeam?.id) {
+          orderQuery = orderQuery.eq('team_id', currentTeam.id);
+        }
+        const { data: orderRow } = await orderQuery.maybeSingle();
         if (!orderRow) { setOrder(null); return; }
 
-        const { data: itemsData } = await supabase
+        let itemsQuery = supabase
           .from('order_items')
           .select('order_id, quantity, price, notes, product_id')
           .eq('order_id', idNum);
+        itemsQuery = addTeamFilter(itemsQuery);
+        const { data: itemsData } = await itemsQuery;
         const items = Array.isArray(itemsData) ? itemsData : [];
         const prodIds = Array.from(new Set(items.map((i: any) => i.product_id)));
         let products: any[] = [];
         if (prodIds.length > 0) {
-          const { data: prods } = await supabase
+          let prodsQuery = supabase
             .from('products')
             .select('id, name, image_url')
             .in('id', prodIds);
+          prodsQuery = addTeamFilter(prodsQuery);
+          const { data: prods } = await prodsQuery;
           products = Array.isArray(prods) ? prods : [];
         }
         const pmap: Record<number, { name: string; image_url?: string | null }> = {};
@@ -97,7 +117,7 @@ const OrderTrackingDetails = () => {
         const addr = addrObj
           ? [addrObj.street, addrObj.number].filter(Boolean).join(', ') + (addrObj.neighborhood ? ` - ${addrObj.neighborhood}` : '')
           : '';
-        const placedAt = orderRow.created_at ? new Date(orderRow.created_at).toLocaleString('pt-BR', { hour12: false }) : '';
+        const placedAt = formatBrTime(orderRow.created_at);
         const thumbnail = its[0]?.image || 'https://images.unsplash.com/photo-1612874742237-6526221588e3';
 
         setOrder({
@@ -119,8 +139,9 @@ const OrderTrackingDetails = () => {
     const channel = supabase.channel(`orders-tracking-details-${idNum}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
         const updated = payload.new as any;
+        if (!isAdminMode && currentTeam?.id && updated.team_id !== currentTeam.id) return;
         if (updated.id !== idNum) return;
-        setOrder((prev) => prev ? { ...prev, placedAt: updated.created_at ? new Date(updated.created_at).toLocaleString('pt-BR', { hour12: false }) : prev.placedAt, trackingHistory: computeSteps(updated.status || '') } : prev);
+        setOrder((prev) => prev ? { ...prev, placedAt: formatBrTime(updated.created_at) || prev.placedAt, trackingHistory: computeSteps(updated.status || '') } : prev);
       })
       .subscribe();
 
@@ -147,7 +168,7 @@ const OrderTrackingDetails = () => {
                 </CardDescription>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {(order?.summary || '').split(',').map((item, idx) => (
-                    <Badge key={`${order.id}-summary-${idx}`} variant="outline" className="text-[11px] font-medium px-2 py-0.5">
+                    <Badge key={`${String(order?.id || 'pedido')}-summary-${idx}`} variant="outline" className="text-[11px] font-medium px-2 py-0.5">
                       {item.trim()}
                     </Badge>
                   ))}

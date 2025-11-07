@@ -57,18 +57,24 @@ const MobileBottomNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, currentUser, loading } = useAuth();
-  const { isAdminMode } = useMultiTenant();
+  const { isAdminMode, currentTenantRole } = useMultiTenant();
   const { totalItems, toggleCart } = useCart();
 
-  const roleFromUser = getRoleFromAuth(currentUser?.role ?? null, user?.app_metadata as Record<string, unknown> | undefined);
+  // Derivar sempre da currentTenantRole quando estiver em tenant
+  const roleFromTenant = ((): string | null => {
+    if (!currentTenantRole) return null;
+    const r = String(currentTenantRole).toLowerCase().trim();
+    // Mapear 'dono' para o papel esperado nas rotas administrativas
+    return r === 'dono' ? 'restaurant_owner' : r;
+  })();
 
   const navItems = useMemo(() => {
     return buildBottomNavItems({
       isAuthenticated: !!user,
-      userRole: roleFromUser,
+      userRole: roleFromTenant,
       isAdminMode,
     });
-  }, [user, roleFromUser, isAdminMode]);
+  }, [user, roleFromTenant, isAdminMode]);
 
   if (!isMobile || loading) {
     return null;

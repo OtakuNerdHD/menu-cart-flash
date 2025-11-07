@@ -1,5 +1,6 @@
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
+import { useMultiTenant } from '@/context/MultiTenantContext';
 
 type MPItem = {
   title: string;
@@ -20,12 +21,12 @@ type CreatePrefOptions = {
 
 export const useCheckout = () => {
   const { currentTeam } = useSupabaseWithMultiTenant();
+  const { subdomain } = useMultiTenant();
 
   const getTeamSlug = () => {
+    // Centraliza leitura do team_slug usando contexto multi-tenant
     if (currentTeam?.slug) return currentTeam.slug;
-    const host = typeof window !== 'undefined' ? window.location.hostname : '';
-    const parts = host.split('.');
-    if (parts.length > 2) return parts[0];
+    if (subdomain) return subdomain;
     return '';
   };
 

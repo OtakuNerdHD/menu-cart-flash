@@ -11,12 +11,13 @@ import { Loader2, CreditCard, Wallet, CreditCardIcon, DollarSign, QrCode } from 
 import { useNavigate } from 'react-router-dom';
 import { DeliveryAddressFormProps } from './DeliveryAddressFormProps';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
+import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
 import { useCheckout } from '@/hooks/useCheckout';
 import { useMultiTenant } from '@/context/MultiTenantContext';
 import { useAuth } from '@/context/AuthContext';
 
 // Payment method type
-type PaymentMethod = 'card' | 'pix' | 'cash' | 'card_delivery';
+type PaymentMethod = 'credit' | 'debit' | 'pix' | 'cash' | 'card_delivery';
 
 const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
   const { subtotal, cartItems, clearCart } = useCart();
@@ -27,15 +28,23 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
   const { user } = useAuth();
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'address' | 'payment'>('address');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('credit');
   const [paymentTab, setPaymentTab] = useState<'online' | 'delivery'>('online');
   const [needChange, setNeedChange] = useState(false);
   const [changeAmount, setChangeAmount] = useState('');
-  const deliveryFee = 5;
-  const total = subtotal + deliveryFee;
+  const { ensureRls, supabase: multiSupabase, addTeamFilter } = useSupabaseWithMultiTenant();
+  const [deliveryEnabled, setDeliveryEnabled] = useState<boolean>(false);
+  const [deliveryFee, setDeliveryFee] = useState<number>(0);
+  const total = subtotal + (deliveryEnabled ? deliveryFee : 0);
   const [mpLoaded, setMpLoaded] = useState(false);
   const [brickInstance, setBrickInstance] = useState<any>(null);
   const brickMountedRef = useRef(false);
+  const cardNumberFieldRef = useRef<any>(null);
+  const expirationFieldRef = useRef<any>(null);
+  const securityCodeFieldRef = useRef<any>(null);
+  const formListenerRef = useRef<any>(null);
+  const cardBinRef = useRef<string>('');
+  const paymentMethodIdRef = useRef<string>('');
   const [publicKey, setPublicKey] = useState<string>('');
   const [pixPayment, setPixPayment] = useState<any | null>(null);
   
@@ -199,12 +208,43 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
     fetchPublicKey();
   }, [currentTeam?.slug, subdomain, publicKey]);
 
-  // Montagem do CardForm (somente para cartão)
+  // Buscar configuração de frete por tenant e refletir na taxa
   useEffect(() => {
-    const mountCardForm = async () => {
+    const loadDeliverySettings = async () => {
+      try {
+        await ensureRls();
+        const teamId = currentTeam?.id || null;
+        let query: any = (multiSupabase || supabase)
+          .from('store_settings')
+          .select('allow_delivery, delivery_fee_per_km')
+          .limit(1);
+        if (teamId) {
+          query = query.eq('team_id', teamId);
+        }
+        // Aplicar helper de filtro por tenant para consistência com RLS
+        if (addTeamFilter) {
+          query = addTeamFilter(query);
+        }
+        const { data, error } = await query.maybeSingle();
+        if (!error && data) {
+          const enabled = Boolean((data as any)?.allow_delivery ?? false);
+          const fee = Number((data as any)?.delivery_fee_per_km ?? 0);
+          setDeliveryEnabled(enabled);
+          setDeliveryFee(enabled ? fee : 0);
+        }
+      } catch (e) {
+        console.warn('Falha ao carregar configurações de frete:', e);
+      }
+    };
+    loadDeliverySettings();
+  }, [currentTeam?.id]);
+
+  // Montagem dos Secure Fields (somente para cartão) e interceptação do submit
+  useEffect(() => {
+    const mountSecureFields = async () => {
       if (!mpLoaded || !publicKey) return;
       if (paymentStep !== 'payment' || paymentTab !== 'online') return;
-      if (paymentMethod !== 'card') return;
+      if (paymentMethod !== 'credit' && paymentMethod !== 'debit') return;
       if (brickMountedRef.current) return; // evita remontagem
 
       if (!(window as any).MercadoPago) {
@@ -213,160 +253,241 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
       }
 
       try {
-        const mp = new (window as any).MercadoPago(publicKey, { locale: 'pt-BR' });
+        const mp: any = new (window as any).MercadoPago(publicKey, { locale: 'pt-BR' });
 
-        const addressObj = { street: endereco, number: numero, complement: complemento || undefined, neighborhood: bairro, city: cidade, state: estado, zipcode: cep };
-        let clientToken = '';
+        // Popular opções de identificação (documento)
         try {
-          clientToken = localStorage.getItem('delliapp_client_token') || '';
-          if (!clientToken) {
-            clientToken = (typeof crypto !== 'undefined' && (crypto as any).randomUUID) ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random()}`;
-            localStorage.setItem('delliapp_client_token', clientToken);
+          const types = await mp.getIdentificationTypes?.();
+          const select = document.getElementById('custom-doc-type') as HTMLSelectElement | null;
+          if (select && Array.isArray(types)) {
+            select.innerHTML = '';
+            types.forEach((t: any) => {
+              const opt = document.createElement('option');
+              opt.value = t.id || t.type || t.name || '';
+              opt.text = t.name || t.id || String(t.type || '');
+              select.appendChild(opt);
+            });
           }
         } catch {}
 
-        const teamSlug = currentTeam?.slug || subdomain || null;
+        // Criar Secure Fields
+        cardNumberFieldRef.current = mp.fields?.create('cardNumber', { placeholder: 'Número do Cartão' });
+        expirationFieldRef.current = mp.fields?.create('expirationDate', { placeholder: 'MM/AA' });
+        securityCodeFieldRef.current = mp.fields?.create('securityCode', { placeholder: 'CVV' });
 
-        const cardForm = mp.cardForm({
-          amount: String(total),
-          iframe: true,
-          form: {
-            id: 'custom-card-form',
-            cardNumber: { id: 'custom-card-number', placeholder: 'Número do Cartão' },
-            expirationDate: { id: 'custom-expiration', placeholder: 'MM/AA' },
-            securityCode: { id: 'custom-cvv', placeholder: 'CVV' },
-            cardholderName: { id: 'custom-cardholder', placeholder: 'Nome no Cartão' },
-            identificationType: { id: 'custom-doc-type', placeholder: 'Documento' },
-            identificationNumber: { id: 'custom-doc-number', placeholder: 'CPF' },
-            cardholderEmail: { id: 'custom-email', placeholder: 'Email' },
-          },
-          callbacks: {
-            onFormMounted: (error: any) => {
-              if (error) {
-                console.warn('Erro ao montar CardForm:', error);
-                toast({ title: 'Erro no pagamento', description: 'Não foi possível montar o formulário de cartão.', variant: 'destructive' });
-              }
-            },
-            onSubmit: async (event: any) => {
-              event.preventDefault();
-              try {
-                if (!teamSlug) {
-                  toast({
-                    title: 'Instância não identificada',
-                    description: 'Defina o cliente via subdomínio ou adicione ?client=SLUG na URL (ambiente local).',
-                    variant: 'destructive'
-                  });
-                  throw new Error('Instância do cliente ausente');
-                }
-                const {
-                  paymentMethodId: payment_method_id,
-                  issuerId: issuer_id,
-                  token,
-                  installments,
-                  identificationNumber,
-                  identificationType,
-                  cardholderEmail,
-                } = (cardForm as any).getCardFormData();
+        cardNumberFieldRef.current?.mount?.('custom-card-number');
+        expirationFieldRef.current?.mount?.('custom-expiration');
+        securityCodeFieldRef.current?.mount?.('custom-cvv');
 
-                const payload: any = {
-                  team_slug: teamSlug,
-                  transaction_amount: total,
-                  payment_method_id: payment_method_id || 'card',
-                  token,
-                  issuer_id,
-                  installments: installments || 1,
-                  payer: {
-                    email: cardholderEmail,
-                    identification: { type: identificationType, number: identificationNumber },
-                  },
-                  description: 'Pedido Delivery',
-                  metadata: {
-                    cart_items: cartItems.map((item) => ({ product_id: item.id, quantity: item.quantity, price: item.price, notes: item.notes || null })),
-                    address: addressObj,
-                    delivery_type: 'delivery',
-                    payment_method: 'card',
-                    total,
-                    created_by: user?.id || null,
-                    client_token: clientToken,
-                  },
-                };
-
-                const { data, error } = await supabase.functions.invoke('create-mercadopago-payment' as never, { body: payload as never });
-                let result = data;
-                if (error || !data) {
-                  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-mercadopago-payment`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'apikey': SUPABASE_ANON_KEY },
-                    body: JSON.stringify(payload),
-                  });
-                  result = await res.json();
-                  if (!res.ok) throw new Error((result?.error || result?.message || 'Falha ao criar pagamento'));
-                }
-
-                // Cria o pedido após pagamento com cartão
-                const newId = await createOrder({ paymentMethod: 'card', paymentInfo: 'Cartão', deliveryAddress: addressObj });
-                if (newId) {
-                  try {
-                    const key = 'my_order_ids';
-                    const saved = JSON.parse(localStorage.getItem(key) || '[]');
-                    const arr = Array.isArray(saved) ? saved : [];
-                    if (!arr.includes(newId)) {
-                      arr.push(newId);
-                      localStorage.setItem(key, JSON.stringify(arr));
-                    }
-                  } catch {}
-                }
-
-                toast({ title: 'Pagamento aprovado', description: 'Seu pedido foi registrado com sucesso.' });
-                return result;
-              } catch (e) {
-                console.error('Erro em pagamento (cartão):', e);
-                toast({ title: 'Erro ao processar pagamento', description: e instanceof Error ? e.message : 'Falha ao criar pagamento', variant: 'destructive' });
-                throw e;
-              }
-            },
-          },
+        // Acompanhar BIN para descobrir bandeira (payment_method_id)
+        cardNumberFieldRef.current?.on?.('binChange', async (data: any) => {
+          const bin = typeof data === 'string' ? data : data?.bin || '';
+          cardBinRef.current = bin || '';
+          if (bin && bin.length >= 6) {
+            try {
+              const methods = await mp.getPaymentMethods?.({ bin });
+              const pmId = Array.isArray(methods) && methods[0]?.id ? methods[0].id : '';
+              paymentMethodIdRef.current = pmId || '';
+            } catch {}
+          }
         });
 
-        setBrickInstance(cardForm);
+        // Interceptar submit do formulário para tokenizar e enviar ao backend
+        const form = document.getElementById('custom-card-form');
+        if (form) {
+          const submitHandler = async (event: Event) => {
+            event.preventDefault();
+            setIsLoading(true);
+            try {
+              const teamSlug = currentTeam?.slug || subdomain || null;
+              if (!teamSlug) {
+                toast({
+                  title: 'Instância não identificada',
+                  description: 'Defina o cliente via subdomínio ou adicione ?client=SLUG na URL (ambiente local).',
+                  variant: 'destructive'
+                });
+                throw new Error('Instância do cliente ausente');
+              }
+
+              const cardholderName = (document.getElementById('custom-cardholder') as HTMLInputElement)?.value?.trim() || '';
+              const identificationType = (document.getElementById('custom-doc-type') as HTMLSelectElement)?.value || '';
+              const identificationNumber = (document.getElementById('custom-doc-number') as HTMLInputElement)?.value?.replace(/\D/g, '') || '';
+              const cardholderEmail = (document.getElementById('custom-email') as HTMLInputElement)?.value?.trim() || '';
+
+              if (!cardholderName || !identificationType || !identificationNumber || !cardholderEmail) {
+                toast({ title: 'Dados do cartão incompletos', description: 'Preencha nome, documento e email.', variant: 'destructive' });
+                setIsLoading(false);
+                return;
+              }
+
+              // Tokenizar via SDK programática
+              const tokenResp = await mp.createCardToken?.({
+                cardholderName,
+                identificationType,
+                identificationNumber,
+              });
+              const token = tokenResp?.id || tokenResp?.token || tokenResp;
+              if (!token || typeof token !== 'string') {
+                throw new Error('Não foi possível tokenizar o cartão');
+              }
+
+              // Dados auxiliares
+              const addressObj = { street: endereco, number: numero, complement: complemento || undefined, neighborhood: bairro, city: cidade, state: estado, zipcode: cep };
+              let clientToken = '';
+              try {
+                clientToken = localStorage.getItem('delliapp_client_token') || '';
+                if (!clientToken) {
+                  clientToken = (typeof crypto !== 'undefined' && (crypto as any).randomUUID) ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random()}`;
+                  localStorage.setItem('delliapp_client_token', clientToken);
+                }
+              } catch {}
+
+              const paymentMethodId = paymentMethodIdRef.current || '';
+
+              const payload: any = {
+                team_slug: teamSlug,
+                transaction_amount: total,
+                payment_method_id: paymentMethodId, // se vazio, backend envia "" e token deve ser suficiente
+                token,
+                installments: 1,
+                payer: {
+                  email: cardholderEmail,
+                  identification: { type: identificationType, number: identificationNumber },
+                },
+                description: 'Pedido Delivery',
+                metadata: {
+                  cart_items: cartItems.map((item) => ({ product_id: item.id, quantity: item.quantity, price: item.price, notes: item.notes || null })),
+                  address: addressObj,
+                  delivery_type: 'delivery',
+                  payment_method: paymentMethod,
+                  total,
+                  delivery_fee: (deliveryEnabled ? deliveryFee : 0),
+                  allow_delivery: deliveryEnabled,
+                  created_by: user?.id || null,
+                  client_token: clientToken,
+                },
+              };
+
+              const { data, error } = await supabase.functions.invoke('create-mercadopago-payment' as never, { body: payload as never });
+              let result = data;
+              if (error || !data) {
+                const res = await fetch(`${SUPABASE_URL}/functions/v1/create-mercadopago-payment`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'apikey': SUPABASE_ANON_KEY },
+                  body: JSON.stringify(payload),
+                });
+                result = await res.json();
+                if (!res.ok) throw new Error((result?.error || result?.message || 'Falha ao criar pagamento'));
+              }
+
+              // Pedido será criado pelo webhook do Mercado Pago após confirmação
+
+              toast({ title: 'Pagamento aprovado', description: 'Seu pedido foi registrado com sucesso.' });
+              setIsLoading(false);
+              return result;
+            } catch (e) {
+              console.error('Erro em pagamento (cartão):', e);
+              toast({ title: 'Erro ao processar pagamento', description: e instanceof Error ? e.message : 'Falha ao criar pagamento', variant: 'destructive' });
+              setIsLoading(false);
+            }
+          };
+          form.addEventListener('submit', submitHandler);
+          formListenerRef.current = submitHandler;
+        }
+
         brickMountedRef.current = true;
       } catch (error) {
-        console.error('Falha ao montar CardForm:', error);
-        toast({ title: 'Erro ao iniciar pagamento', description: 'Não foi possível montar o formulário de pagamento.', variant: 'destructive' });
+        console.error('Falha ao montar Secure Fields:', error);
+        toast({ title: 'Erro ao iniciar pagamento', description: 'Não foi possível montar os campos de cartão.', variant: 'destructive' });
       }
     };
 
-    mountCardForm();
+    mountSecureFields();
   }, [mpLoaded, publicKey, paymentStep, paymentTab, paymentMethod, total]);
 
-  // Desmonta o CardForm ao sair da aba online, do passo de pagamento ou ao trocar do cartão
+  // Desmonta Secure Fields e remove listeners ao sair da aba online, do passo de pagamento ou ao trocar do cartão
   useEffect(() => {
-    if (paymentTab !== 'online' || paymentStep !== 'payment' || paymentMethod !== 'card') {
-      if (brickInstance) {
-        setBrickInstance(null);
-        brickMountedRef.current = false;
+    if (paymentTab !== 'online' || paymentStep !== 'payment' || (paymentMethod !== 'credit' && paymentMethod !== 'debit')) {
+      try { cardNumberFieldRef.current?.unmount?.(); } catch {}
+      try { expirationFieldRef.current?.unmount?.(); } catch {}
+      try { securityCodeFieldRef.current?.unmount?.(); } catch {}
+      cardNumberFieldRef.current = null;
+      expirationFieldRef.current = null;
+      securityCodeFieldRef.current = null;
+      const form = document.getElementById('custom-card-form');
+      if (form && formListenerRef.current) {
+        try { form.removeEventListener('submit', formListenerRef.current); } catch {}
       }
+      formListenerRef.current = null;
+      setBrickInstance(null);
+      brickMountedRef.current = false;
     }
   }, [paymentTab, paymentStep, paymentMethod]);
 
   const handlePayment = async () => {
     if (paymentTab === 'delivery' && (paymentMethod === 'cash' || paymentMethod === 'card_delivery')) {
       setIsLoading(true);
-      const paymentInfo = paymentMethod === 'cash'
-        ? (needChange ? `Dinheiro (Troco para R$ ${changeAmount})` : 'Dinheiro (Sem troco)')
-        : 'Cartão na entrega';
+      const teamSlug = currentTeam?.slug || subdomain || null;
+      if (!teamSlug) {
+        toast({
+          title: 'Instância não identificada',
+          description: 'Defina o cliente via subdomínio ou adicione ?client=SLUG na URL (ambiente local).',
+          variant: 'destructive'
+        });
+        setIsLoading(false);
+        return;
+      }
       const addressObj = { street: endereco, number: numero, complement: complemento || undefined, neighborhood: bairro, city: cidade, state: estado, zipcode: cep };
-      const newId = await createOrder({ paymentMethod, paymentInfo, deliveryAddress: addressObj });
-      if (newId) {
-        try {
-          const key = 'my_order_ids';
-          const saved = JSON.parse(localStorage.getItem(key) || '[]');
-          const arr = Array.isArray(saved) ? saved : [];
-          if (!arr.includes(newId)) {
-            arr.push(newId);
-            localStorage.setItem(key, JSON.stringify(arr));
-          }
-        } catch {}
+      let clientToken = '';
+      try {
+        clientToken = localStorage.getItem('delliapp_client_token') || '';
+        if (!clientToken) {
+          // @ts-ignore
+          clientToken = (typeof crypto !== 'undefined' && (crypto as any).randomUUID) ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random()}`;
+          localStorage.setItem('delliapp_client_token', clientToken);
+        }
+      } catch {}
+
+      const payload: any = {
+        team_slug: teamSlug,
+        cart_items: cartItems.map((item) => ({ product_id: item.id, quantity: item.quantity, price: item.price, notes: item.notes || null })),
+        address: addressObj,
+        payment_method: paymentMethod,
+        total,
+        created_by: user?.id || null,
+        client_token: clientToken,
+      };
+
+      try {
+        const { data, error } = await supabase.functions.invoke('create-delivery-order' as never, { body: payload as never });
+        let result = data;
+        if (error || !data) {
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/create-delivery-order`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'apikey': SUPABASE_ANON_KEY },
+            body: JSON.stringify(payload),
+          });
+          result = await res.json();
+          if (!res.ok) throw new Error((result?.error || result?.message || 'Falha ao criar pedido'));
+        }
+
+        const newId = (result as any)?.order_id;
+        if (newId) {
+          try {
+            const key = 'my_order_ids';
+            const saved = JSON.parse(localStorage.getItem(key) || '[]');
+            const arr = Array.isArray(saved) ? saved : [];
+            if (!arr.includes(newId)) {
+              arr.push(newId);
+              localStorage.setItem(key, JSON.stringify(arr));
+            }
+          } catch {}
+        }
+      } catch (e) {
+        console.error('Erro ao criar pedido na entrega:', e);
+        toast({ title: 'Erro ao criar pedido', description: e instanceof Error ? e.message : 'Falha ao criar pedido', variant: 'destructive' });
+      } finally {
+        setIsLoading(false);
       }
     }
 
@@ -407,6 +528,8 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
             delivery_type: 'delivery',
             payment_method: 'pix',
             total,
+            delivery_fee: (deliveryEnabled ? deliveryFee : 0),
+            allow_delivery: deliveryEnabled,
             created_by: user?.id || null,
             client_token: clientToken,
           },
@@ -425,7 +548,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
         }
 
         setPixPayment(result);
-        await createOrder({ paymentMethod: 'pix', paymentInfo: 'PIX', deliveryAddress: addressObj }, { silent: true });
+        // Pedido será criado pelo webhook após confirmação do PIX
       } catch (e) {
         console.error('Erro no PIX:', e);
         toast({ title: 'Erro no PIX', description: e instanceof Error ? e.message : 'Falha ao gerar QR code', variant: 'destructive' });
@@ -456,7 +579,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
     
     // Atualizar método de pagamento com base na aba selecionada
     if (value === 'online') {
-      setPaymentMethod('card');
+      setPaymentMethod('credit');
     } else {
       setPaymentMethod('card_delivery');
     }
@@ -564,7 +687,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
             </div>
             <div className="flex justify-between mb-2">
               <span className="text-gray-600">Taxa de entrega</span>
-              <span className="font-medium">R$ {deliveryFee.toFixed(2)}</span>
+              <span className="font-medium">{deliveryEnabled ? `R$ ${deliveryFee.toFixed(2)}` : 'Grátis'}</span>
             </div>
             <div className="flex justify-between mb-6">
               <span className="font-bold text-lg">Total</span>
@@ -589,34 +712,44 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
               <TabsTrigger value="delivery">Pagar na entrega</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="online" className="mt-4 space-y-4">
-              <RadioGroup 
-                value={paymentMethod} 
-                onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
-                className="space-y-3"
-              >
-                <Card className={`p-4 cursor-pointer ${paymentMethod === 'card' ? 'border-menu-primary ring-2 ring-menu-primary' : ''}`}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="card" id="card" />
-                    <Label htmlFor="card" className="flex items-center cursor-pointer">
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      <span>Cartão de Crédito/Débito</span>
-                    </Label>
-                  </div>
-                </Card>
-                
-                <Card className={`p-4 cursor-pointer ${paymentMethod === 'pix' ? 'border-menu-primary ring-2 ring-menu-primary' : ''}`}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="pix" id="pix" />
-                    <Label htmlFor="pix" className="flex items-center cursor-pointer">
-                      <QrCode className="h-4 w-4 mr-2" />
-                      <span>PIX</span>
-                    </Label>
-                  </div>
-                </Card>
-              </RadioGroup>
+             <TabsContent value="online" className="mt-4 space-y-4">
+               <RadioGroup 
+                 value={paymentMethod} 
+                 onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
+                 className="flex space-x-2"
+               >
+                 <Card className={`flex-1 p-4 cursor-pointer ${paymentMethod === 'credit' ? 'border-menu-primary ring-2 ring-menu-primary' : ''}`}>
+                   <div className="flex flex-col items-center space-y-2">
+                     <RadioGroupItem value="credit" id="credit" />
+                     <Label htmlFor="credit" className="flex flex-col items-center cursor-pointer text-center">
+                       <CreditCard className="h-6 w-6 mb-1" />
+                       <span className="text-sm">Crédito</span>
+                     </Label>
+                   </div>
+                 </Card>
+                 
+                 <Card className={`flex-1 p-4 cursor-pointer ${paymentMethod === 'debit' ? 'border-menu-primary ring-2 ring-menu-primary' : ''}`}>
+                   <div className="flex flex-col items-center space-y-2">
+                     <RadioGroupItem value="debit" id="debit" />
+                     <Label htmlFor="debit" className="flex flex-col items-center cursor-pointer text-center">
+                       <CreditCard className="h-6 w-6 mb-1" />
+                       <span className="text-sm">Débito</span>
+                     </Label>
+                   </div>
+                 </Card>
+                 
+                 <Card className={`flex-1 p-4 cursor-pointer ${paymentMethod === 'pix' ? 'border-menu-primary ring-2 ring-menu-primary' : ''}`}>
+                   <div className="flex flex-col items-center space-y-2">
+                     <RadioGroupItem value="pix" id="pix" />
+                     <Label htmlFor="pix" className="flex flex-col items-center cursor-pointer text-center">
+                       <QrCode className="h-6 w-6 mb-1" />
+                       <span className="text-sm">PIX</span>
+                     </Label>
+                   </div>
+                 </Card>
+               </RadioGroup>
               
-              {paymentMethod === 'card' && (
+              {(paymentMethod === 'credit' || paymentMethod === 'debit') && (
                 <form id="custom-card-form" className="mt-4 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-2 md:col-span-2">
@@ -648,7 +781,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
                       <input id="custom-email" type="email" className="border rounded-md p-3 h-12 w-full" placeholder="Email" />
                     </div>
                   </div>
-                  <Button type="submit" className="bg-menu-primary hover:bg-menu-primary/90">Pagar com Cartão</Button>
+                  <Button type="submit" className="bg-menu-primary hover:bg-menu-primary/90">Pagar com {paymentMethod === 'credit' ? 'Crédito' : 'Débito'}</Button>
                 </form>
               )}
               {paymentMethod === 'pix' && pixPayment && (
@@ -751,7 +884,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
             </div>
             <div className="flex justify-between mb-2">
               <span className="text-gray-600">Taxa de entrega</span>
-              <span className="font-medium">R$ {deliveryFee.toFixed(2)}</span>
+              <span className="font-medium">{deliveryEnabled ? `R$ ${deliveryFee.toFixed(2)}` : 'Grátis'}</span>
             </div>
             <div className="flex justify-between mb-6">
               <span className="font-bold text-lg">Total</span>
@@ -771,7 +904,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
             <Button
               onClick={handlePayment}
               className="flex-1 bg-menu-primary hover:bg-menu-primary/90"
-              disabled={isLoading || (paymentTab === 'online' && paymentMethod === 'card')}
+              disabled={isLoading || (paymentTab === 'online' && (paymentMethod === 'credit' || paymentMethod === 'debit'))}
             >
               {isLoading ? (
                 <>
@@ -779,7 +912,7 @@ const DeliveryAddressForm = ({ onSuccess }: DeliveryAddressFormProps) => {
                   Processando...
                 </>
               ) : (
-                (paymentTab === 'online' && paymentMethod === 'card' ? 'Use o formulário acima' : 'Finalizar Pedido')
+                (paymentTab === 'online' && (paymentMethod === 'credit' || paymentMethod === 'debit') ? 'Use o formulário acima' : 'Finalizar Pedido')
               )}
             </Button>
           </div>

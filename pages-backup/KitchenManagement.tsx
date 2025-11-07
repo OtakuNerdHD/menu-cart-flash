@@ -13,7 +13,6 @@ import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useMultiTenant } from '@/context/MultiTenantContext';
-import { useTenantRoleGuard } from '@/hooks/useTenantRoleGuard';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,13 +25,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const KitchenManagement = () => {
-  const allowed = useTenantRoleGuard(['dono','admin','cozinha']);
-  if (!allowed) return null;
-
   const { currentUser } = useUserSwitcher();
   const { isSuperAdmin, currentUser: authUser } = useAuth();
-  const { currentTeam, subdomain, isAdminMode } = useMultiTenant();
-  const { getOrders, addTeamFilter } = useSupabaseWithMultiTenant();
+  const { currentTeam } = useMultiTenant();
+  const [membershipRole, setMembershipRole] = useState<string>('client');
+  const { getOrders } = useSupabaseWithMultiTenant();
   const [orders, setOrders] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('preparing');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -43,21 +40,49 @@ const KitchenManagement = () => {
   const [pickedUpFilter, setPickedUpFilter] = useState<'all' | 'store' | 'delivery'>('all');
   const navigate = useNavigate();
   
+  useEffect(() => {
+    const fetchMembershipRole = async () => {
+      try {
+        if (isSuperAdmin) { setMembershipRole('admin'); return; }
+        if (currentTeam?.id) {
+          const { data, error } = await supabase.rpc('get_membership_role_by_team' as never, { p_team_id: currentTeam.id } as never);
+          if (error) { setMembershipRole('client'); return; }
+          setMembershipRole((data as string) || 'client');
+          return;
+        }
+        const host = window.location.hostname;
+        const parts = host.split('.');
+        const isDelli = parts.length >= 3 && parts[parts.length-3] === 'delliapp' && parts[parts.length-2] === 'com' && parts[parts.length-1] === 'br';
+        const slug = (isDelli && parts[0] !== 'app') ? parts[0] : null;
+        if (slug) {
+          const { data, error } = await supabase.rpc('get_membership_role_by_slug' as never, { p_team_slug: slug } as never);
+          if (error) { setMembershipRole('client'); return; }
+          setMembershipRole((data as string) || 'client');
+        } else {
+          setMembershipRole('client');
+        }
+      } catch (e) {
+        console.error('Erro ao buscar papel no tenant (RPC cozinha):', e);
+        setMembershipRole('client');
+      }
+    };
+    fetchMembershipRole();
+  }, [isSuperAdmin, currentTeam?.id]);
+
+  const isKitchenStaff = isSuperAdmin || ['admin', 'owner', 'restaurant_owner', 'chef', 'manager'].includes((membershipRole || '').toLowerCase());
+
+  // Sem bloqueio por carregamento: papel padrão 'client' e promove quando RPC resolver
   
   const handleStartPreparation = async (orderId: number) => {
     try {
-      // Atualizar no Supabase primeiro com isolamento por team
-      let updQuery = supabase
+      // Atualizar no Supabase primeiro
+      await supabase
         .from('orders')
         .update({ 
           status: 'in_progress',
           assigned_to: currentUser?.name || null 
         })
         .eq('id', orderId);
-      if (!isAdminMode && currentTeam?.id) {
-        updQuery = updQuery.eq('team_id', currentTeam.id);
-      }
-      await updQuery;
       
       // Atualizar estado local
       setOrders(prevOrders =>
@@ -88,15 +113,11 @@ const KitchenManagement = () => {
   
   const handleFinishPreparation = async (orderId: number) => {
     try {
-      // Atualizar no Supabase primeiro com isolamento por team
-      let updQuery = supabase
+      // Atualizar no Supabase primeiro
+      await supabase
         .from('orders')
         .update({ status: 'ready' })
         .eq('id', orderId);
-      if (!isAdminMode && currentTeam?.id) {
-        updQuery = updQuery.eq('team_id', currentTeam.id);
-      }
-      await updQuery;
       
       // Atualizar estado local
       setOrders(prevOrders =>
@@ -127,15 +148,11 @@ const KitchenManagement = () => {
   
   const handlePickedUp = async (orderId: number) => {
     try {
-      // Atualizar no Supabase primeiro com isolamento por team
-      let updQuery = supabase
+      // Atualizar no Supabase primeiro
+      await supabase
         .from('orders')
         .update({ status: 'picked_up' })
         .eq('id', orderId);
-      if (!isAdminMode && currentTeam?.id) {
-        updQuery = updQuery.eq('team_id', currentTeam.id);
-      }
-      await updQuery;
       
       // Atualizar estado local
       setOrders(prevOrders =>
@@ -163,20 +180,16 @@ const KitchenManagement = () => {
   
   const handleOpenDetails = async (order: typeof orders[0]) => {
     try {
-      let itemsQuery = supabase
+      const { data: itemsData, error: itemsError } = await supabase
         .from('order_items')
         .select('order_id, quantity, price, notes, product_id')
         .eq('order_id', order.id);
-      itemsQuery = addTeamFilter(itemsQuery);
-      const { data: itemsData, error: itemsError } = await itemsQuery;
       if (itemsError || !itemsData) throw itemsError;
       const productIds = Array.from(new Set(itemsData.map(item => item.product_id)));
-      let productsQuery = supabase
+      const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('id, name, image_url')
         .in('id', productIds);
-      productsQuery = addTeamFilter(productsQuery);
-      const { data: productsData, error: productsError } = await productsQuery;
       if (productsError || !productsData) throw productsError;
       const productMap: Record<number, { name: string; image_url?: string }> = {};
       productsData.forEach(p => { productMap[p.id] = { name: p.name, image_url: p.image_url ?? undefined }; });
@@ -325,6 +338,31 @@ const KitchenManagement = () => {
     fetchOrders();
   }, [currentUser?.id]);
   
+  // Se não for funcionário da cozinha, mostrar mensagem de acesso negado
+  if (!isKitchenStaff) {
+    return (
+      <div className="min-h-screen bg-gray-50 pt-16">
+        <div className="container mx-auto px-4 py-8">
+          <Card className="w-full max-w-md mx-auto">
+            <CardHeader>
+              <CardTitle>Acesso restrito</CardTitle>
+              <CardDescription>
+                Você não tem permissão para acessar esta página
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-500">
+                Esta página é destinada apenas para funcionários da cozinha.
+              </p>
+              <Button className="mt-4" onClick={() => navigate('/')}> 
+                Voltar para o início
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
   
   // Função para salvar um estado de filtro no localStorage
   const saveFilterState = (tabName: string, filterValue: 'all' | 'store' | 'delivery') => {
@@ -368,198 +406,108 @@ const KitchenManagement = () => {
     saveFilterState('pickedUp', value);
   };
 
-  const renderOrderCard = (order: typeof orders[0]) => {
-    const statusLabel =
-      order.status === 'preparing' || order.status === 'queued' || order.status === 'pending'
-        ? 'Na fila'
-        : order.status === 'in_progress'
-        ? 'Em preparo'
-        : order.status === 'ready'
-        ? 'Pronto'
-        : 'Retirado';
-
-    const statusStrongColor =
-      order.status === 'preparing' || order.status === 'queued' || order.status === 'pending'
-        ? 'bg-yellow-600 text-white'
-        : order.status === 'in_progress'
-        ? 'bg-blue-600 text-white'
-        : order.status === 'ready'
-        ? 'bg-green-600 text-white'
-        : 'bg-gray-600 text-white';
-
-    const colorBar =
-      order.status === 'preparing' || order.status === 'queued'
-        ? 'bg-yellow-500'
-        : order.status === 'in_progress'
-        ? 'bg-blue-500'
-        : order.status === 'ready'
-        ? 'bg-green-500'
-        : 'bg-gray-500';
-
-    const createdTime = new Date(order.created_at ?? order.createdAt ?? Date.now()).toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'America/Sao_Paulo',
-    });
-
-    const totalFormatted = `R$ ${Number(order.total ?? order.order_total ?? 0).toFixed(2)}`;
-
-    const primaryAction = (() => {
-      if (order.status === 'preparing' || order.status === 'queued' || order.status === 'pending') {
-        return { label: 'Iniciar Preparo', onClick: () => handleStartPreparation(order.id), variant: 'default' as const };
-      }
-      if (order.status === 'in_progress') {
-        return { label: 'Marcar como Pronto', onClick: () => handleFinishPreparation(order.id), variant: 'success' as const };
-      }
-      if (order.status === 'ready') {
-        return { label: 'Confirmar Retirada', onClick: () => handlePickedUp(order.id), variant: 'outline' as const };
-      }
-      return null;
-    })();
-
-    return (
-      <Card key={order.id} className="overflow-hidden mb-4">
-        {/* Barra de status superior (apenas desktop) */}
-        <div className={`h-2 ${colorBar} hidden md:block`}></div>
-
-        {/* Cabeçalho compacto para mobile */}
-        <div className="block md:hidden px-3 pt-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold">#{order.id}</span>
-              <span className="text-xs text-gray-500">{createdTime}</span>
-            </div>
-            <Badge className={`${statusStrongColor} font-semibold`}>{statusLabel}</Badge>
-          </div>
+  const renderOrderCard = (order: typeof orders[0]) => (
+    <Card key={order.id} className="overflow-hidden mb-4">
+      <div className={`h-2 ${
+        order.status === 'preparing' || order.status === 'queued' ? 'bg-yellow-500' : 
+        order.status === 'in_progress' ? 'bg-blue-500' : 
+        order.status === 'ready' ? 'bg-green-500' : 'bg-gray-500'
+      }`}></div>
+      
+      <CardHeader className="pb-2">
+        <div className="flex justify-between items-start">
+          <CardTitle className="flex items-center gap-2">
+            #{order.id} {!order.isDelivery && order.table && <span className="font-medium">Mesa {order.table}</span>}
+            {order.isDelivery && (
+              <Badge className="bg-indigo-100 text-indigo-800">Delivery</Badge>
+            )}
+          </CardTitle>
+          <Badge className={`${
+            order.status === 'preparing' || order.status === 'queued' ? 'bg-yellow-100 text-yellow-800' : 
+            order.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 
+            order.status === 'ready' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+          }`}>
+            {order.status === 'preparing' || order.status === 'queued' ? 'Na fila' : 
+             order.status === 'in_progress' ? 'Em preparo' : 
+             order.status === 'ready' ? 'Pronto' : 'Retirado'}
+          </Badge>
         </div>
-
-        {/* Cabeçalho original (apenas desktop) */}
-        <CardHeader className="pb-2 hidden md:block">
-          <div className="flex justify-between items-start">
-            <CardTitle className="flex items-center gap-2">
-              #{order.id} {!order.isDelivery && order.table && <span className="font-medium">Mesa {order.table}</span>}
-              {order.isDelivery && (
-                <Badge className="bg-indigo-100 text-indigo-800">Delivery</Badge>
-              )}
-            </CardTitle>
-            <Badge className={`${
-              order.status === 'preparing' || order.status === 'queued' ? 'bg-yellow-100 text-yellow-800' : 
-              order.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 
-              order.status === 'ready' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-            }`}>
-              {statusLabel}
-            </Badge>
+        <CardDescription className="flex items-center gap-1">
+          <Clock className="w-4 h-4" />
+          {new Date(order.created_at ?? order.createdAt ?? Date.now()).toLocaleTimeString('pt-BR', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          })}
+        </CardDescription>
+      </CardHeader>
+      
+      <CardContent>
+        <div className="space-y-3">
+          <div>
+            <h4 className="text-sm font-medium text-gray-500 mb-2">Itens</h4>
+            <ul className="space-y-2">
+              {(order.items || []).map((item, index) => (
+                <li key={index} className="flex flex-col">
+                  <div className="flex justify-between text-sm">
+                    <span>{item.quantity}x {item.name}</span>
+                    <span>R$ {(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                  {item.notes && (
+                    <span className="text-xs text-red-500 italic">{item.notes}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
-          <CardDescription className="flex items-center gap-1">
-            <Clock className="w-4 h-4" />
-            {createdTime}
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent>
-          {/* Conteúdo simplificado no mobile */}
-          <div className="block md:hidden pb-3 px-3">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold">Total: {totalFormatted}</span>
-              {primaryAction && (
-                <Button
-                  size="sm"
-                  className={
-                    primaryAction.variant === 'success'
-                      ? 'bg-green-600 hover:bg-green-700 text-white px-3 py-1 text-xs'
-                      : primaryAction.variant === 'outline'
-                      ? 'px-3 py-1 text-xs'
-                      : 'px-3 py-1 text-xs'
-                  }
-                  onClick={primaryAction.onClick}
-                >
-                  {primaryAction.label}
-                </Button>
-              )}
-            </div>
-            {/* Gatilho secundário para abrir detalhes (somente mobile) */}
-            <div className="mt-2 flex justify-end">
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Detalhes"
+          
+          <Separator />
+          
+          <div className="pt-2 space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="font-semibold">Total: R$ {Number(order.total ?? order.order_total ?? 0).toFixed(2)}</span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex items-center gap-1"
                 onClick={() => handleOpenDetails(order)}
               >
                 <ClipboardList className="h-4 w-4" />
+                Detalhes
               </Button>
             </div>
+            
+            {(order.status === 'preparing' || order.status === 'queued') && (
+              <Button 
+                className="w-full"
+                onClick={() => handleStartPreparation(order.id)}
+              >
+                Iniciar Preparo
+              </Button>
+            )}
+            
+            {order.status === 'in_progress' && (
+              <Button 
+                className="w-full bg-green-600 hover:bg-green-700"
+                onClick={() => handleFinishPreparation(order.id)}
+              >
+                Marcar como Pronto
+              </Button>
+            )}
+            
+            {order.status === 'ready' && (
+              <Button 
+                className="w-full"
+                variant="outline"
+                onClick={() => handlePickedUp(order.id)}
+              >
+                Confirmar Retirada
+              </Button>
+            )}
           </div>
-
-          {/* Conteúdo original (apenas desktop) */}
-          <div className="hidden md:block">
-            <div className="space-y-3">
-              <div>
-                <h4 className="text-sm font-medium text-gray-500 mb-2">Itens</h4>
-                <ul className="space-y-2">
-                  {(order.items || []).map((item, index) => (
-                    <li key={index} className="flex flex-col">
-                      <div className="flex justify-between text-sm">
-                        <span>{item.quantity}x {item.name}</span>
-                        <span>R$ {(item.price * item.quantity).toFixed(2)}</span>
-                      </div>
-                      {item.notes && (
-                        <span className="text-xs text-red-500 italic">{item.notes}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <Separator />
-
-              <div className="pt-2 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold">Total: {totalFormatted}</span>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex items-center gap-1"
-                    onClick={() => handleOpenDetails(order)}
-                  >
-                    <ClipboardList className="h-4 w-4" />
-                    Detalhes
-                  </Button>
-                </div>
-
-                {(order.status === 'preparing' || order.status === 'queued') && (
-                  <Button 
-                    className="w-full"
-                    onClick={() => handleStartPreparation(order.id)}
-                  >
-                    Iniciar Preparo
-                  </Button>
-                )}
-
-                {order.status === 'in_progress' && (
-                  <Button 
-                    className="w-full bg-green-600 hover:bg-green-700"
-                    onClick={() => handleFinishPreparation(order.id)}
-                  >
-                    Marcar como Pronto
-                  </Button>
-                )}
-
-                {order.status === 'ready' && (
-                  <Button 
-                    className="w-full"
-                    variant="outline"
-                    onClick={() => handlePickedUp(order.id)}
-                  >
-                    Confirmar Retirada
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
@@ -573,25 +521,25 @@ const KitchenManagement = () => {
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="w-full grid grid-cols-4">
-            <TabsTrigger value="preparing" className="relative flex items-center gap-2 py-3 -my-1 px-2 -mx-1 md:py-2 md:mx-0 md:my-0">
+            <TabsTrigger value="preparing" className="flex items-center gap-2">
               Na Fila
               {queuedOrders.length > 0 && (
                 <Badge variant="outline" className="ml-1">{queuedOrders.length}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="in_progress" className="relative flex items-center gap-2 py-3 -my-1 px-2 -mx-1 md:py-2 md:mx-0 md:my-0">
+            <TabsTrigger value="in_progress" className="flex items-center gap-2">
               Em Preparo
               {inProgressOrders.length > 0 && (
                 <Badge variant="outline" className="ml-1">{inProgressOrders.length}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="ready" className="relative flex items-center gap-2 py-3 -my-1 px-2 -mx-1 md:py-2 md:mx-0 md:my-0">
+            <TabsTrigger value="ready" className="flex items-center gap-2">
               Prontos
               {readyOrders.length > 0 && (
                 <Badge variant="outline" className="ml-1">{readyOrders.length}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="picked_up" className="relative flex items-center gap-2 py-3 -my-1 px-2 -mx-1 md:py-2 md:mx-0 md:my-0">
+            <TabsTrigger value="picked_up" className="flex items-center gap-2">
               Retirados
               {pickedUpOrders.length > 0 && (
                 <Badge variant="outline" className="ml-1">{pickedUpOrders.length}</Badge>

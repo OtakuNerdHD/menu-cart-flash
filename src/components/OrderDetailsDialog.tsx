@@ -14,6 +14,8 @@ import { toast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
+import { useMultiTenant } from '@/context/MultiTenantContext';
+import { useSupabaseWithMultiTenant } from '@/hooks/useSupabaseWithMultiTenant';
 
 interface OrderItem {
   name: string;
@@ -47,6 +49,8 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   onOpenChange,
   currentUserRole
 }) => {
+  const { currentTeam, isAdminMode } = useMultiTenant();
+  const { addTeamFilter } = useSupabaseWithMultiTenant();
   const [currentStatus, setCurrentStatus] = useState<'pending' | 'preparing' | 'ready' | 'delivered'>(order.status as any || 'pending');
   const [localOrder, setLocalOrder] = useState<OrderProps>(order);
   const [activeTab, setActiveTab] = useState('pending');
@@ -68,27 +72,34 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
   const fetchOrderDetails = useCallback(async () => {
     try {
       // Status do pedido
-      const { data: orderRow, error: orderError } = await supabase
+      let statusQuery = supabase
         .from('orders')
         .select('status')
-        .eq('id', order.id)
-        .single();
+        .eq('id', order.id);
+      if (!isAdminMode && currentTeam?.id) {
+        statusQuery = statusQuery.eq('team_id', currentTeam.id);
+      }
+      const { data: orderRow, error: orderError } = await statusQuery.single();
       if (orderRow) {
         setCurrentStatus(orderRow.status as any);
         setActiveTab(orderRow.status as any);
       }
       // Itens do pedido
-      const { data: itemsData, error: itemsError } = await supabase
+      let itemsQuery = supabase
         .from('order_items')
         .select('order_id, quantity, price, notes, product_id')
         .eq('order_id', order.id);
+      itemsQuery = addTeamFilter(itemsQuery);
+      const { data: itemsData, error: itemsError } = await itemsQuery;
       if (itemsError || !itemsData) throw itemsError;
       // Buscar nomes e imagens de produtos
       const productIds = Array.from(new Set(itemsData.map(i => i.product_id)));
-      const { data: productsData } = await supabase
+      let productsQuery = supabase
         .from('products')
         .select('id, name, image_url')
         .in('id', productIds);
+      productsQuery = addTeamFilter(productsQuery);
+      const { data: productsData } = await productsQuery;
       const productMap: Record<number, {name: string; image_url?: string}> = {};
       productsData?.forEach(p => { productMap[p.id] = p; });
       const fetchedItems = itemsData.map(item => ({
@@ -116,13 +127,17 @@ const OrderDetailsDialog: React.FC<OrderDetailsDialogProps> = ({
       console.log('Enviando pedido para cozinha:', order.id);
       
       // Atualizar o status do pedido no Supabase
-      const { error } = await supabase
+      let updQuery = supabase
         .from('orders')
         .update({ 
           status: 'preparing',
           updated_at: new Date().toISOString()
         })
         .eq('id', order.id);
+      if (!isAdminMode && currentTeam?.id) {
+        updQuery = updQuery.eq('team_id', currentTeam.id);
+      }
+      const { error } = await updQuery;
       
       if (error) {
         console.error('Erro ao atualizar pedido no Supabase:', error);

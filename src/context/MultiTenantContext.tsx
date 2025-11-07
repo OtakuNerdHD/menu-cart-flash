@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState, ReactNo
 import { useSubdomain } from '@/hooks/useSubdomain';
 import { supabase, TENANT_HEADER_KEYS } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import { start as startSingleSession } from '@/hooks/useSingleSession';
 
 const NO_TEAM_SENTINEL = '00000000-0000-0000-0000-000000000000';
 
@@ -20,6 +21,7 @@ interface MultiTenantContextType {
   isClientMode: boolean;
   subdomain: string | null;
   resolvedTeamId: string | null;
+  currentTenantRole: string | null;
   switchToClient: (clientSlug: string) => void;
   switchToAdmin: () => void;
   refreshTeam: () => Promise<void>;
@@ -36,7 +38,9 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
   const { isSuperAdmin, user } = useAuth();
   const [currentTeam, setCurrentTeam] = useState<Team | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentTenantRole, setCurrentTenantRole] = useState<string | null>(null);
   const ensuredRef = useRef<string | null>(null);
+  const startedRef = useRef(false);
 
   // Verificar se está em ambiente local
   const isLocalEnvironment = useMemo(() => {
@@ -154,6 +158,7 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
       const roleValue = isSuperAdmin ? 'general_admin' : 'user';
       await applyRlsConfig(roleValue, NO_TEAM_SENTINEL);
       setCurrentTeam(null);
+      setCurrentTenantRole(null);
       setIsLoading(false);
       return;
     }
@@ -195,6 +200,7 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
       const fallbackRole: 'general_admin' | 'admin' | 'visitor' = isSuperAdmin ? 'general_admin' : (user ? 'admin' : 'visitor');
       await applyRlsConfig(fallbackRole, NO_TEAM_SENTINEL);
       await setRestaurantContext(null);
+      setCurrentTenantRole(null);
     }
     
     setIsLoading(false);
@@ -212,6 +218,60 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
       console.log('[MultiTenant] currentTeam assegurado', currentTeam.id);
     }
   }, [user, currentTeam, effectiveAdminMode]);
+
+  // Carregar papel REAL do tenant (membership) e expor em currentTenantRole
+  useEffect(() => {
+    let cancelled = false;
+    const fetchRole = async () => {
+      try {
+        // Apenas em modo cliente com usuário e team resolvido
+        if (effectiveAdminMode || !user || !currentTeam?.id) {
+          if (!cancelled) setCurrentTenantRole(null);
+          return;
+        }
+
+        // Preferir RPC canônica se disponível
+        try {
+          const { data, error } = await supabase.rpc('get_membership_role_by_team' as never, { p_team_id: currentTeam.id } as never);
+          if (!error && data) {
+            if (!cancelled) setCurrentTenantRole(String(data));
+            return;
+          }
+        } catch {}
+
+        // Fallback: consulta direta na tabela de membership
+        try {
+          const { data: row, error: qErr } = await supabase
+            .from('team_members')
+            .select('role')
+            .eq('team_id', currentTeam.id)
+            .eq('user_id', user.id)
+            .maybeSingle();
+          if (!qErr && row && (row as any).role) {
+            if (!cancelled) setCurrentTenantRole(String((row as any).role));
+            return;
+          }
+        } catch {}
+
+        // Sem papel encontrado
+        if (!cancelled) setCurrentTenantRole(null);
+      } catch (e) {
+        console.warn('Falha ao carregar papel real do tenant:', e);
+        if (!cancelled) setCurrentTenantRole(null);
+      }
+    };
+    fetchRole();
+    return () => { cancelled = true; };
+  }, [effectiveAdminMode, user?.id, currentTeam?.id]);
+
+  // Iniciar sessão única após currentTenantRole ser resolvida
+  useEffect(() => {
+    if (!user || !currentTenantRole || startedRef.current) return;
+    startedRef.current = true;
+    startSingleSession(String(currentTenantRole)).catch(() => {
+      startedRef.current = false;
+    });
+  }, [user?.id, currentTenantRole]);
 
   // Garantir que o carregamento seja finalizado em ambiente local
   useEffect(() => {
@@ -233,6 +293,7 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
     isClientMode: !effectiveAdminMode && !!effectiveSubdomain,
     subdomain: effectiveSubdomain,
     resolvedTeamId: currentTeam?.id ?? ensuredRef.current,
+    currentTenantRole,
     switchToClient,
     switchToAdmin,
     refreshTeam

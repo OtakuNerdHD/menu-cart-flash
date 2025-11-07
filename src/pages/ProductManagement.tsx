@@ -13,8 +13,11 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useNavigate } from 'react-router-dom';
 import ComboForm, { ComboFormData } from '@/components/combo/ComboForm';
 import { getMediaUrl } from '@/lib/media';
+import { useTenantRoleGuard } from '@/hooks/useTenantRoleGuard';
 
 const ProductManagement = () => {
+  const allowed = useTenantRoleGuard(['dono','admin','cozinha','garcom']);
+  if (!allowed) return null;
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { 
@@ -23,7 +26,8 @@ const ProductManagement = () => {
     createCombo: supaCreateCombo,
     updateCombo: supaUpdateCombo,
     deleteCombo: supaDeleteCombo,
-    supabase
+    supabase,
+    addTeamFilter
   } = useSupabaseWithMultiTenant();
   const [combos, setCombos] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -259,19 +263,23 @@ const ProductManagement = () => {
       highlight_full: !!dbCombo.highlight_full,
     };
     if (base.comboType === 'existing') {
-      const { data } = await supabase
+      let q1 = supabase
         .from('combo_products')
         .select('product_id, position')
         .eq('combo_id', dbCombo.id)
         .order('position', { ascending: true });
+      q1 = addTeamFilter(q1);
+      const { data } = await q1 as any;
       base.productIds = (data || []).map((r: any) => String(r.product_id));
       base.items = [];
     } else {
-      const { data } = await supabase
+      let q2 = supabase
         .from('combo_items_custom')
         .select('description, position')
         .eq('combo_id', dbCombo.id)
         .order('position', { ascending: true });
+      q2 = addTeamFilter(q2);
+      const { data } = await q2 as any;
       base.items = (data || []).map((r: any) => r.description);
       base.productIds = [];
     }

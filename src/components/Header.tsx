@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ShoppingCart, Menu, LogOut, User } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { Link, useNavigate } from 'react-router-dom';
 import TenantIndicator from '@/components/TenantIndicator';
 import { toast } from '@/hooks/use-toast';
+import { buildNavigationItems } from '@/config/navigation';
+import { useSingleSession } from '@/hooks/useSingleSession';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
@@ -31,9 +33,11 @@ const getMetadataString = (value: unknown): string | undefined => {
 const Header = () => {
   const { totalItems, toggleCart } = useCart();
   const { user, currentUser, signOut, isSuperAdmin } = useAuth();
-  const { isAdminMode, currentTeam } = useMultiTenant();
+  const { isAdminMode, currentTeam, currentTenantRole } = useMultiTenant();
   const [membershipRole, setMembershipRole] = useState<string | null>(null);
   const navigate = useNavigate();
+  const isMasterDomain = typeof window !== 'undefined' && window.location?.host === 'app.delliapp.com.br';
+  const { endSession } = useSingleSession(null);
 
   const metadata = user?.user_metadata as Record<string, unknown> | undefined;
   const appMetadata = user?.app_metadata as Record<string, unknown> | undefined;
@@ -42,8 +46,8 @@ const Header = () => {
     ?? getMetadataString(appMetadata?.['role'])
     ?? getMetadataString(metadata?.['role']);
 
-  // Em modo cliente, priorizar papel do membership do tenant
-  const userRole = (!isAdminMode && membershipRole) ? membershipRole : userRoleFromProfile;
+  // Para navegação móvel, basear exibição nas rotas pelo currentTenantRole
+  const isAdminTenant = currentTenantRole === 'dono' || currentTenantRole === 'admin';
 
   const displayName = currentUser?.full_name
     ?? getMetadataString(metadata?.['full_name'])
@@ -55,9 +59,27 @@ const Header = () => {
     ?? getMetadataString(metadata?.['email'])
     ?? user?.email;
 
-  const roleLabel = userRole ? ROLE_LABELS[userRole] ?? userRole : null;
+  const roleLabel = currentTenantRole ? ROLE_LABELS[currentTenantRole] ?? currentTenantRole : null;
 
-  const isAdminOrOwner = isSuperAdmin || userRole === 'admin' || userRole === 'restaurant_owner' || userRole === 'owner' || userRole === 'manager';
+  const masterAdminItems = useMemo(() => {
+    if (!isMasterDomain || !user) return [];
+    const items = buildNavigationItems({
+      isAuthenticated: !!user,
+      userRole: userRoleFromProfile ?? null,
+      isAdminMode,
+    });
+    const adminKeys = new Set([
+      'orders',
+      'kitchen',
+      'products',
+      'users',
+      'api',
+      'dashboard',
+      'settings',
+      'shipping-settings',
+    ]);
+    return items.filter((i) => adminKeys.has(i.key));
+  }, [isMasterDomain, user, userRoleFromProfile, isAdminMode]);
 
   useEffect(() => {
     const fetchMembershipRole = async () => {
@@ -75,6 +97,8 @@ const Header = () => {
 
   const handleLogout = async () => {
     try {
+      // Encerrar sessão atual antes do signOut
+      await endSession();
       await signOut();
       toast({
         title: "Logout realizado com sucesso",
@@ -121,10 +145,16 @@ const Header = () => {
                               {displayEmail}
                             </span>
                           )}
-                          {roleLabel && (
-                            <Badge variant="secondary" className="w-fit px-3 py-1 text-xs capitalize">
-                              {roleLabel}
+                          {isMasterDomain ? (
+                            <Badge variant="secondary" className="w-fit px-3 py-1 text-xs">
+                              {isSuperAdmin ? 'Super Admin' : 'Administrador'}
                             </Badge>
+                          ) : (
+                            roleLabel && (
+                              <Badge variant="secondary" className="w-fit px-3 py-1 text-xs capitalize">
+                                {roleLabel}
+                              </Badge>
+                            )
                           )}
                         </div>
                       </div>
@@ -146,37 +176,40 @@ const Header = () => {
                         Acompanhar Pedido
                       </Link>
 
-                      {/* Páginas visíveis apenas para Garçons, Chef, Admin e Dono */}
-                      {['waiter', 'chef', 'admin', 'restaurant_owner'].includes(userRole || '') && (
-                        <Link to="/order-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
-                          Pedidos
-                        </Link>
+                      {/* Domínio master: usar o mesmo set de rotas administrativas do toolbox inferior, ignorando currentTenantRole */}
+                      {isMasterDomain && masterAdminItems.length > 0 ? (
+                        masterAdminItems.map((item) => (
+                          item.to ? (
+                            <Link key={item.key} to={item.to} className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                              {item.label}
+                            </Link>
+                          ) : null
+                        ))
+                      ) : (
+                        // Fora do domínio master: manter comportamento com currentTenantRole ('dono' | 'admin')
+                        isAdminTenant && (
+                          <>
+                            <Link to="/product-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                              Produtos
+                            </Link>
+                            <Link to="/user-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                              Usuários
+                            </Link>
+                            <Link to="/api-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                              APIs
+                            </Link>
+                            <Link to="/order-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                              Pedidos
+                            </Link>
+                            <Link to="/kitchen-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
+                              Cozinha
+                            </Link>
+                          </>
+                        )
                       )}
 
-                      {/* Páginas visíveis apenas para Chef, Admin e Dono */}
-                      {['chef', 'admin', 'restaurant_owner'].includes(userRole || '') && (
-                        <Link to="/kitchen-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
-                          Cozinha
-                        </Link>
-                      )}
-
-                      {/* Páginas visíveis apenas para Admin e Dono */}
-                      {isAdminOrOwner && (
-                        <>
-                          <Link to="/product-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
-                            Produtos
-                          </Link>
-                          <Link to="/user-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
-                            Usuários
-                          </Link>
-                          <Link to="/api-management" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
-                            APIs
-                          </Link>
-                        </>
-                      )}
-
-                      {/* Dashboard SAAS apenas para admins no modo admin */}
-                      {isAdminMode && userRole === 'admin' && (
+                      {/* Dashboard SAAS fora do domínio master: permanece como antes */}
+                      {!isMasterDomain && isAdminMode && (userRoleFromProfile === 'admin') && (
                         <Link to="/dashboard-saas" className="text-lg font-medium hover:text-menu-primary py-2 border-b border-gray-100">
                           Dashboard SAAS
                         </Link>

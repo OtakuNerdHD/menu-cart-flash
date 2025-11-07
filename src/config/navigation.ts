@@ -1,4 +1,4 @@
-import { LucideIcon, Home, ClipboardList, ChefHat, Boxes, Users, ServerCog, LayoutDashboard, LogIn, Route, ShoppingBag, LogOut, Sparkles } from "lucide-react";
+import { LucideIcon, Home, ClipboardList, ChefHat, Boxes, Users, ServerCog, LayoutDashboard, LogIn, Route, ShoppingBag, LogOut, Sparkles, Settings as SettingsIcon } from "lucide-react";
 
 export type AppNavItem = {
   key: string;
@@ -96,6 +96,24 @@ const baseNavItems: AppNavItem[] = [
     requiresAuth: true,
     roles: ["admin"],
     adminModeOnly: true,
+  },
+  {
+    key: "settings",
+    label: "Configurações",
+    to: "/settings",
+    icon: SettingsIcon,
+    requiresAuth: true,
+    roles: ["admin"],
+    adminModeOnly: true,
+  },
+  {
+    key: "shipping-settings",
+    label: "Configurações",
+    to: "/shipping-settings",
+    icon: Route,
+    requiresAuth: true,
+    roles: ROLE_ADMIN_OWNER,
+    showInBottomNav: true,
   },
   {
     key: "login",

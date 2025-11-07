@@ -42,9 +42,12 @@ interface AppUser {
 // Removidos mocks/extra users para evitar poluição e cruzamento de tenants
 
 const UserManagement = () => {
+  const { currentTenantRole } = useMultiTenant();
+  if (currentTenantRole === null) return null;
+  const isAdminTenant = ['dono','admin'].includes((currentTenantRole || '').toLowerCase());
   const { currentUser } = useUserSwitcher();
   const { currentUser: authUser, isSuperAdmin } = useAuth();
-  const { isAdminMode, currentTeam } = useMultiTenant();
+  const { isAdminMode, currentTeam, subdomain } = useMultiTenant();
   const { ensureRls } = useSupabaseWithMultiTenant();
   const [users, setUsers] = useState<AppUser[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -52,7 +55,6 @@ const UserManagement = () => {
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [currentUser2Edit, setCurrentUser2Edit] = useState<any>(null);
-  const [membershipRole, setMembershipRole] = useState<string>('member');
   const [newUser, setNewUser] = useState<Omit<AppUser, 'id'> & { password: string }>({
     full_name: '',
     email: '',
@@ -61,42 +63,6 @@ const UserManagement = () => {
     photo_url: '',
     password: ''
   });
-  
-  // Verificar se é admin do tenant baseado em team_members
-  const isTenantAdmin = ['admin','restaurant_owner','owner','manager'].includes((membershipRole || '').toLowerCase());
-  const isAdminOrOwner = isAdminMode || isTenantAdmin || isSuperAdmin;
-
-  useEffect(() => {
-    const fetchMembershipRole = async () => {
-      try {
-        if (isAdminMode || isSuperAdmin) { setMembershipRole('admin'); return; }
-        if (currentTeam?.id) {
-          const { data, error } = await supabase.rpc('get_membership_role_by_team' as never, { p_team_id: currentTeam.id } as never);
-          if (error) { setMembershipRole('member'); return; }
-          const role = (data as string) || 'member';
-          setMembershipRole(role === 'client' ? 'member' : role);
-          return;
-        }
-        // Fallback: resolver por slug quando o currentTeam ainda não carregou
-        const host = window.location.hostname;
-        const parts = host.split('.');
-        const isDelli = parts.length >= 3 && parts[parts.length-3] === 'delliapp' && parts[parts.length-2] === 'com' && parts[parts.length-1] === 'br';
-        const slug = (isDelli && parts[0] !== 'app') ? parts[0] : null;
-        if (slug) {
-          const { data, error } = await supabase.rpc('get_membership_role_by_slug' as never, { p_team_slug: slug } as never);
-          if (error) { setMembershipRole('member'); return; }
-          const role = (data as string) || 'member';
-          setMembershipRole(role === 'client' ? 'member' : role);
-        } else {
-          setMembershipRole('member');
-        }
-      } catch (e) {
-        console.error('Erro ao buscar papel no tenant (RPC):', e);
-        setMembershipRole('member');
-      }
-    };
-    fetchMembershipRole();
-  }, [isAdminMode, isSuperAdmin, currentTeam?.id]);
 
   useEffect(() => {
     fetchUsersFromSupabase();
@@ -439,7 +405,7 @@ const UserManagement = () => {
     toast({ title: 'Falha ao excluir usuário', description: 'Não foi possível sincronizar com o servidor.', variant: 'destructive' });
   };
 
-  if (!isAdminOrOwner) {
+  if (!isAdminTenant) {
     return (
       <div className="min-h-screen bg-gray-50 pt-16">
         <div className="container mx-auto px-4 py-8">

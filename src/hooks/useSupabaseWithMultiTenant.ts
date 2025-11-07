@@ -180,6 +180,9 @@ export const useSupabaseWithMultiTenant = () => {
 
   // Categorias dinâmicas (funções hoisted)
   async function getCategories() {
+    if (window.location.host === 'app.delliapp.com.br') {
+      return [] as any[];
+    }
     if (isAdminMode) {
       await ensureRlsAdmin();
     } else {
@@ -257,52 +260,69 @@ export const useSupabaseWithMultiTenant = () => {
 
   // Retorna nomes de categorias associadas a um produto
   async function getCategoriesForProduct(productId: number): Promise<string[]> {
+    if (window.location.host === 'app.delliapp.com.br') {
+      return [] as any[];
+    }
     if (isAdminMode) {
       await ensureRlsAdmin();
     } else {
       await ensureRlsUserTeam();
       if (subdomain) { try { await supabase.rpc('ensure_membership' as never, { team_slug: subdomain } as never); } catch {} }
     }
-    const { data: links, error: lerr } = await (supabase as any)
+    let linkQuery = (supabase as any)
       .from('product_categories')
       .select('category_id')
       .eq('product_id', productId);
+    linkQuery = addTeamFilter(linkQuery);
+    const { data: links, error: lerr } = await linkQuery;
     if (lerr) throw lerr;
     const ids = (links || []).map((r: any) => r.category_id);
     if (ids.length === 0) return [];
-    const { data: cats, error: cerr } = await (supabase as any)
+    let catQuery = (supabase as any)
       .from('categories')
       .select('id,name')
       .in('id', ids);
+    catQuery = addTeamFilter(catQuery);
+    const { data: cats, error: cerr } = await catQuery;
     if (cerr) throw cerr;
     return (cats || []).map((c: any) => c.name);
   }
 
   // Retorna nomes de categorias associadas a um combo
   async function getCategoriesForCombo(comboId: number): Promise<string[]> {
+    if (window.location.host === 'app.delliapp.com.br') {
+      return [] as any[];
+    }
     if (isAdminMode) {
       await ensureRlsAdmin();
     } else {
       await ensureRlsUserTeam();
       if (subdomain) { try { await supabase.rpc('ensure_membership' as never, { team_slug: subdomain } as never); } catch {} }
     }
-    const { data: links, error: lerr } = await (supabase as any)
+    let linkQuery = (supabase as any)
       .from('combo_categories')
       .select('category_id')
       .eq('combo_id', comboId);
+    linkQuery = addTeamFilter(linkQuery);
+    const { data: links, error: lerr } = await linkQuery;
     if (lerr) throw lerr;
     const ids = (links || []).map((r: any) => r.category_id);
     if (ids.length === 0) return [];
-    const { data: cats, error: cerr } = await (supabase as any)
+    let catQuery = (supabase as any)
       .from('categories')
       .select('id,name')
       .in('id', ids);
+    catQuery = addTeamFilter(catQuery);
+    const { data: cats, error: cerr } = await catQuery;
     if (cerr) throw cerr;
     return (cats || []).map((c: any) => c.name);
   }
 
   // Lista categorias existentes com pelo menos 1 item
   const getNonEmptyCategories = useCallback(async (kind: 'products' | 'combos'): Promise<string[]> => {
+    if (window.location.host === 'app.delliapp.com.br') {
+      return [] as any[];
+    }
     // Para visitantes, configurar RLS antes de consultar
     if (!authUser && !authLoading) {
       await ensureRlsVisitor();
@@ -311,33 +331,41 @@ export const useSupabaseWithMultiTenant = () => {
     }
     
     if (kind === 'products') {
-      const { data, error } = await (supabase as any)
+      let pcQuery = (supabase as any)
         .from('product_categories')
         .select('category_id')
         .limit(2000);
+      pcQuery = addTeamFilter(pcQuery);
+      const { data, error } = await pcQuery;
       if (error) throw error;
       const ids = Array.from(new Set((data || []).map((r: any) => r.category_id)));
       if (ids.length === 0) return [];
-      const { data: cats, error: cerr } = await (supabase as any)
+      let catsQuery = (supabase as any)
         .from('categories')
         .select('name,id')
         .in('id', ids)
         .order('name', { ascending: true });
+      catsQuery = addTeamFilter(catsQuery);
+      const { data: cats, error: cerr } = await catsQuery;
       if (cerr) throw cerr;
       return (cats || []).map((c: any) => c.name);
     } else {
-      const { data, error } = await (supabase as any)
+      let ccQuery = (supabase as any)
         .from('combo_categories')
         .select('category_id')
         .limit(2000);
+      ccQuery = addTeamFilter(ccQuery);
+      const { data, error } = await ccQuery;
       if (error) throw error;
       const ids = Array.from(new Set((data || []).map((r: any) => r.category_id)));
       if (ids.length === 0) return [];
-      const { data: cats, error: cerr } = await (supabase as any)
+      let catsQuery = (supabase as any)
         .from('categories')
         .select('name,id')
         .in('id', ids)
         .order('name', { ascending: true });
+      catsQuery = addTeamFilter(catsQuery);
+      const { data: cats, error: cerr } = await catsQuery;
       if (cerr) throw cerr;
       return (cats || []).map((c: any) => c.name);
     }
@@ -458,25 +486,11 @@ export const useSupabaseWithMultiTenant = () => {
 
   // Garante que visitantes (não autenticados) tenham RLS configurado
   const ensureRlsVisitorInternal = async (): Promise<string | null> => {
-<<<<<<< HEAD
-=======
-    // Verificar se já temos teamId em cache antes de resolver
-    if (teamIdCacheRef.current.slug === subdomain && teamIdCacheRef.current.teamId) {
-      console.log('[ensureRlsVisitorInternal] Usando teamId do cache:', teamIdCacheRef.current.teamId);
-      return teamIdCacheRef.current.teamId;
-    }
-    
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
     const teamId = await resolveTeamIdBySlug();
     if (!teamId) {
       console.warn('Não foi possível determinar o team do visitante.');
       return null;
     }
-<<<<<<< HEAD
-=======
-    
-    console.log('[ensureRlsVisitorInternal] Configurando RLS para visitante, teamId:', teamId);
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
 
     try {
       await supabase.rpc('set_app_config', {
@@ -521,14 +535,7 @@ export const useSupabaseWithMultiTenant = () => {
       localStorage.setItem(TENANT_HEADER_KEYS.role, 'visitor');
       localStorage.setItem(TENANT_HEADER_KEYS.tenantId, teamId);
       localStorage.setItem(TENANT_HEADER_KEYS.restaurantId, restaurantId);
-<<<<<<< HEAD
     } catch {}
-=======
-      console.log('[ensureRlsVisitorInternal] Headers persistidos:', { role: 'visitor', teamId, restaurantId });
-    } catch (e) {
-      console.warn('[ensureRlsVisitorInternal] Erro ao persistir headers:', e);
-    }
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
 
     console.log('[Visitante] RLS configurado para teamId:', teamId);
     return teamId;
@@ -629,7 +636,18 @@ export const useSupabaseWithMultiTenant = () => {
       return query;
     }
 
-    const effectiveTeamId = currentTeam?.id ?? resolvedTeamId ?? null;
+    // Fallback adicional: quando o contexto ainda não resolveu o team,
+    // utilizamos o valor persistido no localStorage para garantir isolamento.
+    let effectiveTeamId = currentTeam?.id ?? resolvedTeamId ?? null;
+    if (!effectiveTeamId) {
+      try {
+        const lsTeamId = localStorage.getItem('current_team_id');
+        if (lsTeamId && lsTeamId !== 'default-team') {
+          effectiveTeamId = lsTeamId;
+        }
+      } catch {}
+    }
+
     if (effectiveTeamId) {
       return query.eq('team_id', effectiveTeamId);
     }
@@ -641,6 +659,9 @@ export const useSupabaseWithMultiTenant = () => {
     onlyHighlightedHomepage?: boolean;
     onlyHighlightedCombos?: boolean;
   }) => {
+    if (window.location.host === 'app.delliapp.com.br') {
+      return [] as any[];
+    }
     // Para visitantes não logados, garantir RLS antes de consultar
     if (!authUser && !authLoading) {
       await ensureRlsVisitorInternal();
@@ -659,11 +680,7 @@ export const useSupabaseWithMultiTenant = () => {
     const { data, error } = await query.order('created_at', { ascending: false });
     if (error) throw error;
     return data;
-<<<<<<< HEAD
-  }, [authUser, authLoading, isAdminMode, currentTeam, resolvedTeamId, subdomain]);
-=======
   }, [authUser, authLoading, isAdminMode, currentTeam, subdomain]);
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
 
   const getComboById = async (id: string | number) => {
     let teamIdForFilter: string | null = null;
@@ -861,6 +878,9 @@ export const useSupabaseWithMultiTenant = () => {
 
   // Produtos
   const getProducts = useCallback(async (filters?: { category?: string; restaurant_id?: string }) => {
+    if (window.location.host === 'app.delliapp.com.br') {
+      return [] as any[];
+    }
     // Para visitantes não logados, garantir RLS antes de consultar
     if (!authUser && !authLoading) {
       await ensureRlsVisitorInternal();
@@ -883,11 +903,7 @@ export const useSupabaseWithMultiTenant = () => {
     const { data, error } = await query;
     if (error) throw error;
     return data;
-<<<<<<< HEAD
-  }, [authUser, authLoading, isAdminMode, currentTeam, resolvedTeamId, subdomain]);
-=======
   }, [authUser, authLoading, isAdminMode, currentTeam, subdomain]);
->>>>>>> 5ce9250d93104389be3c0fc25bec59864d6849a1
 
   const createProduct = async (product: any) => {
     // Garantir contexto RLS e membership
@@ -1000,6 +1016,9 @@ export const useSupabaseWithMultiTenant = () => {
 
   // Pedidos
   const getOrders = async (filters?: { status?: string; restaurant_id?: string }) => {
+    if (window.location.host === 'app.delliapp.com.br') {
+      return [] as any[];
+    }
     // Evitar nested select que depende de FK declarada no PostgREST
     let query = supabase.from('orders').select('*');
     
@@ -1049,6 +1068,9 @@ export const useSupabaseWithMultiTenant = () => {
 
   // Restaurantes
   const getRestaurants = async () => {
+    if (window.location.host === 'app.delliapp.com.br') {
+      return [] as any[];
+    }
     let query = supabase.from('restaurants').select('*');
     
     // Aplicar filtro de team automaticamente
@@ -1077,6 +1099,9 @@ export const useSupabaseWithMultiTenant = () => {
 
   // Mesas
   const getTables = async (restaurant_id?: string) => {
+    if (window.location.host === 'app.delliapp.com.br') {
+      return [] as any[];
+    }
     const baseQuery = supabase.from('tables').select('*');
     const teamQuery = addTeamFilter(baseQuery);
     
