@@ -73,6 +73,7 @@ Deno.serve(async (req: Request) => {
 
     if (metadata && typeof metadata === "object") payBody.metadata = metadata;
 
+<<<<<<< HEAD
     // Regras específicas para PIX: garantir payer com email
     const isPix = (String(payment_method_id || "").toLowerCase() === "pix");
     if (isPix) {
@@ -98,6 +99,33 @@ Deno.serve(async (req: Request) => {
       
       payBody.payer = { email };
     }
+=======
+    // Regras específicas para PIX: garantir payer com email
+    const isPix = (String(payment_method_id || "").toLowerCase() === "pix");
+    if (isPix) {
+      // PIX sempre precisa de um email no payer
+      let email = (payer?.email || "").trim();
+      
+      // Se não fornecido, tentar buscar do perfil do usuário
+      if (!email && metadata && typeof metadata === "object" && (metadata as any).created_by) {
+        try {
+          const { data: profile } = await sb
+            .from("profiles")
+            .select("email")
+            .eq("id", (metadata as any).created_by)
+            .maybeSingle();
+          if (profile?.email) email = String(profile.email).trim();
+        } catch {}
+      }
+      
+      // Se ainda não tiver email, usar um email padrão (será substituído no frontend)
+      if (!email) {
+        email = "cliente@exemplo.com";
+      }
+      
+      payBody.payer = { email };
+    }
+>>>>>>> d25b33b431c73611ccee8a3d119fb19b2d1138d0
 
     // Dados específicos de cartão
     if ((payment_method_id || "").toLowerCase().includes("card") || token) {
@@ -106,6 +134,7 @@ Deno.serve(async (req: Request) => {
       payBody.installments = Number(installments || 1);
     }
 
+<<<<<<< HEAD
     console.log('[create-payment] Enviando para Mercado Pago:', JSON.stringify(payBody));
     
     // Gera chave de idempotência obrigatória pelo Mercado Pago
@@ -144,6 +173,46 @@ Deno.serve(async (req: Request) => {
 
     // Retornar o JSON do pagamento
     return json(paymentJson);
+=======
+    console.log('[create-payment] Enviando para Mercado Pago:', JSON.stringify(payBody));
+    
+    // Gera chave de idempotência obrigatória pelo Mercado Pago
+    const idempotencyKey = String(
+      (metadata && ((metadata as any).client_token || (metadata as any).order_id)) || `${team.slug}-${Date.now()}`
+    );
+
+    const res = await fetch("https://api.mercadopago.com/v1/payments", {
+      method: "POST",
+      headers: { 
+        Authorization: `Bearer ${accessToken}`, 
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": idempotencyKey,
+      },
+      body: JSON.stringify(payBody),
+    });
+
+    const paymentJson = await res.json().catch(() => ({}));
+    
+    console.log('[create-payment] Resposta Mercado Pago:', { status: res.status, body: JSON.stringify(paymentJson) });
+
+    try {
+      await sb.from("payment_events").insert({
+        team_id: team.id,
+        event_type: res.ok ? "payment_created" : "payment_failed",
+        payload: { request: payBody, response: paymentJson },
+      });
+    } catch (e) {
+      console.warn('[create-payment] Erro ao salvar evento:', e);
+    }
+
+    if (!res.ok) {
+      console.error('[create-payment] Erro do Mercado Pago:', paymentJson);
+      return json({ error: "PAYMENT_FAILED", details: paymentJson }, { status: 400 });
+    }
+
+    // Retornar o JSON do pagamento
+    return json(paymentJson);
+>>>>>>> d25b33b431c73611ccee8a3d119fb19b2d1138d0
   } catch (e) {
     return json({ error: "UNEXPECTED", details: String(e) }, { status: 500 });
   }

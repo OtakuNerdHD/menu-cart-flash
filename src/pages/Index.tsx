@@ -18,7 +18,11 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const { teamId, isLoading: teamLoading, isReady: teamReady } = useTeam();
   const { loading: authLoading, isSuperAdmin, user } = useAuth();
+<<<<<<< HEAD
   const { isLoading: multiTenantLoading, isAdminMode, resolvedTeamId } = useMultiTenant();
+=======
+  const { isLoading: multiTenantLoading, isAdminMode } = useMultiTenant();
+>>>>>>> d25b33b431c73611ccee8a3d119fb19b2d1138d0
   const { ensureRls, supabase, getProducts, getCombos, getNonEmptyCategories } = useSupabaseWithMultiTenant();
   const [highlightCombos, setHighlightCombos] = useState<any[]>([]);
   const [categoryNames, setCategoryNames] = useState<string[]>([]);
@@ -26,10 +30,18 @@ const Index = () => {
   useEffect(() => {
     let cancelled = false;
 
+<<<<<<< HEAD
     // Aguardar contextos essenciais sem prender na ausência de resolvedTeamId:
     // usamos readiness do TeamContext como condição mais robusta
     const shouldWait = authLoading || multiTenantLoading || (!isAdminMode && !teamReady);
     if (shouldWait) {
+=======
+    // Aguardar apenas carregamento de autenticação e multi-tenant
+    const shouldWait = authLoading || multiTenantLoading;
+
+    if (shouldWait) {
+      console.log('Index aguardando contextos', { authLoading, multiTenantLoading });
+>>>>>>> d25b33b431c73611ccee8a3d119fb19b2d1138d0
       setLoading(true);
       return () => { cancelled = true; };
     }
@@ -106,8 +118,12 @@ const Index = () => {
     const fetchCategories = async () => {
       try {
         const cats = await getNonEmptyCategories('products');
+<<<<<<< HEAD
         // getNonEmptyCategories retorna uma lista de nomes (string[])
         if (!cancelled) setCategoryNames(Array.isArray(cats) ? cats : []);
+=======
+        if (!cancelled) setCategoryNames(Array.isArray(cats) ? cats.map((c: any) => c.name) : []);
+>>>>>>> d25b33b431c73611ccee8a3d119fb19b2d1138d0
       } catch {
         if (!cancelled) setCategoryNames([]);
       }
@@ -120,7 +136,11 @@ const Index = () => {
     return () => {
       cancelled = true;
     };
+<<<<<<< HEAD
   }, [authLoading, multiTenantLoading, teamReady, isAdminMode]);
+=======
+  }, [authLoading, multiTenantLoading, user?.id, isAdminMode, getNonEmptyCategories, getProducts, getCombos]);
+>>>>>>> d25b33b431c73611ccee8a3d119fb19b2d1138d0
 
   const filteredItems = selectedCategory === 'todos'
     ? products
