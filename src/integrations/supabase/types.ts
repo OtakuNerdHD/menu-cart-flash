@@ -210,6 +210,7 @@ export type Database = {
           highlight_homepage: boolean
           id: number
           images: string[] | null
+          is_published: boolean
           perks: string[] | null
           price_label: string | null
           savings: string | null
@@ -229,6 +230,7 @@ export type Database = {
           highlight_homepage?: boolean
           id?: number
           images?: string[] | null
+          is_published?: boolean
           perks?: string[] | null
           price_label?: string | null
           savings?: string | null
@@ -248,6 +250,7 @@ export type Database = {
           highlight_homepage?: boolean
           id?: number
           images?: string[] | null
+          is_published?: boolean
           perks?: string[] | null
           price_label?: string | null
           savings?: string | null
@@ -384,6 +387,7 @@ export type Database = {
         Row: {
           address: Json | null
           assigned_to: string | null
+          client_token: string | null
           created_at: string | null
           created_by: string | null
           delivery_person_id: number | null
@@ -393,7 +397,9 @@ export type Database = {
           kitchen_status: string | null
           order_number: number | null
           order_type: string | null
+          payment_id: string | null
           payment_method: string | null
+          payment_status: string | null
           restaurant_id: number | null
           status: string
           table_id: number | null
@@ -407,6 +413,7 @@ export type Database = {
         Insert: {
           address?: Json | null
           assigned_to?: string | null
+          client_token?: string | null
           created_at?: string | null
           created_by?: string | null
           delivery_person_id?: number | null
@@ -416,7 +423,9 @@ export type Database = {
           kitchen_status?: string | null
           order_number?: number | null
           order_type?: string | null
+          payment_id?: string | null
           payment_method?: string | null
+          payment_status?: string | null
           restaurant_id?: number | null
           status?: string
           table_id?: number | null
@@ -430,6 +439,7 @@ export type Database = {
         Update: {
           address?: Json | null
           assigned_to?: string | null
+          client_token?: string | null
           created_at?: string | null
           created_by?: string | null
           delivery_person_id?: number | null
@@ -439,7 +449,9 @@ export type Database = {
           kitchen_status?: string | null
           order_number?: number | null
           order_type?: string | null
+          payment_id?: string | null
           payment_method?: string | null
+          payment_status?: string | null
           restaurant_id?: number | null
           status?: string
           table_id?: number | null
@@ -670,10 +682,11 @@ export type Database = {
           image_url: string | null
           images: string[] | null
           ingredients: string | null
+          is_published: boolean
           name: string | null
           note_hint: string | null
           nutritional_info: Json | null
-          price: number | null
+          price: number
           restaurant_id: number | null
           team_id: string | null
           thumbnail: string | null
@@ -689,10 +702,11 @@ export type Database = {
           image_url?: string | null
           images?: string[] | null
           ingredients?: string | null
+          is_published?: boolean
           name?: string | null
           note_hint?: string | null
           nutritional_info?: Json | null
-          price?: number | null
+          price?: number
           restaurant_id?: number | null
           team_id?: string | null
           thumbnail?: string | null
@@ -708,10 +722,11 @@ export type Database = {
           image_url?: string | null
           images?: string[] | null
           ingredients?: string | null
+          is_published?: boolean
           name?: string | null
           note_hint?: string | null
           nutritional_info?: Json | null
-          price?: number | null
+          price?: number
           restaurant_id?: number | null
           team_id?: string | null
           thumbnail?: string | null
@@ -885,13 +900,19 @@ export type Database = {
           city: string | null
           created_at: string | null
           delivery_fee_per_km: number | null
+          delivery_min_fee: number | null
           delivery_radius: number | null
+          fixed_delivery_fee: number | null
+          freight_enabled: boolean
+          freight_type: string | null
           id: number
           latitude: number | null
           longitude: number | null
+          order_min_amount: number | null
           payment_provider: string | null
           state: string | null
           store_name: string | null
+          team_id: string | null
           updated_at: string | null
           zipcode: string | null
         }
@@ -902,13 +923,19 @@ export type Database = {
           city?: string | null
           created_at?: string | null
           delivery_fee_per_km?: number | null
+          delivery_min_fee?: number | null
           delivery_radius?: number | null
+          fixed_delivery_fee?: number | null
+          freight_enabled?: boolean
+          freight_type?: string | null
           id?: number
           latitude?: number | null
           longitude?: number | null
+          order_min_amount?: number | null
           payment_provider?: string | null
           state?: string | null
           store_name?: string | null
+          team_id?: string | null
           updated_at?: string | null
           zipcode?: string | null
         }
@@ -919,13 +946,19 @@ export type Database = {
           city?: string | null
           created_at?: string | null
           delivery_fee_per_km?: number | null
+          delivery_min_fee?: number | null
           delivery_radius?: number | null
+          fixed_delivery_fee?: number | null
+          freight_enabled?: boolean
+          freight_type?: string | null
           id?: number
           latitude?: number | null
           longitude?: number | null
+          order_min_amount?: number | null
           payment_provider?: string | null
           state?: string | null
           store_name?: string | null
+          team_id?: string | null
           updated_at?: string | null
           zipcode?: string | null
         }
@@ -1539,6 +1572,11 @@ export type Database = {
             Returns: string
           }
       enablelongtransactions: { Args: never; Returns: string }
+      end_other_sessions_current_scope: {
+        Args: { p_keep_session: string }
+        Returns: number
+      }
+      end_session: { Args: { p_session_id: string }; Returns: undefined }
       ensure_default_categories: {
         Args: { p_team_id: string }
         Returns: undefined
@@ -1754,6 +1792,7 @@ export type Database = {
           highlight_homepage: boolean
           id: number
           images: string[] | null
+          is_published: boolean
           perks: string[] | null
           price_label: string | null
           savings: string | null
@@ -1782,10 +1821,11 @@ export type Database = {
           image_url: string | null
           images: string[] | null
           ingredients: string | null
+          is_published: boolean
           name: string | null
           note_hint: string | null
           nutritional_info: Json | null
-          price: number | null
+          price: number
           restaurant_id: number | null
           team_id: string | null
           thumbnail: string | null
@@ -1840,6 +1880,7 @@ export type Database = {
           highlight_homepage: boolean
           id: number
           images: string[] | null
+          is_published: boolean
           perks: string[] | null
           price_label: string | null
           savings: string | null
@@ -1874,10 +1915,11 @@ export type Database = {
           image_url: string | null
           images: string[] | null
           ingredients: string | null
+          is_published: boolean
           name: string | null
           note_hint: string | null
           nutritional_info: Json | null
-          price: number | null
+          price: number
           restaurant_id: number | null
           team_id: string | null
           thumbnail: string | null
@@ -2492,6 +2534,16 @@ export type Database = {
         Args: { geom: unknown; move: number; wrap: number }
         Returns: unknown
       }
+      start_session: {
+        Args: {
+          p_fingerprint?: string
+          p_ip?: unknown
+          p_role_at_login: string
+          p_user_agent?: string
+        }
+        Returns: string
+      }
+      touch_session: { Args: { p_session_id: string }; Returns: undefined }
       unassign_table: {
         Args: { p_table_id: number }
         Returns: {
