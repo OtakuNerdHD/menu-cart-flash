@@ -76,19 +76,25 @@ export function useSingleSession(roleAtLogin: string | null) {
           localStorage.setItem(TENANT_HEADER_KEYS.role, roleHeader);
         } catch {}
         
-        // CRÍTICO: encerrar sessão anterior antes de criar nova
-        const oldSessionId = localStorage.getItem(KEY(scope));
-        if (oldSessionId) {
-          console.log('[SingleSession] Encerrando sessão anterior antes de criar nova:', oldSessionId);
-          try {
-            await supabase.rpc('end_session', { p_session_id: oldSessionId });
-          } catch (endError) {
-            console.warn('[SingleSession] Erro ao encerrar sessão anterior (ignorando):', endError);
+        // 1) Tentar reutilizar sessão existente válida no escopo
+        const existingLocalId = localStorage.getItem(KEY(scope));
+        if (existingLocalId) {
+          try { await supabase.rpc('touch_session', { p_session_id: existingLocalId }); } catch {}
+          const { data: existingRow } = await (supabase.from as any)('app.sessions')
+            .select('id, revoked_at')
+            .eq('id', existingLocalId)
+            .maybeSingle();
+          if (existingRow && !existingRow.revoked_at) {
+            sessionIdRef.current = existingLocalId;
+            console.log('[SingleSession] Reutilizando sessão existente:', existingLocalId);
+            return;
           }
+          // inválida -> limpar
           localStorage.removeItem(KEY(scope));
           sessionIdRef.current = null;
         }
         
+        // 2) Não havendo sessão válida, criar uma nova
         console.log('[SingleSession] Iniciando nova sessão automaticamente', { scope, role });
         const { data, error } = await supabase.rpc('start_session', {
           p_role_at_login: role,
@@ -97,7 +103,26 @@ export function useSingleSession(roleAtLogin: string | null) {
           p_ip: null
         });
         
-        if (error) throw error;
+        if (error) {
+          const code = (error as any)?.code;
+          const msg = (error as any)?.message || '';
+          const isConflict = code === '23505' || msg.includes('duplicate key value');
+          if (isConflict) {
+            console.warn('[SingleSession] Conflito de sessão detectado (23505). Buscando sessão ativa do escopo...');
+            let q = (supabase.from as any)('app.sessions')
+              .select('id, team_id_text, revoked_at, created_at')
+              .is('revoked_at', null);
+            q = resolvedTeamId ? q.eq('team_id_text', resolvedTeamId) : q.is('team_id_text', null);
+            const { data: activeInScope } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle();
+            if (activeInScope?.id) {
+              localStorage.setItem(KEY(scope), activeInScope.id);
+              sessionIdRef.current = activeInScope.id;
+              console.log('[SingleSession] Sessão ativa do escopo aplicada:', activeInScope.id);
+              return;
+            }
+          }
+          throw error;
+        }
         
         const newId = (data as string) || null;
         sessionIdRef.current = newId;
@@ -105,6 +130,8 @@ export function useSingleSession(roleAtLogin: string | null) {
           localStorage.setItem(KEY(scope), newId);
           sessionStarted = true;
           console.log('[SingleSession] Sessão iniciada:', newId);
+          // Garante unicidade encerrando outras do mesmo escopo (se existirem)
+          try { await supabase.rpc('end_other_sessions_current_scope', { p_keep_session: newId }); } catch {}
         }
       } catch (e) {
         console.error('[SingleSession] Erro ao iniciar sessão:', e);
@@ -121,8 +148,19 @@ export function useSingleSession(roleAtLogin: string | null) {
       try {
         console.log('[SingleSession] Heartbeat para sessão:', sid);
         await supabase.rpc('touch_session', { p_session_id: sid });
+        // Verifica se a sessão não foi revogada por outro cliente
+        const { data: row } = await (supabase.from as any)('app.sessions')
+          .select('id, revoked_at')
+          .eq('id', sid)
+          .maybeSingle();
+        if (!row || row.revoked_at) {
+          console.warn('[SingleSession] Sessão revogada detectada no heartbeat. Deslogando...');
+          try { await supabase.auth.signOut(); } catch {}
+          localStorage.removeItem(KEY(scope));
+          sessionIdRef.current = null;
+        }
       } catch (e) {
-        console.warn('[SingleSession] touch_session error, deslogando:', e);
+        console.warn('[SingleSession] touch_session erro, deslogando:', e);
         try { await supabase.auth.signOut(); } catch {}
         localStorage.removeItem(KEY(scope));
         sessionIdRef.current = null;
@@ -159,14 +197,18 @@ export function useSingleSession(roleAtLogin: string | null) {
         localStorage.setItem(TENANT_HEADER_KEYS.role, roleHeader);
       } catch {}
       
-      // CRÍTICO: encerrar sessão anterior antes de criar nova
-      const oldSessionId = localStorage.getItem(KEY(scope));
-      if (oldSessionId) {
-        console.log('[SingleSession] startBound: encerrando sessão anterior:', oldSessionId);
-        try {
-          await supabase.rpc('end_session', { p_session_id: oldSessionId });
-        } catch (endError) {
-          console.warn('[SingleSession] startBound: erro ao encerrar sessão anterior (ignorando):', endError);
+      // 1) Reutilizar sessão existente válida
+      const localId = localStorage.getItem(KEY(scope));
+      if (localId) {
+        try { await supabase.rpc('touch_session', { p_session_id: localId }); } catch {}
+        const { data: row } = await (supabase.from as any)('app.sessions')
+          .select('id, revoked_at')
+          .eq('id', localId)
+          .maybeSingle();
+        if (row && !row.revoked_at) {
+          sessionIdRef.current = localId;
+          console.log('[SingleSession] startBound: reutilizando sessão:', localId);
+          return;
         }
         localStorage.removeItem(KEY(scope));
         sessionIdRef.current = null;
@@ -182,13 +224,33 @@ export function useSingleSession(roleAtLogin: string | null) {
         p_ip: null
       });
       
-      if (error) throw error;
+      if (error) {
+        const code = (error as any)?.code;
+        const msg = (error as any)?.message || '';
+        const isConflict = code === '23505' || msg.includes('duplicate key value');
+        if (isConflict) {
+          console.warn('[SingleSession] startBound: conflito detectado. Aplicando sessão ativa do escopo...');
+          let q = (supabase.from as any)('app.sessions')
+            .select('id, team_id_text, revoked_at, created_at')
+            .is('revoked_at', null);
+          q = resolvedTeamId ? q.eq('team_id_text', resolvedTeamId) : q.is('team_id_text', null);
+          const { data: active } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle();
+          if (active?.id) {
+            localStorage.setItem(KEY(scope), active.id);
+            sessionIdRef.current = active.id;
+            console.log('[SingleSession] startBound: sessão ativa aplicada:', active.id);
+            return;
+          }
+        }
+        throw error;
+      }
       
       const newId = (data as string) || null;
       sessionIdRef.current = newId;
       if (newId) {
         localStorage.setItem(KEY(scope), newId);
         console.log('[SingleSession] startBound: sessão criada:', newId);
+        try { await supabase.rpc('end_other_sessions_current_scope', { p_keep_session: newId }); } catch {}
       }
     } catch (e) {
       console.error('[SingleSession] start_session error', e);
