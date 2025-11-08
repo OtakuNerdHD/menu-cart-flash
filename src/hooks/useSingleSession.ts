@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, TENANT_HEADER_KEYS } from '@/integrations/supabase/client';
 import { useMultiTenant } from '@/context/MultiTenantContext';
 
 const KEY = (scope: string) => `sess_${scope}`;
@@ -55,19 +55,27 @@ export async function start(roleAtLogin: string) {
 }
 
 export function useSingleSession(roleAtLogin: string | null) {
-  const { subdomain, currentTenantRole } = useMultiTenant();
-  const scope = currentScope(subdomain);
+  const { subdomain, currentTenantRole, resolvedTeamId } = useMultiTenant();
+  const scope = `${currentScope(subdomain)}${resolvedTeamId ? `:${resolvedTeamId}` : ''}`;
   const sessionIdRef = useRef<string | null>(null);
 
   // Iniciar sessão automaticamente quando role resolver
   useEffect(() => {
     if (!roleAtLogin && !currentTenantRole) return;
+    if (subdomain && !resolvedTeamId) return;
     
     const role = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
     let sessionStarted = false;
     
     const initSession = async () => {
       try {
+        // Garante headers multi-tenant corretos antes das RPCs
+        try {
+          if (resolvedTeamId) localStorage.setItem(TENANT_HEADER_KEYS.tenantId, resolvedTeamId);
+          const roleHeader = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
+          localStorage.setItem(TENANT_HEADER_KEYS.role, roleHeader);
+        } catch {}
+        
         // CRÍTICO: encerrar sessão anterior antes de criar nova
         const oldSessionId = localStorage.getItem(KEY(scope));
         if (oldSessionId) {
@@ -144,6 +152,13 @@ export function useSingleSession(roleAtLogin: string | null) {
   // start vinculado ao escopo/hook para atualizar o ref local
   const startBound = async () => {
     try {
+      // Garante headers multi-tenant corretos antes das RPCs
+      try {
+        if (resolvedTeamId) localStorage.setItem(TENANT_HEADER_KEYS.tenantId, resolvedTeamId);
+        const roleHeader = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
+        localStorage.setItem(TENANT_HEADER_KEYS.role, roleHeader);
+      } catch {}
+      
       // CRÍTICO: encerrar sessão anterior antes de criar nova
       const oldSessionId = localStorage.getItem(KEY(scope));
       if (oldSessionId) {
