@@ -68,6 +68,19 @@ export function useSingleSession(roleAtLogin: string | null) {
     
     const initSession = async () => {
       try {
+        // CRÍTICO: encerrar sessão anterior antes de criar nova
+        const oldSessionId = localStorage.getItem(KEY(scope));
+        if (oldSessionId) {
+          console.log('[SingleSession] Encerrando sessão anterior antes de criar nova:', oldSessionId);
+          try {
+            await supabase.rpc('end_session', { p_session_id: oldSessionId });
+          } catch (endError) {
+            console.warn('[SingleSession] Erro ao encerrar sessão anterior (ignorando):', endError);
+          }
+          localStorage.removeItem(KEY(scope));
+          sessionIdRef.current = null;
+        }
+        
         console.log('[SingleSession] Iniciando nova sessão automaticamente', { scope, role });
         const { data, error } = await supabase.rpc('start_session', {
           p_role_at_login: role,
@@ -131,6 +144,19 @@ export function useSingleSession(roleAtLogin: string | null) {
   // start vinculado ao escopo/hook para atualizar o ref local
   const startBound = async () => {
     try {
+      // CRÍTICO: encerrar sessão anterior antes de criar nova
+      const oldSessionId = localStorage.getItem(KEY(scope));
+      if (oldSessionId) {
+        console.log('[SingleSession] startBound: encerrando sessão anterior:', oldSessionId);
+        try {
+          await supabase.rpc('end_session', { p_session_id: oldSessionId });
+        } catch (endError) {
+          console.warn('[SingleSession] startBound: erro ao encerrar sessão anterior (ignorando):', endError);
+        }
+        localStorage.removeItem(KEY(scope));
+        sessionIdRef.current = null;
+      }
+      
       const role = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
       console.log('[SingleSession] startBound chamado', { scope, role });
       
