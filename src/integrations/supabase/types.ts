@@ -1681,6 +1681,10 @@ export type Database = {
         Returns: boolean
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
+      get_active_session: {
+        Args: { p_tenant_id_text: string }
+        Returns: string
+      }
       get_jwt_claims: { Args: never; Returns: Json }
       get_membership_role_by_slug: {
         Args: { p_team_slug: string }
@@ -2542,10 +2546,6 @@ export type Database = {
           p_user_agent?: string
         }
         Returns: string
-      }
-      get_active_session: {
-        Args: { p_tenant_id_text: string | null }
-        Returns: string | null
       }
       touch_session: { Args: { p_session_id: string }; Returns: undefined }
       unassign_table: {

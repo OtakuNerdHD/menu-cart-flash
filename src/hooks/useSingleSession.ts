@@ -215,88 +215,73 @@ export function useSingleSession(roleAtLogin: string | null, options?: { autoSta
     
     const initSession = async () => {
       try {
-        // Garante headers multi-tenant corretos antes das RPCs
-        try {
-          const roleHeader = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
-          localStorage.setItem(TENANT_HEADER_KEYS.role, roleHeader);
-        } catch {}
+        // CRÍTICO: Definir headers ANTES de qualquer RPC para garantir isolamento correto
+        const roleHeader = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
+        localStorage.setItem(TENANT_HEADER_KEYS.tenantId, tenantIdNow);
+        localStorage.setItem(TENANT_HEADER_KEYS.role, roleHeader);
         
         const scopeNow = `${currentScope(subdomain)}:${tenantIdNow}`;
 
-        // 1) Consultar sessão ativa no servidor (fonte da verdade)
-        try {
-          const { data: active } = await supabase.rpc('get_active_session', { p_tenant_id_text: tenantIdNow });
-          const serverActiveId = (active as string) || null;
-          if (serverActiveId) {
-            const { error: touchErr } = await supabase.rpc('touch_session', { p_session_id: serverActiveId });
-            if (touchErr) {
-              localStorage.removeItem(KEY(scopeNow));
-              sessionIdRef.current = null;
-              try { await supabase.auth.signOut(); } catch {}
-              console.log('[SingleSession] Sessão ativa no servidor está revogada. Deslogando cliente.');
-              return;
-            }
-            localStorage.setItem(KEY(scopeNow), serverActiveId);
-            sessionIdRef.current = serverActiveId;
-            attachRealtimeForSession(serverActiveId, scopeNow);
-            console.log('[SingleSession] Usando sessão ativa do servidor', serverActiveId);
+        // 1) Consultar sessão ativa no servidor para ESTE tenant específico
+        const { data: active } = await supabase.rpc('get_active_session', { p_tenant_id_text: tenantIdNow });
+        const serverActiveId = (active as string) || null;
+        
+        if (serverActiveId) {
+          const { error: touchErr } = await supabase.rpc('touch_session', { p_session_id: serverActiveId });
+          if (touchErr) {
+            localStorage.removeItem(KEY(scopeNow));
+            sessionIdRef.current = null;
+            try { await supabase.auth.signOut(); } catch {}
+            console.log('[SingleSession] Sessão revogada. Deslogando.', serverActiveId);
             return;
           }
-        } catch {}
+          localStorage.setItem(KEY(scopeNow), serverActiveId);
+          sessionIdRef.current = serverActiveId;
+          attachRealtimeForSession(serverActiveId, scopeNow);
+          console.log('[SingleSession] Reutilizando sessão ativa', serverActiveId);
+          return;
+        }
 
-        // 2) Tentar reutilizar sessão existente válida no escopo (fallback local)
+        // 2) Verificar se existe sessão local válida para este escopo
         const existingLocalId = localStorage.getItem(KEY(scopeNow));
         if (existingLocalId) {
           const { error: touchErr } = await supabase.rpc('touch_session', { p_session_id: existingLocalId });
           if (touchErr) {
-            // Sessão inválida/revogada: limpar e deslogar, NÃO recriar automaticamente
             localStorage.removeItem(KEY(scopeNow));
             sessionIdRef.current = null;
             try { await supabase.auth.signOut(); } catch {}
-            console.log('[SingleSession] Sessão revogada detectada. Deslogando cliente.', existingLocalId);
+            console.log('[SingleSession] Sessão local revogada. Deslogando.', existingLocalId);
             return;
           }
           sessionIdRef.current = existingLocalId;
           attachRealtimeForSession(existingLocalId, scopeNow);
-          console.log('[SingleSession] Reutilizando sessão existente', existingLocalId);
+          console.log('[SingleSession] Reutilizando sessão local', existingLocalId);
           return;
         }
 
-        // 3) Não havendo sessão válida, criar uma nova
+        // 3) Criar nova sessão para ESTE tenant específico
         const { data, error } = await supabase.rpc('start_session', {
-          p_role_at_login: role,
+          p_role_at_login: roleHeader,
           p_fingerprint: null,
           p_user_agent: navigator.userAgent,
           p_ip: null
         });
 
         if (error) {
-          const code = (error as any)?.code;
-          const msg = (error as any)?.message || '';
-          const isConflict = code === '23505' || msg.includes('duplicate key value');
-          if (isConflict) {
-            const keepId = localStorage.getItem(KEY(scope));
-            if (keepId) {
-              try { await supabase.rpc('touch_session', { p_session_id: keepId }); } catch {}
-              localStorage.setItem(KEY(scope), keepId);
-              sessionIdRef.current = keepId;
-              console.log('[SingleSession] Reutilizando sessão existente', keepId);
-              return;
-            }
-          }
-          throw error;
+          console.error('[SingleSession] Erro ao criar sessão:', error);
+          return;
         }
         
         const newId = (data as string) || null;
-        sessionIdRef.current = newId;
         if (newId) {
           localStorage.setItem(KEY(scopeNow), newId);
+          sessionIdRef.current = newId;
           sessionStarted = true;
-          console.log('[SingleSession] Criando nova sessão', newId);
-          // Garante unicidade encerrando outras do mesmo escopo (se existirem)
           attachRealtimeForSession(newId, scopeNow);
+          console.log('[SingleSession] Nova sessão criada', newId);
         }
       } catch (e) {
+        console.error('[SingleSession] Erro na inicialização:', e);
       }
     };
     
@@ -407,103 +392,81 @@ export function useSingleSession(roleAtLogin: string | null, options?: { autoSta
   // start vinculado ao escopo/hook para atualizar o ref local
   const startBound = async () => {
     try {
-      // Respeitar regras de master/tenant
-      if (isMasterHost()) {
-        return;
-      }
-      if (!isTenant(subdomain)) {
-        return;
-      }
-      // Gate: requer tenantId válido antes de iniciar sessão
-      {
-        const tenantIdNow = localStorage.getItem(TENANT_HEADER_KEYS.tenantId);
-        if (!tenantIdNow || tenantIdNow === NO_TEAM_SENTINEL) {
-          console.log('[SingleSession] Gate: tenantId inválido ou não resolvido; não iniciar sessão');
-          return;
-        }
-      }
+      if (isMasterHost()) return;
+      if (!isTenant(subdomain)) return;
       
-      // Garante headers multi-tenant corretos antes das RPCs
-      try {
-        const roleHeader = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
-        localStorage.setItem(TENANT_HEADER_KEYS.role, roleHeader);
-      } catch {}
-      
-      // 1) Consultar sessão ativa no servidor (fonte da verdade)
       const tenantIdNow = localStorage.getItem(TENANT_HEADER_KEYS.tenantId);
+      if (!tenantIdNow || tenantIdNow === NO_TEAM_SENTINEL) {
+        console.log('[SingleSession] Gate: aguardando tenantId válido');
+        return;
+      }
+      
+      // CRÍTICO: Definir headers ANTES de qualquer RPC
+      const roleHeader = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
+      localStorage.setItem(TENANT_HEADER_KEYS.tenantId, tenantIdNow);
+      localStorage.setItem(TENANT_HEADER_KEYS.role, roleHeader);
+      
       const scopeNow = `${currentScope(subdomain)}:${tenantIdNow}`;
-      try {
-        const { data: active } = await supabase.rpc('get_active_session', { p_tenant_id_text: tenantIdNow });
-        const serverActiveId = (active as string) || null;
-        if (serverActiveId) {
-          const { error: touchErr } = await supabase.rpc('touch_session', { p_session_id: serverActiveId });
-          if (touchErr) {
-            localStorage.removeItem(KEY(scopeNow));
-            sessionIdRef.current = null;
-            try { await supabase.auth.signOut(); } catch {}
-            console.log('[SingleSession] Sessão ativa no servidor está revogada. Deslogando cliente.');
-            return;
-          }
-          localStorage.setItem(KEY(scopeNow), serverActiveId);
-          sessionIdRef.current = serverActiveId;
-          attachRealtimeForSession(serverActiveId, scopeNow);
-          console.log('[SingleSession] Usando sessão ativa do servidor', serverActiveId);
+
+      // 1) Consultar sessão ativa no servidor para ESTE tenant
+      const { data: active } = await supabase.rpc('get_active_session', { p_tenant_id_text: tenantIdNow });
+      const serverActiveId = (active as string) || null;
+      
+      if (serverActiveId) {
+        const { error: touchErr } = await supabase.rpc('touch_session', { p_session_id: serverActiveId });
+        if (touchErr) {
+          localStorage.removeItem(KEY(scopeNow));
+          sessionIdRef.current = null;
+          try { await supabase.auth.signOut(); } catch {}
+          console.log('[SingleSession] Sessão revogada. Deslogando.');
           return;
         }
-      } catch {}
+        localStorage.setItem(KEY(scopeNow), serverActiveId);
+        sessionIdRef.current = serverActiveId;
+        attachRealtimeForSession(serverActiveId, scopeNow);
+        console.log('[SingleSession] Reutilizando sessão ativa', serverActiveId);
+        return;
+      }
 
-      // 2) Reutilizar sessão existente válida (fallback local)
+      // 2) Verificar sessão local
       const localId = localStorage.getItem(KEY(scopeNow));
       if (localId) {
         const { error: touchErr } = await supabase.rpc('touch_session', { p_session_id: localId });
         if (touchErr) {
-          // Sessão inválida/revogada: limpar e deslogar, NÃO recriar automaticamente
           localStorage.removeItem(KEY(scopeNow));
           sessionIdRef.current = null;
           try { await supabase.auth.signOut(); } catch {}
-          console.log('[SingleSession] Sessão revogada detectada. Deslogando cliente.', localId);
+          console.log('[SingleSession] Sessão local revogada. Deslogando.');
           return;
         }
         sessionIdRef.current = localId;
         attachRealtimeForSession(localId, scopeNow);
-        console.log('[SingleSession] Reutilizando sessão existente', localId);
+        console.log('[SingleSession] Reutilizando sessão local', localId);
         return;
       }
       
-      const role = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
-      
+      // 3) Criar nova sessão
       const { data, error } = await supabase.rpc('start_session', {
-        p_role_at_login: role,
+        p_role_at_login: roleHeader,
         p_fingerprint: null,
         p_user_agent: navigator.userAgent,
         p_ip: null
       });
       
       if (error) {
-        const code = (error as any)?.code;
-        const msg = (error as any)?.message || '';
-        const isConflict = code === '23505' || msg.includes('duplicate key value');
-        if (isConflict) {
-          const keepId = localStorage.getItem(KEY(scopeNow));
-          if (keepId) {
-            try { await supabase.rpc('touch_session', { p_session_id: keepId }); } catch {}
-            localStorage.setItem(KEY(scopeNow), keepId);
-            sessionIdRef.current = keepId;
-            console.log('[SingleSession] Reutilizando sessão existente', keepId);
-            return;
-          }
-        }
-        throw error;
+        console.error('[SingleSession] Erro ao criar sessão:', error);
+        return;
       }
       
       const newId = (data as string) || null;
-      sessionIdRef.current = newId;
       if (newId) {
         localStorage.setItem(KEY(scopeNow), newId);
-        console.log('[SingleSession] Criando nova sessão', newId);
+        sessionIdRef.current = newId;
         attachRealtimeForSession(newId, scopeNow);
+        console.log('[SingleSession] Nova sessão criada', newId);
       }
     } catch (e) {
+      console.error('[SingleSession] Erro:', e);
     }
   };
 
