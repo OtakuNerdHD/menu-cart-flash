@@ -2543,10 +2543,13 @@ export type Database = {
         }
         Returns: string
       }
+<<<<<<< HEAD
       get_active_session: {
         Args: { p_tenant_id_text: string | null }
         Returns: string | null
       }
+=======
+>>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
       touch_session: { Args: { p_session_id: string }; Returns: undefined }
       unassign_table: {
         Args: { p_table_id: number }
