@@ -166,19 +166,22 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
     // Modo cliente: primeiro garante associação e contexto pelo RPC
     let ensuredTeamId: string | null = null;
     if (!user) {
+      // Visitante: configurar contexto mínimo e NÃO chamar ensure_membership (requer usuário)
       await applyRlsConfig('visitor', NO_TEAM_SENTINEL);
       await setRestaurantContext(null);
-    }
-    try {
-      const { data: ensured, error: ensureErr } = await supabase.rpc('ensure_membership' as never, { team_slug: effectiveSubdomain } as never);
-      if (!ensureErr && ensured) {
-        ensuredTeamId = String(ensured);
-        ensuredRef.current = ensuredTeamId;
-      } else if (ensureErr) {
-        console.warn('ensure_membership falhou:', ensureErr);
+    } else {
+      // Usuário autenticado: garantir membership por slug
+      try {
+        const { data: ensured, error: ensureErr } = await supabase.rpc('ensure_membership' as never, { team_slug: effectiveSubdomain } as never);
+        if (!ensureErr && ensured) {
+          ensuredTeamId = String(ensured);
+          ensuredRef.current = ensuredTeamId;
+        } else if (ensureErr) {
+          console.warn('ensure_membership falhou:', ensureErr);
+        }
+      } catch (e) {
+        console.warn('Erro ensure_membership:', e);
       }
-    } catch (e) {
-      console.warn('Erro ensure_membership:', e);
     }
 
     if (ensuredTeamId) {
@@ -238,6 +241,13 @@ export const MultiTenantProvider: React.FC<MultiTenantProviderProps> = ({ childr
     
     setIsLoading(false);
   };
+
+  // Reexecutar refresh quando o usuário autenticar em um tenant
+  useEffect(() => {
+    if (!subdomainLoading && effectiveSubdomain && user?.id) {
+      refreshTeam();
+    }
+  }, [user?.id, effectiveSubdomain, subdomainLoading]);
 
   useEffect(() => {
     if (!subdomainLoading) {

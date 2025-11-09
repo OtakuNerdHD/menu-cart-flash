@@ -1,8 +1,5 @@
 import { useEffect, useRef } from 'react';
-<<<<<<< HEAD
 import { useLocation } from 'react-router-dom';
-=======
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
 import { supabase, TENANT_HEADER_KEYS } from '@/integrations/supabase/client';
 import { useMultiTenant } from '@/context/MultiTenantContext';
 
@@ -32,7 +29,6 @@ function getSubdomainFromHost(): string | null {
 // Detecta explicitamente o domínio master
 function isMasterHost(): boolean {
   try {
-<<<<<<< HEAD
     return window.location.hostname === 'app.delliapp.com.br';
   } catch {
     return false;
@@ -149,46 +145,11 @@ export function useSingleSession(roleAtLogin: string | null, options?: { autoSta
   const { subdomain, currentTenantRole } = useMultiTenant();
   const tenantIdHeader = (typeof window !== 'undefined') ? localStorage.getItem(TENANT_HEADER_KEYS.tenantId) : null;
   const scope = `${currentScope(subdomain)}${tenantIdHeader ? `:${tenantIdHeader}` : ''}`;
-=======
-    const scope = currentScope(getSubdomainFromHost());
-    console.log('[SingleSession] Iniciando sessão', { scope, roleAtLogin });
-    
-    // CRÍTICO: usar RPC público start_session com assinatura correta
-    const { data, error } = await supabase.rpc('start_session', {
-      p_role_at_login: (roleAtLogin || 'cliente').toLowerCase().trim(),
-      p_fingerprint: null,
-      p_user_agent: navigator.userAgent,
-      p_ip: null
-    });
-    
-    if (error) {
-      console.error('[SingleSession] Erro ao iniciar sessão:', error);
-      throw error;
-    }
-    
-    const newId = (data as string) || null;
-    if (newId) {
-      localStorage.setItem(KEY(scope), newId);
-      console.log('[SingleSession] Sessão criada:', newId);
-    }
-    
-    return newId;
-  } catch (e) {
-    console.error('[SingleSession] start_session error', e);
-    throw e;
-  }
-}
-
-export function useSingleSession(roleAtLogin: string | null) {
-  const { subdomain, currentTenantRole, resolvedTeamId } = useMultiTenant();
-  const scope = `${currentScope(subdomain)}${resolvedTeamId ? `:${resolvedTeamId}` : ''}`;
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
   const sessionIdRef = useRef<string | null>(null);
   const realtimeChannelRef = useRef<any>(null);
   const location = useLocation();
   const autoStart = options?.autoStart !== false;
 
-<<<<<<< HEAD
   // Helper: reanexar assinatura Realtime para a sessão atual
   const attachRealtimeForSession = (sid: string, scopeNow: string) => {
     try {
@@ -248,12 +209,6 @@ export function useSingleSession(roleAtLogin: string | null) {
     }
 
     if (!roleAtLogin && !currentTenantRole) return;
-=======
-  // Iniciar sessão automaticamente quando role resolver
-  useEffect(() => {
-    if (!roleAtLogin && !currentTenantRole) return;
-    if (subdomain && !resolvedTeamId) return;
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
     
     const role = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
     let sessionStarted = false;
@@ -262,15 +217,10 @@ export function useSingleSession(roleAtLogin: string | null) {
       try {
         // Garante headers multi-tenant corretos antes das RPCs
         try {
-<<<<<<< HEAD
-=======
-          if (resolvedTeamId) localStorage.setItem(TENANT_HEADER_KEYS.tenantId, resolvedTeamId);
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
           const roleHeader = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
           localStorage.setItem(TENANT_HEADER_KEYS.role, roleHeader);
         } catch {}
         
-<<<<<<< HEAD
         const scopeNow = `${currentScope(subdomain)}:${tenantIdNow}`;
 
         // 1) Consultar sessão ativa no servidor (fonte da verdade)
@@ -313,63 +263,24 @@ export function useSingleSession(roleAtLogin: string | null) {
         }
 
         // 3) Não havendo sessão válida, criar uma nova
-=======
-        // 1) Tentar reutilizar sessão existente válida no escopo
-        const existingLocalId = localStorage.getItem(KEY(scope));
-        if (existingLocalId) {
-          try { await supabase.rpc('touch_session', { p_session_id: existingLocalId }); } catch {}
-          const { data: existingRow } = await (supabase.from as any)('app.sessions')
-            .select('id, revoked_at')
-            .eq('id', existingLocalId)
-            .maybeSingle();
-          if (existingRow && !existingRow.revoked_at) {
-            sessionIdRef.current = existingLocalId;
-            console.log('[SingleSession] Reutilizando sessão existente:', existingLocalId);
-            return;
-          }
-          // inválida -> limpar
-          localStorage.removeItem(KEY(scope));
-          sessionIdRef.current = null;
-        }
-        
-        // 2) Não havendo sessão válida, criar uma nova
-        console.log('[SingleSession] Iniciando nova sessão automaticamente', { scope, role });
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
         const { data, error } = await supabase.rpc('start_session', {
           p_role_at_login: role,
           p_fingerprint: null,
           p_user_agent: navigator.userAgent,
           p_ip: null
         });
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
         if (error) {
           const code = (error as any)?.code;
           const msg = (error as any)?.message || '';
           const isConflict = code === '23505' || msg.includes('duplicate key value');
           if (isConflict) {
-<<<<<<< HEAD
             const keepId = localStorage.getItem(KEY(scope));
             if (keepId) {
               try { await supabase.rpc('touch_session', { p_session_id: keepId }); } catch {}
               localStorage.setItem(KEY(scope), keepId);
               sessionIdRef.current = keepId;
               console.log('[SingleSession] Reutilizando sessão existente', keepId);
-=======
-            console.warn('[SingleSession] Conflito de sessão detectado (23505). Buscando sessão ativa do escopo...');
-            let q = (supabase.from as any)('app.sessions')
-              .select('id, team_id_text, revoked_at, created_at')
-              .is('revoked_at', null);
-            q = resolvedTeamId ? q.eq('team_id_text', resolvedTeamId) : q.is('team_id_text', null);
-            const { data: activeInScope } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle();
-            if (activeInScope?.id) {
-              localStorage.setItem(KEY(scope), activeInScope.id);
-              sessionIdRef.current = activeInScope.id;
-              console.log('[SingleSession] Sessão ativa do escopo aplicada:', activeInScope.id);
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
               return;
             }
           }
@@ -379,7 +290,6 @@ export function useSingleSession(roleAtLogin: string | null) {
         const newId = (data as string) || null;
         sessionIdRef.current = newId;
         if (newId) {
-<<<<<<< HEAD
           localStorage.setItem(KEY(scopeNow), newId);
           sessionStarted = true;
           console.log('[SingleSession] Criando nova sessão', newId);
@@ -387,51 +297,18 @@ export function useSingleSession(roleAtLogin: string | null) {
           attachRealtimeForSession(newId, scopeNow);
         }
       } catch (e) {
-=======
-          localStorage.setItem(KEY(scope), newId);
-          sessionStarted = true;
-          console.log('[SingleSession] Sessão iniciada:', newId);
-          // Garante unicidade encerrando outras do mesmo escopo (se existirem)
-          try { await supabase.rpc('end_other_sessions_current_scope', { p_keep_session: newId }); } catch {}
-        }
-      } catch (e) {
-        console.error('[SingleSession] Erro ao iniciar sessão:', e);
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
       }
     };
     
     // Iniciar sessão
     initSession();
     
-<<<<<<< HEAD
     // heartbeat: a cada 2 minutos (apenas em tenants)
     const iv = setInterval(async () => {
       const sid = sessionIdRef.current;
       if (!sid) return;
       const { error: hbErr } = await supabase.rpc('touch_session', { p_session_id: sid });
       if (hbErr) {
-=======
-    // heartbeat: a cada 5 minutos
-    const iv = setInterval(async () => {
-      const sid = sessionIdRef.current;
-      if (!sid) return;
-      try {
-        console.log('[SingleSession] Heartbeat para sessão:', sid);
-        await supabase.rpc('touch_session', { p_session_id: sid });
-        // Verifica se a sessão não foi revogada por outro cliente
-        const { data: row } = await (supabase.from as any)('app.sessions')
-          .select('id, revoked_at')
-          .eq('id', sid)
-          .maybeSingle();
-        if (!row || row.revoked_at) {
-          console.warn('[SingleSession] Sessão revogada detectada no heartbeat. Deslogando...');
-          try { await supabase.auth.signOut(); } catch {}
-          localStorage.removeItem(KEY(scope));
-          sessionIdRef.current = null;
-        }
-      } catch (e) {
-        console.warn('[SingleSession] touch_session erro, deslogando:', e);
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
         try { await supabase.auth.signOut(); } catch {}
         localStorage.removeItem(KEY(scope));
         sessionIdRef.current = null;
@@ -440,7 +317,6 @@ export function useSingleSession(roleAtLogin: string | null) {
 
     return () => {
       clearInterval(iv);
-<<<<<<< HEAD
       // Fechar canal realtime ao desmontar
       if (realtimeChannelRef.current) {
         try { supabase.removeChannel(realtimeChannelRef.current); } catch {}
@@ -514,27 +390,15 @@ export function useSingleSession(roleAtLogin: string | null) {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [subdomain, autoStart]);
-=======
-    };
-  }, [roleAtLogin, currentTenantRole, scope]);
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
 
   // helper logout
   const endSession = async () => {
     try {
       const sid = sessionIdRef.current || localStorage.getItem(KEY(scope));
       if (sid) {
-<<<<<<< HEAD
         await supabase.rpc('end_session', { p_session_id: sid });
       }
     } catch (e) {
-=======
-        console.log('[SingleSession] Encerrando sessão:', sid);
-        await supabase.rpc('end_session', { p_session_id: sid });
-      }
-    } catch (e) {
-      console.warn('[SingleSession] Erro ao encerrar sessão:', e);
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
     }
     localStorage.removeItem(KEY(scope));
     sessionIdRef.current = null;
@@ -543,7 +407,6 @@ export function useSingleSession(roleAtLogin: string | null) {
   // start vinculado ao escopo/hook para atualizar o ref local
   const startBound = async () => {
     try {
-<<<<<<< HEAD
       // Respeitar regras de master/tenant
       if (isMasterHost()) {
         return;
@@ -562,16 +425,10 @@ export function useSingleSession(roleAtLogin: string | null) {
       
       // Garante headers multi-tenant corretos antes das RPCs
       try {
-=======
-      // Garante headers multi-tenant corretos antes das RPCs
-      try {
-        if (resolvedTeamId) localStorage.setItem(TENANT_HEADER_KEYS.tenantId, resolvedTeamId);
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
         const roleHeader = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
         localStorage.setItem(TENANT_HEADER_KEYS.role, roleHeader);
       } catch {}
       
-<<<<<<< HEAD
       // 1) Consultar sessão ativa no servidor (fonte da verdade)
       const tenantIdNow = localStorage.getItem(TENANT_HEADER_KEYS.tenantId);
       const scopeNow = `${currentScope(subdomain)}:${tenantIdNow}`;
@@ -614,27 +471,6 @@ export function useSingleSession(roleAtLogin: string | null) {
       }
       
       const role = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
-=======
-      // 1) Reutilizar sessão existente válida
-      const localId = localStorage.getItem(KEY(scope));
-      if (localId) {
-        try { await supabase.rpc('touch_session', { p_session_id: localId }); } catch {}
-        const { data: row } = await (supabase.from as any)('app.sessions')
-          .select('id, revoked_at')
-          .eq('id', localId)
-          .maybeSingle();
-        if (row && !row.revoked_at) {
-          sessionIdRef.current = localId;
-          console.log('[SingleSession] startBound: reutilizando sessão:', localId);
-          return;
-        }
-        localStorage.removeItem(KEY(scope));
-        sessionIdRef.current = null;
-      }
-      
-      const role = (roleAtLogin ?? currentTenantRole ?? 'cliente').toLowerCase().trim();
-      console.log('[SingleSession] startBound chamado', { scope, role });
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
       
       const { data, error } = await supabase.rpc('start_session', {
         p_role_at_login: role,
@@ -648,25 +484,12 @@ export function useSingleSession(roleAtLogin: string | null) {
         const msg = (error as any)?.message || '';
         const isConflict = code === '23505' || msg.includes('duplicate key value');
         if (isConflict) {
-<<<<<<< HEAD
           const keepId = localStorage.getItem(KEY(scopeNow));
           if (keepId) {
             try { await supabase.rpc('touch_session', { p_session_id: keepId }); } catch {}
             localStorage.setItem(KEY(scopeNow), keepId);
             sessionIdRef.current = keepId;
             console.log('[SingleSession] Reutilizando sessão existente', keepId);
-=======
-          console.warn('[SingleSession] startBound: conflito detectado. Aplicando sessão ativa do escopo...');
-          let q = (supabase.from as any)('app.sessions')
-            .select('id, team_id_text, revoked_at, created_at')
-            .is('revoked_at', null);
-          q = resolvedTeamId ? q.eq('team_id_text', resolvedTeamId) : q.is('team_id_text', null);
-          const { data: active } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle();
-          if (active?.id) {
-            localStorage.setItem(KEY(scope), active.id);
-            sessionIdRef.current = active.id;
-            console.log('[SingleSession] startBound: sessão ativa aplicada:', active.id);
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
             return;
           }
         }
@@ -676,20 +499,11 @@ export function useSingleSession(roleAtLogin: string | null) {
       const newId = (data as string) || null;
       sessionIdRef.current = newId;
       if (newId) {
-<<<<<<< HEAD
         localStorage.setItem(KEY(scopeNow), newId);
         console.log('[SingleSession] Criando nova sessão', newId);
         attachRealtimeForSession(newId, scopeNow);
       }
     } catch (e) {
-=======
-        localStorage.setItem(KEY(scope), newId);
-        console.log('[SingleSession] startBound: sessão criada:', newId);
-        try { await supabase.rpc('end_other_sessions_current_scope', { p_keep_session: newId }); } catch {}
-      }
-    } catch (e) {
-      console.error('[SingleSession] start_session error', e);
->>>>>>> 93ea4566963ad6279a53bd930d5689a00fbe7db8
     }
   };
 
