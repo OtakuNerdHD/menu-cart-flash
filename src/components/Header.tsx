@@ -37,7 +37,8 @@ const Header = () => {
   const [membershipRole, setMembershipRole] = useState<string | null>(null);
   const navigate = useNavigate();
   const isMasterDomain = typeof window !== 'undefined' && window.location?.host === 'app.delliapp.com.br';
-  const { endSession } = useSingleSession(null);
+  // Usar apenas o encerramento de sessão; desabilitar auto-start para evitar inicializações duplas
+  const { endSession } = useSingleSession(null, { autoStart: false });
 
   const metadata = user?.user_metadata as Record<string, unknown> | undefined;
   const appMetadata = user?.app_metadata as Record<string, unknown> | undefined;
@@ -100,19 +101,19 @@ const Header = () => {
       // Encerrar sessão atual antes do signOut
       await endSession();
       await signOut();
+      
       toast({
-        title: "Logout realizado com sucesso",
-        description: "Você foi desconectado do sistema.",
+        title: 'Logout realizado',
+        description: 'Você foi desconectado com sucesso.',
       });
       
-      // Redirecionar para a homepage após logout
-      navigate('/');
+      navigate('/login');
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
       toast({
-        title: "Erro ao fazer logout",
-        description: "Houve um problema ao desconectar. Tente novamente.",
-        variant: "destructive"
+        title: 'Erro ao fazer logout',
+        description: 'Ocorreu um erro ao tentar desconectar.',
+        variant: 'destructive',
       });
     }
   };

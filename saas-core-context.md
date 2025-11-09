@@ -90,3 +90,43 @@ RLS v2 é DEFINITIVO
 isolamento é baseline — não é opcional / não mexer sem instrução explícita
 
 Qualquer sugestão futura do agente deve manter esse ecossistema intacto.
+
+Sessão Única por Tenant (Single Session)
+
+Objetivo: garantir apenas uma sessão ativa por usuário dentro de cada escopo de tenant/subdomínio. Ao iniciar login em outra aba ou dispositivo no mesmo tenant, a sessão anterior é imediatamente revogada e o cliente é desconectado.
+
+Implementação base (pilar técnico):
+
+Tabela app.sessions com índice único por (user_id, team_id_text) onde revoked_at IS NULL — assegura 1 sessão ativa por escopo.
+
+Wrappers RPC públicos: public.start_session, public.touch_session, public.end_other_sessions_current_scope — contratados para o frontend. Funções internas em app.* sob SECURITY DEFINER.
+
+RLS nas operações de app.sessions limitando por user_id = auth.uid(). Não remover nem afrouxar.
+
+Realtime: cliente assina UPDATE em app.sessions filtrando id=eq.<session_id>. Ao detectar new.revoked_at o cliente faz signOut imediato.
+
+Fluxo no cliente (useSingleSession):
+
+Somente tenants participam; o domínio master (app.delliapp.com.br) não cria sessões.
+
+Escopo calculado por subdomínio e x-tenant-id (app.current_team_id). A sessão é persistida localmente por chave sess_<escopo> e revalidada continuamente.
+
+Ao criar/reusar sessão, o cliente chama end_other_sessions_current_scope(p_keep_session) para encerrar outras do mesmo escopo.
+
+Heartbeat e foco/visibilidade: o cliente chama touch_session periodicamente e ao retomar foco; se touch_session retornar erro (ex.: sessão revogada) o cliente desloga de forma imediata.
+
+Regras que NUNCA podem ser quebradas:
+
+Master não participa de sessão única; nunca criar/gerir sessões no master.
+
+Não alterar a assinatura/nomes dos RPCs citados sem atualização coordenada em todo o frontend.
+
+Manter o índice único e as políticas RLS de app.sessions.
+
+Manter a assinatura Realtime e o tratamento de erro explícito de touch_session no cliente (logout imediato ao erro).
+
+Manter a dependência de app.current_team_id resolvida via set_app_config e headers multi-tenant — qualquer desvio pode quebrar isolamento e o single session.
+
+Validação operacional:
+
+Ao logar em uma segunda aba no mesmo tenant, start_session deve retornar 200 e end_other_sessions_current_scope deve indicar revogação (>0). Na aba anterior, touch_session deve retornar 400 ou o Realtime deve publicar UPDATE com revoked_at, levando ao logout instantâneo.
