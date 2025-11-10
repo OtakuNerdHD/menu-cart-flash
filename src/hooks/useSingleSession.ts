@@ -63,12 +63,13 @@ export async function start(roleAtLogin: string) {
     const scope = `${currentScope(sub)}:${tenantIdHeader}`;
     const role = (roleAtLogin || 'cliente').toLowerCase().trim();
 
-    // Assegurar headers básicos (se disponíveis) antes das RPCs
+    // CRÍTICO: Definir headers ANTES de qualquer RPC para garantir isolamento correto
     try {
+      localStorage.setItem(TENANT_HEADER_KEYS.tenantId, tenantIdHeader);
       localStorage.setItem(TENANT_HEADER_KEYS.role, role);
     } catch {}
 
-    // 1) Consultar sessão ativa no servidor (fonte da verdade)
+    // 1) Consultar sessão ativa no servidor para ESTE tenant específico
     let serverActiveId: string | null = null;
     try {
       const { data: active } = await supabase.rpc('get_active_session', { p_tenant_id_text: tenantIdHeader });
@@ -104,7 +105,7 @@ export async function start(roleAtLogin: string) {
       return existingLocalId;
     }
 
-    // 4) Criar nova sessão caso não haja válida
+    // 4) Criar nova sessão para ESTE tenant específico
     const { data, error } = await supabase.rpc('start_session', {
       p_role_at_login: role,
       p_fingerprint: null,
@@ -113,18 +114,7 @@ export async function start(roleAtLogin: string) {
     });
 
     if (error) {
-      const code = (error as any)?.code;
-      const msg = (error as any)?.message || '';
-      const isConflict = code === '23505' || msg.includes('duplicate key value');
-      if (isConflict) {
-        // Conflito: se já houver sessão no localStorage neste escopo, reutilizar
-        const keepId = localStorage.getItem(KEY(scope));
-        if (keepId) {
-          try { await supabase.rpc('touch_session', { p_session_id: keepId }); } catch {}
-          console.log('[SingleSession] Reutilizando sessão existente', keepId);
-          return keepId;
-        }
-      }
+      console.error('[SingleSession] Erro ao criar sessão:', error);
       throw error;
     }
 
@@ -132,7 +122,6 @@ export async function start(roleAtLogin: string) {
     if (newId) {
       localStorage.setItem(KEY(scope), newId);
       console.log('[SingleSession] Criando nova sessão', newId);
-      // Garante unicidade encerrando outras do mesmo escopo
     }
 
     return newId;

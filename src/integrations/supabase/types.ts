@@ -1581,7 +1581,16 @@ export type Database = {
         Args: { p_team_id: string }
         Returns: undefined
       }
-      ensure_membership: { Args: { team_slug: string }; Returns: string }
+      ensure_membership:
+        | { Args: { team_slug: string }; Returns: string }
+        | {
+            Args: {
+              p_default_role?: string
+              p_team_id: string
+              p_user_id: string
+            }
+            Returns: boolean
+          }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
       geometry: { Args: { "": string }; Returns: unknown }
       geometry_above: {
